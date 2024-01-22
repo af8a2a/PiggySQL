@@ -10,3 +10,6 @@ sqlparser = { version = "0.41.0", features = ["serde", "bigdecimal"] }
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 bigdecimal = { version = "0.4.1", features = ["serde", "string-only"] }
+futures = "0.3"
+async-trait = "0.1"
+async-recursion = "1"

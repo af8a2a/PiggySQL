@@ -1,12 +1,18 @@
 use std::collections::HashMap;
 
-use sqlparser::ast::ColumnDef;
+use serde::{Serialize, Deserialize};
+use sqlparser::ast::{ColumnDef, Expr};
 
-pub struct Catalog {
-    tables: HashMap<String, Schema>,
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Schema {
+    pub table_name: String,
+    pub column_defs: Option<Vec<ColumnDef>>,
+    pub indexes: Vec<SchemaIndex>,
 }
 
-pub struct Schema {
-    name: String,
-    cols: Vec<ColumnDef>,
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SchemaIndex {
+    pub name: String,
+    pub expr: Expr,
 }
