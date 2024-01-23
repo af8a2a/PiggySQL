@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::TableWithJoins;
 
-use super::expr::{Expr, IndexOperator};
+use super::{expr::Expr, operator::IndexOperator};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Query {

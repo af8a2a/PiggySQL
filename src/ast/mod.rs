@@ -3,6 +3,9 @@ pub mod expr;
 pub mod join;
 pub mod query;
 pub mod types;
+pub mod schema;
+pub mod aggregate_function;
+pub mod operator;
 use serde::{Deserialize, Serialize};
 
 use self::query::Query;

@@ -2,7 +2,11 @@ use crate::error::*;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::Query;
 
-use super::{ast_literal::AstLiteral, types::Value};
+use super::{
+    ast_literal::AstLiteral,
+    operator::{BinaryOperator, UnaryOperator},
+    types::Value,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Expr {
@@ -73,37 +77,4 @@ impl Expr {
             _ => todo!(),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum UnaryOperator {
-    Plus,
-    Minus,
-    Not,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum BinaryOperator {
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
-    Modulo,
-    Gt,
-    Lt,
-    GtEq,
-    LtEq,
-    Eq,
-    NotEq,
-    And,
-    Or,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum IndexOperator {
-    Gt,
-    Lt,
-    GtEq,
-    LtEq,
-    Eq,
 }
