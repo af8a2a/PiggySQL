@@ -19,6 +19,7 @@ pub enum Expr {
 
     IsNull(Box<Expr>),
     IsNotNull(Box<Expr>),
+    /// `[ NOT ] IN (val1, val2, ...)`
     InList {
         expr: Box<Expr>,
         list: Vec<Expr>,

@@ -1,11 +1,19 @@
 pub mod error;
-use self::error::TranslateError;
-use crate::{ast::expr::Expr, error::Result};
-use sqlparser::ast::Expr as SqlExpr;
+mod query;
+use crate::ast::expr::Expr;
 
+use self::error::TranslateError;
+use {
+    crate::{ast::Statement, result::Result},
+    sqlparser::ast::{
+        Assignment as SqlAssignment, Expr as SqlExpr, Ident as SqlIdent,
+        ObjectName as SqlObjectName, ObjectType as SqlObjectType, Statement as SqlStatement,
+        TableFactor, TableWithJoins,
+    },
+};
 
 impl Expr {
-    pub fn from(expr: SqlExpr) -> Result<Self> {
+    pub fn from(expr: &SqlExpr) -> Result<Self> {
         match expr {
             SqlExpr::Identifier(id) => Ok(Expr::Identifier(id.value.clone())),
             SqlExpr::CompoundIdentifier(idents) => (idents.len() == 2)
@@ -20,18 +28,26 @@ impl Expr {
                     ))
                     .into()
                 }),
-            SqlExpr::IsNull(expr) => Expr::from(*expr).map(Box::new).map(Expr::IsNull),
-            SqlExpr::IsNotNull(expr) => Expr::from(*expr).map(Box::new).map(Expr::IsNotNull),
+            SqlExpr::IsNull(expr) => Expr::from(expr).map(Box::new).map(Expr::IsNull),
+            SqlExpr::IsNotNull(expr) => Expr::from(expr).map(Box::new).map(Expr::IsNotNull),
             SqlExpr::InList {
                 expr,
                 list,
                 negated,
-            } => todo!(),
+            } => Ok(Expr::InList {
+                expr: Expr::from(expr).map(Box::new)?,
+                list: list.iter().map(Expr::from).collect::<Result<_>>()?,
+                negated: *negated,
+            }),
             SqlExpr::InSubquery {
                 expr,
                 subquery,
                 negated,
-            } => todo!(),
+            } => Ok(Expr::InSubquery {
+                expr: Expr::from(expr).map(Box::new)?,
+                subquery: todo!(),
+                negated: *negated,
+            }),
             SqlExpr::InUnnest {
                 expr,
                 array_expr,
@@ -89,3 +105,29 @@ impl Expr {
     }
 }
 
+fn translate_table_with_join(table: &TableWithJoins) -> Result<String> {
+    if !table.joins.is_empty() {
+        return Err(TranslateError::JoinOnUpdateNotSupported.into());
+    }
+    match &table.relation {
+        TableFactor::Table { name, .. } => translate_object_name(name),
+        t => Err(TranslateError::UnsupportedTableFactor(t.to_string()).into()),
+    }
+}
+
+fn translate_object_name(sql_object_name: &SqlObjectName) -> Result<String> {
+    let sql_object_name = &sql_object_name.0;
+    if sql_object_name.len() > 1 {
+        let compound_object_name = translate_idents(sql_object_name).join(".");
+        return Err(TranslateError::CompoundObjectNotSupported(compound_object_name).into());
+    }
+
+    sql_object_name
+        .get(0)
+        .map(|v| v.value.to_owned())
+        .ok_or_else(|| TranslateError::UnreachableEmptyObject.into())
+}
+
+pub fn translate_idents(idents: &[SqlIdent]) -> Vec<String> {
+    idents.iter().map(|v| v.value.to_owned()).collect()
+}
