@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Serialize, Deserialize};
 
-use crate::types::{expression::Expression, DataType};
+use crate::types::{expression::Expr, DataType};
 
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub struct Schema {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SchemaIndex {
     pub name: String,
-    pub expr:Expression ,
+    pub expr:Expr ,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub struct Column{
     pub data_type: DataType,
     pub nullable: bool,
     /// `DEFAULT <restricted-expr>`
-    pub default: Option<Expression>,
+    pub default: Option<Expr>,
     /// `{ PRIMARY KEY | UNIQUE }`
     pub unique: Option<bool>,
 

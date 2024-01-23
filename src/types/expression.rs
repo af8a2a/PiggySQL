@@ -1,71 +1,50 @@
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::Query;
 
+use super::operator::{BinaryOperator, UnaryOperator};
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Expression {
+pub enum Expr {
     Identifier(String),
-    IsNull(Box<Expression>),
-    IsNotNull(Box<Expression>),
+    IsNull(Box<Expr>),
+    IsNotNull(Box<Expr>),
     InList {
-        expr: Box<Expression>,
-        list: Vec<Expression>,
+        expr: Box<Expr>,
+        list: Vec<Expr>,
         negated: bool,
     },
     InSubquery {
-        expr: Box<Expression>,
+        expr: Box<Expr>,
         subquery: Box<Query>,
         negated: bool,
     },
     Between {
-        expr: Box<Expression>,
+        expr: Box<Expr>,
         negated: bool,
-        low: Box<Expression>,
-        high: Box<Expression>,
+        low: Box<Expr>,
+        high: Box<Expr>,
     },
 
     BinaryOp {
-        left: Box<Expression>,
+        left: Box<Expr>,
         op: BinaryOperator,
-        right: Box<Expression>,
+        right: Box<Expr>,
     },
     UnaryOp {
         op: UnaryOperator,
-        expr: Box<Expression>,
+        expr: Box<Expr>,
     },
 
 }
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum UnaryOperator {
-    Plus,
-    Minus,
-    Not,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum BinaryOperator {
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
-    Modulo,
-    Gt,
-    Lt,
-    GtEq,
-    LtEq,
-    Eq,
-    NotEq,
-    And,
-    Or,
+pub struct OrderByExpr {
+    pub expr: Expr,
+    pub asc: Option<bool>,
 }
 
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum IndexOperator {
-    Gt,
-    Lt,
-    GtEq,
-    LtEq,
-    Eq,
-}
+
+
+
+

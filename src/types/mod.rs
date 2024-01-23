@@ -1,5 +1,5 @@
 pub mod expression;
-
+pub mod operator;
 use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
