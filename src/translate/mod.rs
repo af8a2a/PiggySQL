@@ -1,6 +1,10 @@
+pub mod aggregate_function;
 pub mod error;
 pub mod query;
-pub mod aggregate_function;
+pub mod types;
+pub mod ddl;
+pub mod operator;
+
 use crate::ast::expr::Expr;
 
 use self::error::TranslateError;
