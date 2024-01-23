@@ -2,4 +2,4 @@ use crate::types::Value;
 
 
 
-type Row=Vec<Value>;
+pub type DataRow = Vec<Value>;
