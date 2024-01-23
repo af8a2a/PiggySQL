@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use sqlparser::ast::TableWithJoins;
 
-use super::{expr::Expr, operator::IndexOperator};
+use super::{expr::Expr, join::TableWithJoins, operator::IndexOperator};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Query {
@@ -41,10 +40,6 @@ pub enum SetExpr {
     Select(Box<Select>),
     Values(Values),
 }
-
-
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TableFactor {

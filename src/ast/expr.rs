@@ -1,9 +1,8 @@
 use crate::error::*;
 use serde::{Deserialize, Serialize};
-use sqlparser::ast::Query;
 
 use super::{
-    aggregate_function::Aggregate, ast_literal::AstLiteral, operator::{BinaryOperator, UnaryOperator}, types::Value
+    aggregate_function::Aggregate, ast_literal::AstLiteral, operator::{BinaryOperator, UnaryOperator}, query::Query, types::Value
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -45,6 +44,17 @@ pub enum Expr {
         expr: Box<Expr>,
     },
     Aggregate(Box<Aggregate>),
+    Like {
+        expr: Box<Expr>,
+        negated: bool,
+        pattern: Box<Expr>,
+    },
+    Nested(Box<Expr>),
+    Exists {
+        subquery: Box<Query>,
+        negated: bool,
+    },
+    Subquery(Box<Query>)
 
 }
 
