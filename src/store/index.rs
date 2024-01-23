@@ -1,6 +1,5 @@
 use crate::{
-    result::{Error, Result},
-    types::{expression::OrderByExpr, operator::IndexOperator, Value},
+    ast::query::OrderByExpr, result::{Error, Result}, types::{operator::IndexOperator, Value}
 };
 
 use super::RowIter;

@@ -44,11 +44,7 @@ pub enum Expr {
 
 
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct OrderByExpr {
-    pub expr: Expr,
-    pub asc: Option<bool>,
-}
+
 
 
 
