@@ -1,5 +1,5 @@
 use crate::{
-    ast::{expr::IndexOperator, query::OrderByExpr, types::Value},
+    ast::{ operator::IndexOperator, query::OrderByExpr, types::Value},
     result::{Error, Result},
 };
 
