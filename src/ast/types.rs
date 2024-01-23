@@ -21,6 +21,7 @@ pub enum Value {
     Float(f64),
     String(String),
 }
+///for index
 pub type Key = Value;
 
 impl Value {
