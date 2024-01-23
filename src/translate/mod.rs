@@ -1,9 +1,8 @@
 pub mod error;
 use self::error::TranslateError;
-use crate::error::Result;
+use crate::{ast::expr::Expr, error::Result};
 use sqlparser::ast::Expr as SqlExpr;
 
-use super::expression::Expr;
 
 impl Expr {
     pub fn from(expr: SqlExpr) -> Result<Self> {
@@ -51,34 +50,6 @@ impl Expr {
                 pattern,
                 escape_char,
             } => todo!(),
-            SqlExpr::ILike {
-                negated,
-                expr,
-                pattern,
-                escape_char,
-            } => todo!(),
-            SqlExpr::SimilarTo {
-                negated,
-                expr,
-                pattern,
-                escape_char,
-            } => todo!(),
-            SqlExpr::RLike {
-                negated,
-                expr,
-                pattern,
-                regexp,
-            } => todo!(),
-            SqlExpr::AnyOp {
-                left,
-                compare_op,
-                right,
-            } => todo!(),
-            SqlExpr::AllOp {
-                left,
-                compare_op,
-                right,
-            } => todo!(),
             SqlExpr::UnaryOp { op, expr } => todo!(),
             SqlExpr::Convert {
                 expr,
@@ -86,48 +57,6 @@ impl Expr {
                 charset,
                 target_before_value,
             } => todo!(),
-            SqlExpr::Cast {
-                expr,
-                data_type,
-                format,
-            } => todo!(),
-            SqlExpr::TryCast {
-                expr,
-                data_type,
-                format,
-            } => todo!(),
-            SqlExpr::SafeCast {
-                expr,
-                data_type,
-                format,
-            } => todo!(),
-            SqlExpr::AtTimeZone {
-                timestamp,
-                time_zone,
-            } => todo!(),
-            SqlExpr::Extract { field, expr } => todo!(),
-            SqlExpr::Ceil { expr, field } => todo!(),
-            SqlExpr::Floor { expr, field } => todo!(),
-            SqlExpr::Position { expr, r#in } => todo!(),
-            SqlExpr::Substring {
-                expr,
-                substring_from,
-                substring_for,
-                special,
-            } => todo!(),
-            SqlExpr::Trim {
-                expr,
-                trim_where,
-                trim_what,
-                trim_characters,
-            } => todo!(),
-            SqlExpr::Overlay {
-                expr,
-                overlay_what,
-                overlay_from,
-                overlay_for,
-            } => todo!(),
-            SqlExpr::Collate { expr, collation } => todo!(),
             SqlExpr::Nested(_) => todo!(),
             SqlExpr::Value(_) => todo!(),
             SqlExpr::IntroducedString { introducer, value } => todo!(),
@@ -159,3 +88,4 @@ impl Expr {
         }
     }
 }
+

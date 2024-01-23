@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::TableWithJoins;
 
-use crate::types::{expression::Expr, operator::IndexOperator};
+use super::expr::{Expr, IndexOperator};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Query {
@@ -10,7 +10,6 @@ pub struct Query {
     pub limit: Option<Expr>,
     pub offset: Option<Expr>,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Select {
@@ -22,7 +21,6 @@ pub struct Select {
     pub having: Option<Expr>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TableAlias {
     pub name: String,
@@ -32,21 +30,17 @@ pub struct TableAlias {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Values(pub Vec<Vec<Expr>>);
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OrderByExpr {
     pub expr: Expr,
     pub asc: Option<bool>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SetExpr {
     Select(Box<Select>),
     Values(Values),
 }
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TableFactor {
@@ -65,9 +59,6 @@ pub enum TableFactor {
         size: Expr,
     },
 }
-
-
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IndexItem {
@@ -88,4 +79,3 @@ pub enum SelectItem {
     /// An unqualified `*`
     Wildcard,
 }
-

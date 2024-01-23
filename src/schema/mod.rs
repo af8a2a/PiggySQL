@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::types::{expression::Expr, DataType};
-
+use crate::{ast::expr::Expr, types::DataType};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Schema {
@@ -15,11 +14,11 @@ pub struct Schema {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SchemaIndex {
     pub name: String,
-    pub expr:Expr ,
+    pub expr: Expr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Column{
+pub struct Column {
     pub name: String,
     pub data_type: DataType,
     pub nullable: bool,
@@ -27,5 +26,4 @@ pub struct Column{
     pub default: Option<Expr>,
     /// `{ PRIMARY KEY | UNIQUE }`
     pub unique: Option<bool>,
-
 }

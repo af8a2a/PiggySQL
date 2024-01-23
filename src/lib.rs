@@ -6,6 +6,7 @@ pub mod types;
 pub mod common;
 pub mod store;
 pub mod ast;
+pub mod translate;
 mod result;
 
 pub mod error {

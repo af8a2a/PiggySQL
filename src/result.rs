@@ -13,6 +13,10 @@ pub enum Error {
 
     #[error("translate: {0}")]
     Translate(#[from] TranslateError),
+
+    // #[error("evaluate: {0}")]
+    // Evaluate(#[from] EvaluateError),
+
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

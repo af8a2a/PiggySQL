@@ -1,5 +1,6 @@
 pub mod query;
 pub mod join;
+pub mod expr;
 
 use serde::{Deserialize, Serialize};
 

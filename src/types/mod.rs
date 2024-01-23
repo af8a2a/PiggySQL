@@ -1,12 +1,10 @@
-pub mod expression;
-pub mod operator;
-pub mod translate;
 
+use crate::error::*;
 use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Hash, PartialEq,Eq,Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DataType {
     Boolean,
     Integer,
@@ -23,7 +21,7 @@ pub enum Value {
     Float(f64),
     String(String),
 }
-pub type Key=Value;
+pub type Key = Value;
 
 impl Value {
     /// Returns the value's datatype, or None for null values
@@ -37,7 +35,7 @@ impl Value {
         }
     }
 }
-impl PartialOrd for Value{
+impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Self::Null, Self::Null) => Some(Ordering::Equal),
@@ -51,6 +49,5 @@ impl PartialOrd for Value{
             (Self::String(a), Self::String(b)) => a.partial_cmp(b),
             (_, _) => None,
         }
-
     }
 }
