@@ -7,6 +7,10 @@ use super::operator::{BinaryOperator, UnaryOperator};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Expr {
     Identifier(String),
+    CompoundIdentifier {
+        alias: String,
+        ident: String,
+    },
     IsNull(Box<Expr>),
     IsNotNull(Box<Expr>),
     InList {
@@ -37,6 +41,9 @@ pub enum Expr {
     },
 
 }
+
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OrderByExpr {
     pub expr: Expr,
