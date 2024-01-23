@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
-use sqlparser::ast::TableFactor;
 
 use crate::types::expression::Expr;
+
+use super::query::TableFactor;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Join {
