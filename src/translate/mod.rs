@@ -1,5 +1,6 @@
 pub mod error;
-mod query;
+pub mod query;
+pub mod aggregate_function;
 use crate::ast::expr::Expr;
 
 use self::error::TranslateError;

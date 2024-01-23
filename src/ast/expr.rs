@@ -3,9 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser::ast::Query;
 
 use super::{
-    ast_literal::AstLiteral,
-    operator::{BinaryOperator, UnaryOperator},
-    types::Value,
+    aggregate_function::Aggregate, ast_literal::AstLiteral, operator::{BinaryOperator, UnaryOperator}, types::Value
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -46,6 +44,8 @@ pub enum Expr {
         op: UnaryOperator,
         expr: Box<Expr>,
     },
+    Aggregate(Box<Aggregate>),
+
 }
 
 impl Expr {
