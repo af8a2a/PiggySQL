@@ -8,11 +8,18 @@ pub mod query;
 pub mod types;
 
 use crate::{
-    ast::{expr::Expr, query::Query, Assignment},
+    ast::{
+        expr::Expr,
+        query::{OrderByExpr, Query},
+        Assignment,
+    },
     result::Error,
 };
 
-use self::error::TranslateError;
+use self::{
+    ddl::{translate_alter_table_operation, translate_column_def},
+    error::TranslateError,
+};
 use {
     crate::{ast::Statement, result::Result},
     sqlparser::ast::{
@@ -49,7 +56,6 @@ impl Statement {
                 selection: selection.as_ref().map(Expr::from).transpose()?,
             }),
             SqlStatement::Delete {
-                tables,
                 from,
                 selection,
                 ..
@@ -64,101 +70,100 @@ impl Statement {
                     selection: selection.as_ref().map(Expr::from).transpose()?,
                 })
             }
+            //todo
             SqlStatement::CreateTable {
-                or_replace,
-                temporary,
-                external,
-                global,
                 if_not_exists,
-                transient,
                 name,
                 columns,
-                constraints,
-                hive_distribution,
-                hive_formats,
-                table_properties,
-                with_options,
-                file_format,
-                location,
                 query,
-                without_rowid,
-                like,
-                clone,
                 engine,
-                comment,
-                auto_increment_offset,
-                default_charset,
-                collation,
-                on_commit,
-                on_cluster,
-                order_by,
-                strict,
-            } => todo!(),
+                ..
+            } => {
+                let columns = columns
+                    .iter()
+                    .map(translate_column_def)
+                    .collect::<Result<Vec<_>>>()?;
+
+                let columns = (!columns.is_empty()).then_some(columns);
+
+                Ok(Statement::CreateTable {
+                    if_not_exists: *if_not_exists,
+                    name: translate_object_name(name)?,
+                    columns,
+                    source: match query {
+                        Some(v) => Some(Query::from(v).map(Box::new)?),
+                        None => None,
+                    },
+                    engine: engine.clone(),
+                })
+            }
 
             SqlStatement::CreateIndex {
                 name,
                 table_name,
-                using,
                 columns,
-                unique,
-                concurrently,
-                if_not_exists,
-                include,
-                nulls_distinct,
-                predicate,
-            } => todo!(),
+                ..
+            } => {
+                if columns.len() > 1 {
+                    return Err(TranslateError::CompositeIndexNotSupported.into());
+                }
+
+                let Some(name) = name else {
+                    return Err(TranslateError::UnsupportedUnnamedIndex.into());
+                };
+
+                let name = translate_object_name(name)?;
+
+                if name.to_uppercase() == "PRIMARY" {
+                    return Err(TranslateError::ReservedIndexName(name).into());
+                };
+
+                Ok(Statement::CreateIndex {
+                    name,
+                    table_name: translate_object_name(table_name)?,
+                    column: OrderByExpr::from(&columns[0])?,
+                })
+            }
 
             SqlStatement::AlterTable {
-                name,
-                if_exists,
-                only,
-                operations,
-            } => todo!(),
+                name, operations, ..
+            } => {
+                if operations.len() > 1 {
+                    return Err(TranslateError::UnsupportedMultipleAlterTableOperations.into());
+                }
+
+                let operation = operations
+                    .iter()
+                    .next()
+                    .ok_or(TranslateError::UnreachableEmptyAlterTableOperation)?;
+
+                Ok(Statement::AlterTable {
+                    name: translate_object_name(name)?,
+                    operation: translate_alter_table_operation(operation)?,
+                })
+            }
             SqlStatement::AlterIndex { name, operation } => todo!(),
             SqlStatement::Drop {
-                object_type,
+                object_type: SqlObjectType::Table,
                 if_exists,
                 names,
-                cascade,
-                restrict,
-                purge,
-                temporary,
-            } => todo!(),
+                ..
+            } => Ok(Statement::DropTable {
+                if_exists: *if_exists,
+                names: names
+                    .iter()
+                    .map(translate_object_name)
+                    .collect::<Result<Vec<_>>>()?,
+            }),
 
             SqlStatement::ShowTables {
-                extended,
-                full,
-                db_name,
-                filter,
+                ..
             } => todo!(),
-            SqlStatement::StartTransaction {
-                modes,
-                begin,
-                modifier,
-            } => todo!(),
-            SqlStatement::SetTransaction {
-                modes,
-                snapshot,
-                session,
-            } => todo!(),
-            SqlStatement::Comment {
-                object_type,
-                object_name,
-                comment,
-                if_exists,
-            } => todo!(),
-            SqlStatement::Commit { chain } => todo!(),
-            SqlStatement::Rollback { .. } => todo!(),
-            SqlStatement::CreateSchema {
-                schema_name,
-                if_not_exists,
-            } => todo!(),
+            SqlStatement::StartTransaction { .. } => Ok(Statement::StartTransaction),
+            SqlStatement::Commit { .. } => Ok(Statement::Commit),
+            SqlStatement::Rollback { .. } => Ok(Statement::Rollback),
             SqlStatement::Explain {
-                describe_alias,
-                analyze,
-                verbose,
-                statement,
-                format,
+                ..
             } => todo!(),
             _ => unimplemented!(),
         }
