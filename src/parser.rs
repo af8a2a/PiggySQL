@@ -1,5 +1,4 @@
 use crate::result::{Error, Result};
-use sqlparser::ast;
 use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::{ast::Statement as SqlStatement, parser::Parser};
 const DIALECT: PostgreSqlDialect = PostgreSqlDialect {};
