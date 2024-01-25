@@ -12,3 +12,7 @@ serde = { version = "1", features = ["derive","rc"] }
 bigdecimal = { version = "0.4.1", features = ["serde", "string-only"] }
 futures = "0.3"
 ordered-float = "4.2.0"
+itertools = "0.12.0"
+
+[dev-dependencies]
+tempfile = "3.0.7"

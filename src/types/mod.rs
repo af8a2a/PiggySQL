@@ -41,3 +41,16 @@ pub enum DataType {
     Interger,
     Utf8,
 }
+
+impl DataType {
+    fn try_from(value: sqlparser::ast::DataType) -> Result<Self, Self::Error> {
+        match value {
+            sqlparser::ast::DataType::Float(_) => Ok(DataType::Float),
+            sqlparser::ast::DataType::Int(_) | sqlparser::ast::DataType::Integer(_) => {
+                Ok(DataType::Interger)
+            }
+            sqlparser::ast::DataType::Boolean => Ok(DataType::Boolean),
+            _=>unimplemented!()
+        }
+    }
+}

@@ -9,8 +9,8 @@ pub enum Error {
 
     #[error("parser: {0}")]
     Parser(String),
-
-    
+    #[error("Bind: {0}")]
+    BindError(String),
     // #[error("evaluate: {0}")]
     // Evaluate(#[from] EvaluateError),
 }
