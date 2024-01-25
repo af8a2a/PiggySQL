@@ -1,6 +1,6 @@
 use crate::result::{Error,Result};
 
-pub trait Transaction {
+pub trait Transaction:Sync + Send + 'static{
     async fn begin(&mut self, autocommit: bool) -> Result<bool> {
         if autocommit {
             return Ok(false);

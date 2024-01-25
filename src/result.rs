@@ -1,7 +1,6 @@
 use serde::Serialize;
 use thiserror::Error as ThisError;
 
-use crate::translate::error::TranslateError;
 
 #[derive(ThisError, Serialize, Debug, PartialEq)]
 pub enum Error {
@@ -11,8 +10,6 @@ pub enum Error {
     #[error("parser: {0}")]
     Parser(String),
 
-    #[error("translate: {0}")]
-    Translate(#[from] TranslateError),
     
     // #[error("evaluate: {0}")]
     // Evaluate(#[from] EvaluateError),

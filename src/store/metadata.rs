@@ -1,10 +1,10 @@
 use {
-    crate::{ast::types::Value, result::Result},
+    crate::{result::Result, types::DataValue},
     std::{collections::HashMap, iter::empty},
 };
 
 type ObjectName = String;
-pub type MetaIter = Box<dyn Iterator<Item = Result<(ObjectName, HashMap<String, Value>)>>>;
+pub type MetaIter = Box<dyn Iterator<Item = Result<(ObjectName, HashMap<String, DataValue>)>>>;
 
 pub trait Metadata {
     async fn scan_table_meta(&self) -> Result<MetaIter> {

@@ -1,9 +1,19 @@
-use crate::{
-    ast::{ operator::IndexOperator, query::OrderByExpr, types::Value},
-    result::{Error, Result},
-};
+use serde::{Deserialize, Serialize};
+use sqlparser::ast::{OrderByExpr, Value};
+
+use crate::result::{Error,Result};
 
 use super::RowIter;
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum IndexOperator {
+    Gt,
+    Lt,
+    GtEq,
+    LtEq,
+    Eq,
+}
 
 pub trait Index {
     async fn scan_indexed_data(

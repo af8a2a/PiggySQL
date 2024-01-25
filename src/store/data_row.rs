@@ -1,6 +1,8 @@
-use crate::ast::types::Value;
+use crate::types::DataValue;
 
 
 
 
-pub type DataRow = Vec<Value>;
+
+
+pub type DataRow = Vec<DataValue>;
