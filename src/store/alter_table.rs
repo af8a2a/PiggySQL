@@ -1,6 +1,5 @@
 use {
-    super::Column,
-    crate::result::{Error, Result},
+    super::schema::Column, crate::result::{Error, Result}
 };
 
 // /// AlterTable

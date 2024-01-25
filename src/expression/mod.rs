@@ -3,7 +3,10 @@ pub mod agg;
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::DataType;
 
-use crate::{store::Column, types::DataValue};
+use crate::{
+    store::schema::{Column, ColumnRef},
+    types::{DataValue, ValueRef},
+};
 
 use self::agg::Aggregate;
 
@@ -11,10 +14,10 @@ use self::agg::Aggregate;
 /// SELECT a+1, b FROM t1.
 /// a+1 -> ScalarExpression::Unary(a + 1)
 /// b   -> ScalarExpression::ColumnRef()
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub enum ScalarExpression {
-    Constant(DataValue),
-    ColumnRef(Column),
+    Constant(ValueRef),
+    ColumnRef(ColumnRef),
     Alias {
         expr: Box<ScalarExpression>,
         alias: String,

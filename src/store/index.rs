@@ -1,19 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlparser::ast::{OrderByExpr, Value};
 
-use crate::result::{Error,Result};
+use crate::result::{Error, Result};
 
-use super::RowIter;
-
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum IndexOperator {
-    Gt,
-    Lt,
-    GtEq,
-    LtEq,
-    Eq,
-}
+use super::{schema::IndexOperator, RowIter};
 
 pub trait Index {
     async fn scan_indexed_data(

@@ -5,3 +5,4 @@ pub mod binder;
 pub mod result;
 pub mod types;
 pub mod expression;
+pub mod plan;

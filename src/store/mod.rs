@@ -19,19 +19,10 @@ mod data_row;
 mod index;
 mod metadata;
 mod transaction;
-
+pub mod schema;
 type Key = Value;
 pub type RowIter = Pin<Box<dyn Stream<Item = Result<(Key, DataRow)>>>>;
 
-pub struct Schema{
-    pub table_name: String,
-    pub columns: Vec<Column>,
-}
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Column{
-    pub column_name: String,
-    pub data_type: DataType,
-}
 
 // pub trait Storage: Store + Index + Metadata {}
 // impl<S: Store + Index + Metadata> Storage for S {}

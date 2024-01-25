@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 sqlparser = { version = "0.39.0", features = ["serde", "bigdecimal"] }
 thiserror = "1.0"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive","rc"] }
 bigdecimal = { version = "0.4.1", features = ["serde", "string-only"] }
 futures = "0.3"
+ordered-float = "4.2.0"
