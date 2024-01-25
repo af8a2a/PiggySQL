@@ -1,6 +1,7 @@
 use crate::result::{Error, Result};
 use crate::types::DataType;
 use futures::Stream;
+use serde::{Deserialize, Serialize};
 use sqlparser::ast::{ColumnDef, Value};
 use std::pin::Pin;
 
@@ -26,6 +27,7 @@ pub struct Schema{
     pub table_name: String,
     pub columns: Vec<Column>,
 }
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Column{
     pub column_name: String,
     pub data_type: DataType,
