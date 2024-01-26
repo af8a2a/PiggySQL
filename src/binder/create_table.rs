@@ -1,19 +1,21 @@
-use std::{collections::HashSet, sync::Arc};
+use itertools::Itertools;
+use sqlparser::ast::{ColumnDef, ColumnOption, ObjectName, TableConstraint};
+use std::collections::HashSet;
+use std::sync::Arc;
 
-use sqlparser::ast::{ColumnDef, Ident, ObjectName, TableConstraint};
+use super::Binder;
+use crate::binder::{lower_case_name, split_name, BindError};
+use crate::catalog::{ColumnCatalog, ColumnDesc};
+use crate::expression::ScalarExpression;
+use crate::plan::operator::create_table::CreateTableOperator;
+use crate::plan::operator::Operator;
+use crate::plan::LogicalPlan;
+use crate::storage::Transaction;
+use crate::types::value::DataValue;
+use crate::types::LogicalType;
 
-use crate::{
-    plan::{
-        operator::{create_table::CreateTableOperator, Operator},
-        LogicalPlan,
-    },
-    store::{schema::Column, StorageMut, Store},
-    types::DataType,
-};
-
-use super::{split_name, BindError, Binder};
-
-impl<'a, S: Store + StorageMut> Binder<'a, S> {
+impl<'a, T: Transaction> Binder<'a, T> {
+    // TODO: TableConstraint
     pub(crate) fn bind_create_table(
         &mut self,
         name: &ObjectName,
@@ -21,14 +23,10 @@ impl<'a, S: Store + StorageMut> Binder<'a, S> {
         constraints: &[TableConstraint],
         if_not_exists: bool,
     ) -> Result<LogicalPlan, BindError> {
-        let name = ObjectName(
-            name.0
-                .iter()
-                .map(|ident| Ident::new(ident.value.to_lowercase()))
-                .collect(),
-        );
+        let name = lower_case_name(name);
         let (_, name) = split_name(&name)?;
-        let table_name = name.to_string();
+        let table_name = Arc::new(name.to_string());
+
         {
             // check duplicated column names
             let mut set = HashSet::new();
@@ -39,11 +37,10 @@ impl<'a, S: Store + StorageMut> Binder<'a, S> {
                 }
             }
         }
-        let mut columns: Vec<Column> = columns
+        let mut columns: Vec<ColumnCatalog> = columns
             .iter()
             .map(|col| self.bind_column(col))
             .try_collect()?;
-
         for constraint in constraints {
             match constraint {
                 TableConstraint::Unique {
@@ -54,12 +51,12 @@ impl<'a, S: Store + StorageMut> Binder<'a, S> {
                     for column_name in column_names {
                         if let Some(column) = columns
                             .iter_mut()
-                            .find(|column| column.column_name == column_name.to_string())
+                            .find(|column| column.name() == column_name.to_string())
                         {
                             if *is_primary {
-                                column.is_primary = true;
+                                column.desc.is_primary = true;
                             } else {
-                                column.is_unique = true;
+                                column.desc.is_unique = true;
                             }
                         }
                     }
@@ -67,11 +64,13 @@ impl<'a, S: Store + StorageMut> Binder<'a, S> {
                 _ => todo!(),
             }
         }
-        if columns.iter().filter(|col| col.is_primary).count() != 1 {
+
+        if columns.iter().filter(|col| col.desc.is_primary).count() != 1 {
             return Err(BindError::InvalidTable(
                 "The primary key field must exist and have at least one".to_string(),
             ));
         }
+
         let plan = LogicalPlan {
             operator: Operator::CreateTable(CreateTableOperator {
                 table_name,
@@ -80,21 +79,48 @@ impl<'a, S: Store + StorageMut> Binder<'a, S> {
             }),
             childrens: vec![],
         };
-
         Ok(plan)
     }
-    //todo
-    pub fn bind_column(&mut self, column_def: &ColumnDef) -> Result<Column, BindError> {
+
+    pub fn bind_column(&mut self, column_def: &ColumnDef) -> Result<ColumnCatalog, BindError> {
         let column_name = column_def.name.to_string();
-        let mut col = Column::new(
-            column_def.name.to_string(),
-            DataType::try_from(column_def.data_type.clone())?,
+        let mut column_desc = ColumnDesc::new(
+            LogicalType::try_from(column_def.data_type.clone())?,
             false,
             false,
-            false,
+            None,
         );
-        Ok(col)
+        let mut nullable = false;
+
+        // TODO: 这里可以对更多字段可设置内容进行补充
+        for option_def in &column_def.options {
+            match &option_def.option {
+                ColumnOption::Null => nullable = true,
+                ColumnOption::NotNull => (),
+                ColumnOption::Unique { is_primary } => {
+                    if *is_primary {
+                        column_desc.is_primary = true;
+                        nullable = false;
+                        // Skip other options when using primary key
+                        break;
+                    } else {
+                        column_desc.is_unique = true;
+                    }
+                }
+                ColumnOption::Default(expr) => {
+                    if let ScalarExpression::Constant(value) = self.bind_expr(expr)? {
+                        let cast_value =
+                            DataValue::clone(&value).cast(&column_desc.column_datatype)?;
+                        column_desc.default = Some(Arc::new(cast_value));
+                    } else {
+                        unreachable!("'default' only for constant")
+                    }
+                }
+                _ => todo!(),
+            }
+        }
+
+        Ok(ColumnCatalog::new(column_name, nullable, column_desc, None))
     }
 }
-
 

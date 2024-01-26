@@ -9,3 +9,14 @@ pub enum Aggregate {
     Sum,
     Count,
 }
+impl Aggregate {
+    pub fn allow_distinct(&self) -> bool {
+        match self {
+            Aggregate::Avg => false,
+            Aggregate::Max => false,
+            Aggregate::Min => false,
+            Aggregate::Sum => true,
+            Aggregate::Count => true,
+        }
+    }
+}

@@ -1,4 +1,6 @@
-use crate::plan::TableName;
+use crate::catalog::TableName;
+
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DeleteOperator {

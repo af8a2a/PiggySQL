@@ -6,13 +6,37 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-sqlparser = { version = "0.39.0", features = ["serde", "bigdecimal"] }
-thiserror = "1.0"
-serde = { version = "1", features = ["derive","rc"] }
-bigdecimal = { version = "0.4.1", features = ["serde", "string-only"] }
-futures = "0.3"
-ordered-float = "4.2.0"
-itertools = "0.12.0"
+sqlparser = "0.34.0"
+thiserror = "1"
+parking_lot = "0.12.1"
+itertools = "0.10"
+tracing = "0.1.37"
+chrono = "0.4.26"
+tokio = { version = "1.28.2", features = ["full"] }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+bincode = "1.3.3"
+integer-encoding = "3.0.4"
+strum_macros = "0.24"
+ordered-float = "3.0"
+petgraph = "0.6.3"
+futures = "0.3.25"
+ahash = "0.8.3"
+lazy_static = "1.4.0"
+comfy-table = "7.0.1"
+bytes = "1.5.0"
+rust_decimal = "1"
+csv = "1"
+regex = "1.10.2"
+clap = "4.4.11"
+rustyline = "13.0.0"
 
 [dev-dependencies]
+cargo-tarpaulin = "0.27.1"
+tokio-test = "0.4.2"
+ctor = "0.2.0"
+env_logger = "0.10"
+paste = "^1.0"
+rstest = "0.17"
 tempfile = "3.0.7"
+criterion = { version = "0.5.1", features = ["html_reports","async_tokio","async_futures"] }

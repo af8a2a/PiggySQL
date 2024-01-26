@@ -1,36 +1,44 @@
-use sqlparser::ast::{Ident, ObjectName, Statement};
+pub mod aggregate;
+mod alter_table;
 mod create_table;
+mod delete;
+mod distinct;
+mod drop_table;
+pub mod expr;
+mod insert;
+mod select;
+mod show;
+mod update;
 
-use crate::plan::LogicalPlan;
-use crate::result::Result;
-use crate::store::{StorageMut, Store};
-use crate::{expression::ScalarExpression, plan::operator::join::JoinType, store::schema::Schema};
+use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
 use std::collections::BTreeMap;
 
-mod select;
+use crate::catalog::{CatalogError, TableCatalog, TableName, DEFAULT_SCHEMA_NAME};
+use crate::expression::ScalarExpression;
+use crate::plan::operator::join::JoinType;
+use crate::plan::LogicalPlan;
+use crate::storage::Transaction;
+use crate::types::errors::TypeError;
 
-type TableName = String;
-pub(crate) static DEFAULT_DATABASE_NAME: &str = "kipsql";
-pub(crate) static DEFAULT_SCHEMA_NAME: &str = "kipsql";
-
-pub struct Storage<T: Store + StorageMut> {
-    pub storage: T,
+pub enum InputRefType {
+    AggCall,
+    GroupBy,
 }
 
-
-
-pub struct BinderContext<'a,S:Store + StorageMut> {
-    storage:&'a S,
-    pub(crate) bind_table: BTreeMap<TableName, (Schema, Option<JoinType>)>,
+#[derive(Clone)]
+pub struct BinderContext<'a, T: Transaction> {
+    transaction: &'a T,
+    pub(crate) bind_table: BTreeMap<TableName, (TableCatalog, Option<JoinType>)>,
     aliases: BTreeMap<String, ScalarExpression>,
     table_aliases: BTreeMap<String, TableName>,
     group_by_exprs: Vec<ScalarExpression>,
     pub(crate) agg_calls: Vec<ScalarExpression>,
 }
-impl<'a,S:Store + StorageMut> BinderContext<'a,S>{
-    pub fn new(storage: &'a S) -> Self {
+
+impl<'a, T: Transaction> BinderContext<'a, T> {
+    pub fn new(transaction: &'a T) -> Self {
         BinderContext {
-            storage,
+            transaction,
             bind_table: Default::default(),
             aliases: Default::default(),
             table_aliases: Default::default(),
@@ -38,20 +46,79 @@ impl<'a,S:Store + StorageMut> BinderContext<'a,S>{
             agg_calls: Default::default(),
         }
     }
-}   
 
+    pub fn table(&self, table_name: TableName) -> Option<&TableCatalog> {
+        if let Some(real_name) = self.table_aliases.get(table_name.as_ref()) {
+            self.transaction.table(real_name.clone())
+        } else {
+            self.transaction.table(table_name)
+        }
+    }
 
-pub struct Binder<'a, S:Store+StorageMut> {
-    context: BinderContext<'a,S>,
+    // Tips: The order of this index is based on Aggregate being bound first.
+    pub fn input_ref_index(&self, ty: InputRefType) -> usize {
+        match ty {
+            InputRefType::AggCall => self.agg_calls.len(),
+            InputRefType::GroupBy => self.agg_calls.len() + self.group_by_exprs.len(),
+        }
+    }
+
+    pub fn add_alias(&mut self, alias: String, expr: ScalarExpression) -> Result<(), BindError> {
+        let is_exist = self.aliases.insert(alias.clone(), expr).is_some();
+        if is_exist {
+            return Err(BindError::InvalidColumn(format!("{} duplicated", alias)));
+        }
+
+        Ok(())
+    }
+
+    pub fn add_table_alias(&mut self, alias: String, table: TableName) -> Result<(), BindError> {
+        let is_alias_exist = self
+            .table_aliases
+            .insert(alias.clone(), table.clone())
+            .is_some();
+        if is_alias_exist {
+            return Err(BindError::InvalidTable(format!("{} duplicated", alias)));
+        }
+
+        Ok(())
+    }
+
+    pub fn add_bind_table(
+        &mut self,
+        table: TableName,
+        table_catalog: TableCatalog,
+        join_type: Option<JoinType>,
+    ) -> Result<(), BindError> {
+        let is_bound = self
+            .bind_table
+            .insert(table.clone(), (table_catalog.clone(), join_type))
+            .is_some();
+        if is_bound {
+            return Err(BindError::InvalidTable(format!("{} duplicated", table)));
+        }
+
+        Ok(())
+    }
+
+    pub fn has_agg_call(&self, expr: &ScalarExpression) -> bool {
+        self.group_by_exprs.contains(expr)
+    }
 }
 
-impl<'a, S:Store + StorageMut> Binder<'a, S> {
-    pub fn new(context: BinderContext<'a, S>) -> Self {
+pub struct Binder<'a, T: Transaction> {
+    context: BinderContext<'a, T>,
+}
+
+impl<'a, T: Transaction> Binder<'a, T> {
+    pub fn new(context: BinderContext<'a, T>) -> Self {
         Binder { context }
     }
-    pub async fn bind(mut self, stmt: &Statement) -> Result<LogicalPlan> {
-        let plan = match stmt{
-            // Statement::Query(query) => self.bind_query(query)?,
+
+    pub fn bind(mut self, stmt: &Statement) -> Result<LogicalPlan, BindError> {
+        let plan = match stmt {
+            Statement::Query(query) => self.bind_query(query)?,
+            Statement::AlterTable { name, operation } => self.bind_alter_table(name, operation)?,
             Statement::CreateTable {
                 name,
                 columns,
@@ -59,16 +126,84 @@ impl<'a, S:Store + StorageMut> Binder<'a, S> {
                 if_not_exists,
                 ..
             } => self.bind_create_table(name, columns, constraints, *if_not_exists)?,
+            Statement::Drop {
+                object_type,
+                names,
+                if_exists,
+                ..
+            } => match object_type {
+                ObjectType::Table => self.bind_drop_table(&names[0], if_exists)?,
+                _ => todo!(),
+            },
+            Statement::Insert {
+                table_name,
+                columns,
+                source,
+                overwrite,
+                ..
+            } => {
+                if let SetExpr::Values(values) = source.body.as_ref() {
+                    self.bind_insert(table_name.to_owned(), columns, &values.rows, *overwrite)?
+                } else {
+                    todo!()
+                }
+            }
+            Statement::Update {
+                table,
+                selection,
+                assignments,
+                ..
+            } => {
+                if !table.joins.is_empty() {
+                    unimplemented!()
+                } else {
+                    self.bind_update(table, selection, assignments)?
+                }
+            }
+            Statement::Delete {
+                from, selection, ..
+            } => {
+                let table = &from[0];
 
-            _ => unimplemented!(),
-
+                if !table.joins.is_empty() {
+                    unimplemented!()
+                } else {
+                    self.bind_delete(table, selection)?
+                }
+            }
+            // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,
+            // Statement::ShowTables { .. } => self.bind_show_tables()?,
+            // Statement::Copy {
+            //     source,
+            //     to,
+            //     target,
+            //     options,
+            //     ..
+            // } => self.bind_copy(source.clone(), *to, target.clone(), options)?,
+            _ => return Err(BindError::UnsupportedStmt(stmt.to_string())),
         };
-        todo!()
+        Ok(plan)
     }
-
 }
 
+/// Convert an object name into lower case
+fn lower_case_name(name: &ObjectName) -> ObjectName {
+    ObjectName(
+        name.0
+            .iter()
+            .map(|ident| Ident::new(ident.value.to_lowercase()))
+            .collect(),
+    )
+}
 
+/// Split an object name into `(schema name, table name)`.
+fn split_name(name: &ObjectName) -> Result<(&str, &str), BindError> {
+    Ok(match name.0.as_slice() {
+        [table] => (DEFAULT_SCHEMA_NAME, &table.value),
+        [schema, table] => (&schema.value, &table.value),
+        _ => return Err(BindError::InvalidTableName(name.0.clone())),
+    })
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum BindError {
@@ -92,18 +227,10 @@ pub enum BindError {
     Subquery(String),
     #[error("agg miss: {0}")]
     AggMiss(String),
-    // #[error("catalog error: {0}")]
-    // CatalogError(#[from] CatalogError),
-    // #[error("type error: {0}")]
-    // TypeError(#[from] TypeError),
-}
-
-
-
-fn split_name(name: &ObjectName) -> Result<(&str, &str), BindError> {
-    Ok(match name.0.as_slice() {
-        [table] => (DEFAULT_SCHEMA_NAME, &table.value),
-        [schema, table] => (&schema.value, &table.value),
-        _ => return Err(BindError::InvalidTableName(name.0.clone())),
-    })
+    #[error("catalog error: {0}")]
+    CatalogError(#[from] CatalogError),
+    #[error("type error: {0}")]
+    TypeError(#[from] TypeError),
+    #[error("copy error: {0}")]
+    UnsupportedCopySource(String),
 }

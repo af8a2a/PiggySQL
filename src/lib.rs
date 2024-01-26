@@ -1,8 +1,9 @@
 pub mod parser;
 pub mod common;
-pub mod store;
+pub mod storage;
 pub mod binder;
 pub mod result;
 pub mod types;
 pub mod expression;
 pub mod plan;
+pub mod catalog;

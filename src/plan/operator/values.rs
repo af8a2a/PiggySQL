@@ -1,4 +1,5 @@
-use crate::{store::schema::ColumnRef, types::ValueRef};
+use crate::catalog::ColumnRef;
+use crate::types::value::ValueRef;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ValuesOperator {

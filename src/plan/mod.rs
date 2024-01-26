@@ -1,8 +1,8 @@
+use crate::catalog::TableName;
+
 use self::operator::Operator;
 
 pub mod operator;
-type TableName = String;
-
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct LogicalPlan {
