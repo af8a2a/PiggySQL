@@ -1,5 +1,6 @@
 pub(crate) mod dql;
 pub(crate) mod dml;
+pub(crate) mod ddl;
 
 use std::{cell::RefCell, sync::Arc};
 
