@@ -1,5 +1,6 @@
 mod table_codec;
-
+mod mvcc;
+mod mock;
 use crate::catalog::{CatalogError, ColumnCatalog, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
