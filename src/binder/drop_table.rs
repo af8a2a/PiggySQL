@@ -1,7 +1,7 @@
 use crate::binder::{lower_case_name, split_name, BindError, Binder};
-use crate::plan::operator::drop_table::DropTableOperator;
-use crate::plan::operator::Operator;
-use crate::plan::LogicalPlan;
+use crate::planner::operator::drop_table::DropTableOperator;
+use crate::planner::operator::Operator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use sqlparser::ast::ObjectName;
 use std::sync::Arc;

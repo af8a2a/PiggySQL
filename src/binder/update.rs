@@ -1,8 +1,8 @@
 use crate::binder::{lower_case_name, split_name, BindError, Binder};
 use crate::expression::ScalarExpression;
-use crate::plan::operator::update::UpdateOperator;
-use crate::plan::operator::Operator;
-use crate::plan::LogicalPlan;
+use crate::planner::operator::update::UpdateOperator;
+use crate::planner::operator::Operator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::value::ValueRef;
 use sqlparser::ast::{Assignment, Expr, TableFactor, TableWithJoins};

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     expression::ScalarExpression,
-    plan::{
+    planner::{
         operator::{
             filter::FilterOperator, join::JoinOperator as LJoinOperator, limit::LimitOperator,
             project::ProjectOperator, Operator,
@@ -20,9 +20,9 @@ use crate::catalog::{
     ColumnCatalog, TableCatalog, TableName, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME,
 };
 use crate::expression::BinaryOperator;
-use crate::plan::operator::join::JoinCondition;
-use crate::plan::operator::sort::{SortField, SortOperator};
-use crate::plan::LogicalPlan;
+use crate::planner::operator::join::JoinCondition;
+use crate::planner::operator::sort::{SortField, SortOperator};
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::errors::TypeError;
 use crate::types::LogicalType;

@@ -1,4 +1,4 @@
-use crate::plan::LogicalPlan;
+use crate::planner::LogicalPlan;
 
 use super::Operator;
 

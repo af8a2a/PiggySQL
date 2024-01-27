@@ -1,7 +1,7 @@
 use crate::binder::Binder;
 use crate::expression::ScalarExpression;
-use crate::plan::operator::aggregate::AggregateOperator;
-use crate::plan::LogicalPlan;
+use crate::planner::operator::aggregate::AggregateOperator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 
 impl<'a, T: Transaction> Binder<'a, T> {

@@ -15,8 +15,8 @@ use std::collections::BTreeMap;
 
 use crate::catalog::{CatalogError, TableCatalog, TableName, DEFAULT_SCHEMA_NAME};
 use crate::expression::ScalarExpression;
-use crate::plan::operator::join::JoinType;
-use crate::plan::LogicalPlan;
+use crate::planner::operator::join::JoinType;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::errors::TypeError;
 

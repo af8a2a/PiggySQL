@@ -1,4 +1,4 @@
-use crate::{expression::ScalarExpression, plan::LogicalPlan};
+use crate::{expression::ScalarExpression, planner::LogicalPlan};
 
 use super::Operator;
 

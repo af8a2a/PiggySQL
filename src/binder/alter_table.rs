@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use super::Binder;
 use crate::binder::{lower_case_name, split_name, BindError};
-use crate::plan::operator::alter_table::AddColumnOperator;
-use crate::plan::operator::alter_table::DropColumnOperator;
-use crate::plan::operator::scan::ScanOperator;
-use crate::plan::operator::Operator;
-use crate::plan::LogicalPlan;
+use crate::planner::operator::alter_table::AddColumnOperator;
+use crate::planner::operator::alter_table::DropColumnOperator;
+use crate::planner::operator::scan::ScanOperator;
+use crate::planner::operator::Operator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 
 impl<'a, T: Transaction> Binder<'a, T> {

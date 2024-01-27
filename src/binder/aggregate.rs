@@ -4,11 +4,11 @@ use sqlparser::ast::{Expr, OrderByExpr};
 use std::collections::HashSet;
 
 use crate::binder::BindError;
-use crate::plan::LogicalPlan;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::{
     expression::ScalarExpression,
-    plan::operator::{aggregate::AggregateOperator, sort::SortField},
+    planner::operator::{aggregate::AggregateOperator, sort::SortField},
 };
 
 use super::Binder;

@@ -1,5 +1,5 @@
-use crate::plan::LogicalPlan;
-use crate::{expression::ScalarExpression, plan::operator::Operator};
+use crate::planner::LogicalPlan;
+use crate::{expression::ScalarExpression, planner::operator::Operator};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AggregateOperator {
