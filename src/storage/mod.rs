@@ -1,6 +1,7 @@
-mod table_codec;
+mod engine;
 mod mvcc;
-mod mock;
+mod table_codec;
+mod keycode;
 use crate::catalog::{CatalogError, ColumnCatalog, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
@@ -13,6 +14,9 @@ use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
 use std::mem;
 use std::ops::SubAssign;
+use std::sync::Arc;
+
+use self::engine::StorageEngine;
 
 pub trait Storage: Sync + Send + Clone + 'static {
     type TransactionType: Transaction;
@@ -20,6 +24,7 @@ pub trait Storage: Sync + Send + Clone + 'static {
     #[allow(async_fn_in_trait)]
     async fn transaction(&self) -> Result<Self::TransactionType, StorageError>;
 }
+
 
 /// Optional bounds of the reader, of the form (offset, limit).
 pub(crate) type Bounds = (Option<usize>, Option<usize>);
@@ -95,6 +100,10 @@ pub trait Transaction: Sync + Send + 'static {
 
     #[allow(async_fn_in_trait)]
     async fn commit(self) -> Result<(), StorageError>;
+    
+    #[allow(async_fn_in_trait)]
+    async fn rollback(self) -> Result<(), StorageError>;
+
 }
 
 enum IndexValue {
@@ -156,5 +165,10 @@ pub enum StorageError {
 
     #[error("The table already exists")]
     TableExists,
+}
+
+
+pub struct TransactionImpl{
+
 }
 

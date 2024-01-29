@@ -46,12 +46,6 @@ pub enum ExecutorError {
         #[source]
         std::io::Error,
     ),
-    #[error("csv error")]
-    Csv(
-        #[from]
-        #[source]
-        csv::Error,
-    ),
     #[error("tuple length mismatch: expected {expected} but got {actual}")]
     LengthMismatch { expected: usize, actual: usize },
     #[error("abort")]
