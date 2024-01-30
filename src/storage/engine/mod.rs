@@ -1,5 +1,8 @@
 pub mod memory;
 
+
+pub type KvScan = Box<dyn DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>),StorageEngineError>> + Send>;
+
 pub trait StorageEngine: std::fmt::Display + Send + Sync {
     /// The iterator returned by scan(). Traits can't return "impl Trait", and
     /// we don't want to use trait objects, so the type must be specified.

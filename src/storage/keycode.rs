@@ -1,218 +1,180 @@
-// use std::fmt::{self, Display};
+//! Order-preserving encodings for use in keys.
+//!
+//! bool:    0x00 for false, 0x01 for true.
+//! Vec<u8>: 0x00 is escaped with 0x00 0xff, terminated with 0x00 0x00.
+//! String:  Like Vec<u8>.
+//! u64:     Big-endian binary representation.
+//! i64:     Big-endian binary representation, with sign bit flipped.
+//! f64:     Big-endian binary representation, with sign bit flipped if +, all flipped if -.
+//! Value:   Like above, with type prefix 0x00=Null 0x01=Boolean 0x02=Float 0x03=Integer 0x04=String
 
-// use serde::de::Visitor;
-// use serde::ser::{self, SerializeSeq, SerializeTuple};
+// use crate::sql::types::Value;
+use crate::result::{Error, Result};
+use std::convert::TryInto;
 
-// struct Serializer {
-//     output: Vec<u8>,
-// }
-// #[derive(Clone, Debug)]
+/// Encodes a boolean, using 0x00 for false and 0x01 for true.
+pub fn encode_boolean(bool: bool) -> u8 {
+    match bool {
+        true => 0x01,
+        false => 0x00,
+    }
+}
 
-// pub enum CodecError {
-//     KeycodeError(String),
-// }
-// impl std::error::Error for CodecError {}
-// impl serde::ser::Error for CodecError {
-//     fn custom<T: Display>(msg: T) -> Self {
-//         CodecError::KeycodeError(msg.to_string())
-//     }
-// }
+/// Decodes a boolean. See encode_boolean() for format.
+pub fn decode_boolean(byte: u8) -> Result<bool> {
+    match byte {
+        0x00 => Ok(false),
+        0x01 => Ok(true),
+        b => Err(Error::Internal(format!("Invalid boolean value {:?}", b))),
+    }
+}
 
-// impl serde::de::Error for CodecError {
-//     fn custom<T: Display>(msg: T) -> Self {
-//         CodecError::KeycodeError(msg.to_string())
-//     }
-// }
-// impl Display for CodecError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> fmt::Result {
-//         match self {
-//             CodecError::KeycodeError(msg) => write!(f, "{}", &format!("{}", msg)),
-//         }
-//     }
-// }
+/// Decodes a boolean from a slice and shrinks the slice.
+pub fn take_boolean(bytes: &mut &[u8]) -> Result<bool> {
+    take_byte(bytes).and_then(decode_boolean)
+}
 
-// impl<'a> serde::Serializer for &'a mut Serializer {
-//     type Ok = ();
+/// Encodes a byte vector. 0x00 is escaped as 0x00 0xff, and 0x00 0x00 is used as a terminator.
+/// See: https://activesphere.com/blog/2018/08/17/order-preserving-serialization
+pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
+    // flat_map() obscures Iterator.size_hint(), so we explicitly allocate.
+    // See also: https://github.com/rust-lang/rust/issues/45840
+    let mut encoded = Vec::with_capacity(bytes.len() + 2);
+    encoded.extend(
+        bytes
+            .iter()
+            .flat_map(|b| match b {
+                0x00 => vec![0x00, 0xff],
+                b => vec![*b],
+            })
+            .chain(vec![0x00, 0x00]),
+    );
+    encoded
+}
 
-//     type Error = CodecError;
+/// Takes a single byte from a slice and shortens it, without any escaping.
+pub fn take_byte(bytes: &mut &[u8]) -> Result<u8> {
+    if bytes.is_empty() {
+        return Err(Error::Internal("Unexpected end of bytes".into()));
+    }
+    let b = bytes[0];
+    *bytes = &bytes[1..];
+    Ok(b)
+}
 
-//     type SerializeSeq = Self;
+/// Decodes a byte vector from a slice and shortens the slice. See encode_bytes() for format.
+pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>> {
+    // Since we're generally decoding keys, and these are short, we begin allocating at half of
+    // the byte size.
+    let mut decoded = Vec::with_capacity(bytes.len() / 2);
+    let mut iter = bytes.iter().enumerate();
+    let taken = loop {
+        match iter.next().map(|(_, b)| b) {
+            Some(0x00) => match iter.next() {
+                Some((i, 0x00)) => break i + 1,        // 0x00 0x00 is terminator
+                Some((_, 0xff)) => decoded.push(0x00), // 0x00 0xff is escape sequence for 0x00
+                Some((_, b)) => return Err(Error::Value(format!("Invalid byte escape {:?}", b))),
+                None => return Err(Error::Value("Unexpected end of bytes".into())),
+            },
+            Some(b) => decoded.push(*b),
+            None => return Err(Error::Value("Unexpected end of bytes".into())),
+        }
+    };
+    *bytes = &bytes[taken..];
+    Ok(decoded)
+}
 
-//     type SerializeTuple = Self;
+/// Encodes an f64. Uses big-endian form, and flip sign bit to 1 if 0, otherwise flip all bits.
+/// This preserves the natural numerical ordering, with NaN at the end.
+pub fn encode_f64(n: f64) -> [u8; 8] {
+    let mut bytes = n.to_be_bytes();
+    match (bytes[0] >> 7) & 1 {
+        0 => bytes[0] ^= 1 << 7,
+        _ => bytes.iter_mut().for_each(|b| *b = !*b),
+    }
+    bytes
+}
 
-//     type SerializeTupleStruct = ser::Impossible<(), CodecError>;
+/// Decodes an f64. See encode_f64() for format.
+pub fn decode_f64(mut bytes: [u8; 8]) -> f64 {
+    match (bytes[0] >> 7) & 1 {
+        1 => bytes[0] ^= 1 << 7,
+        _ => bytes.iter_mut().for_each(|b| *b = !*b),
+    }
+    f64::from_be_bytes(bytes)
+}
 
-//     type SerializeTupleVariant = Self;
+/// Decodes an f64 from a slice and shrinks the slice.
+pub fn take_f64(bytes: &mut &[u8]) -> Result<f64> {
+    if bytes.len() < 8 {
+        return Err(Error::Internal(format!(
+            "Unable to decode f64 from {} bytes",
+            bytes.len()
+        )));
+    }
+    let n = decode_f64(bytes[0..8].try_into()?);
+    *bytes = &bytes[8..];
+    Ok(n)
+}
 
-//     type SerializeMap = ser::Impossible<(), CodecError>;
+/// Encodes an i64. Uses big-endian form, with the first bit flipped to order negative/positive
+/// numbers correctly.
+pub fn encode_i64(n: i64) -> [u8; 8] {
+    let mut bytes = n.to_be_bytes();
+    bytes[0] ^= 1 << 7; // Flip left-most bit in the first byte, i.e. sign bit.
+    bytes
+}
 
-//     type SerializeStruct = ser::Impossible<(), CodecError>;
+/// Decodes an i64. See encode_i64() for format.
+pub fn decode_i64(mut bytes: [u8; 8]) -> i64 {
+    bytes[0] ^= 1 << 7;
+    i64::from_be_bytes(bytes)
+}
 
-//     type SerializeStructVariant = ser::Impossible<(), CodecError>;
+/// Decodes a i64 from a slice and shrinks the slice.
+pub fn take_i64(bytes: &mut &[u8]) -> Result<i64> {
+    if bytes.len() < 8 {
+        return Err(Error::Internal(format!(
+            "Unable to decode i64 from {} bytes",
+            bytes.len()
+        )));
+    }
+    let n = decode_i64(bytes[0..8].try_into()?);
+    *bytes = &bytes[8..];
+    Ok(n)
+}
 
-//     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
+/// Encodes a string. Simply converts to a byte vector and encodes that.
+pub fn encode_string(string: &str) -> Vec<u8> {
+    encode_bytes(string.as_bytes())
+}
 
-//     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
+/// Decodes a string from a slice and shrinks the slice.
+pub fn take_string(bytes: &mut &[u8]) -> Result<String> {
+    Ok(String::from_utf8(take_bytes(bytes)?)?)
+}
 
-//     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
+/// Encodes a u64. Simply uses the big-endian form, which preserves order. Does not attempt to
+/// compress it, for now.
+pub fn encode_u64(n: u64) -> [u8; 8] {
+    n.to_be_bytes()
+}
 
-//     fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
+/// Decodes a u64. See encode_u64() for format.
+pub fn decode_u64(bytes: [u8; 8]) -> u64 {
+    u64::from_be_bytes(bytes)
+}
 
-//     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
+/// Decodes a u64 from a slice and shrinks the slice.
+pub fn take_u64(bytes: &mut &[u8]) -> Result<u64> {
+    if bytes.len() < 8 {
+        return Err(Error::Internal(format!(
+            "Unable to decode u64 from {} bytes",
+            bytes.len()
+        )));
+    }
+    let n = decode_u64(bytes[0..8].try_into()?);
+    *bytes = &bytes[8..];
+    Ok(n)
+}
 
-//     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-//         self.output.extend(
-//             v.iter()
-//                 .flat_map(|b| match b {
-//                     0x00 => vec![0x00, 0xff],
-//                     b => vec![*b],
-//                 })
-//                 .chain([0x00, 0x00]),
-//         );
-//         Ok(())
-//     }
-
-//     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
-//     where
-//         T: serde::Serialize,
-//     {
-//         todo!()
-//     }
-
-//     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_unit_variant(
-//         self,
-//         _: &'static str,
-//         index: u32,
-//         _: &'static str,
-//     ) -> Result<Self::Ok, Self::Error> {
-//         self.output.push(u8::try_from(index)?);
-//         Ok(())
-//     }
-
-//     fn serialize_newtype_struct<T: ?Sized>(
-//         self,
-//         name: &'static str,
-//         value: &T,
-//     ) -> Result<Self::Ok, Self::Error>
-//     where
-//         T: serde::Serialize,
-//     {
-//         todo!()
-//     }
-
-//     fn serialize_newtype_variant<T: ?Sized>(
-//         self,
-//         name: &'static str,
-//         variant_index: u32,
-//         variant: &'static str,
-//         value: &T,
-//     ) -> Result<Self::Ok, Self::Error>
-//     where
-//         T: serde::Serialize,
-//     {
-//         todo!()
-//     }
-
-//     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_tuple_struct(
-//         self,
-//         name: &'static str,
-//         len: usize,
-//     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_tuple_variant(
-//         self,
-//         name: &'static str,
-//         variant_index: u32,
-//         variant: &'static str,
-//         len: usize,
-//     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_struct(
-//         self,
-//         name: &'static str,
-//         len: usize,
-//     ) -> Result<Self::SerializeStruct, Self::Error> {
-//         todo!()
-//     }
-
-//     fn serialize_struct_variant(
-//         self,
-//         name: &'static str,
-//         variant_index: u32,
-//         variant: &'static str,
-//         len: usize,
-//     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-//         todo!()
-//     }
-    
-// }

@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::ExecutorError;
-pub type BoxedExecutor = BoxStream<'static, Result<Tuple, ExecutorError>>;
+pub type BoxedExecutor = BoxStream<Result<Tuple, ExecutorError>>;
 
 pub trait Executor<T: Transaction> {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor;
