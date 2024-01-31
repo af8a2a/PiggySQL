@@ -4,6 +4,7 @@ use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
 use crate::types::tuple::Tuple;
 use futures_async_stream::try_stream;
+use itertools::Itertools;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -20,7 +21,20 @@ impl From<ScanOperator> for SeqScan {
 
 impl<T: Transaction> Executor<T> for SeqScan {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        unsafe { self._execute(transaction.as_ptr().as_ref().unwrap()) }
+        let ScanOperator {
+            table_name,
+            columns,
+            limit,
+            ..
+        } = self.op;
+        let transaction=transaction.borrow();
+        let mut iter = transaction.read(table_name, limit, columns)?;
+        let mut tuples = Vec::new();
+        while let Some(tuple) = iter.next_tuple()? {
+            tuples.push(tuple);
+        }
+        Ok(tuples)
+        // unsafe { self._execute(transaction.as_ptr().as_ref().unwrap()) }
     }
 }
 

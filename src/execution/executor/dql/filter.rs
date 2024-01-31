@@ -21,21 +21,14 @@ impl From<(FilterOperator, BoxedExecutor)> for Filter {
 
 impl<T: Transaction> Executor<T> for Filter {
     fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
-        self._execute()
-    }
-}
-
-impl Filter {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute(self) {
         let Filter { predicate, input } = self;
+        let mut tuples= Vec::new();
 
-        #[for_await]
-        for tuple in input {
-            let tuple = tuple?;
-            if let DataValue::Boolean(option) = predicate.eval(&tuple)?.as_ref() {
+        for tuple in input?.iter() {
+            if let DataValue::Boolean(option) = predicate.eval(tuple)?.as_ref() {
                 if let Some(true) = option {
-                    yield tuple;
+                    tuples.push(tuple.clone());
+                    // yield tuple;
                 } else {
                     continue;
                 }
@@ -43,5 +36,28 @@ impl Filter {
                 unreachable!("only bool");
             }
         }
+        Ok(tuples)
+        // self._execute()
     }
 }
+
+// impl Filter {
+//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
+//     pub async fn _execute(self) {
+//         let Filter { predicate, input } = self;
+
+//         #[for_await]
+//         for tuple in input {
+//             let tuple = tuple?;
+//             if let DataValue::Boolean(option) = predicate.eval(&tuple)?.as_ref() {
+//                 if let Some(true) = option {
+//                     yield tuple;
+//                 } else {
+//                     continue;
+//                 }
+//             } else {
+//                 unreachable!("only bool");
+//             }
+//         }
+//     }
+// }

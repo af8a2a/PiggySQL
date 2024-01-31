@@ -18,18 +18,26 @@ impl From<DropTableOperator> for DropTable {
 
 impl<T: Transaction> Executor<T> for DropTable {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        unsafe { self._execute(transaction.as_ptr().as_mut().unwrap()) }
-    }
-}
-
-impl DropTable {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute<T: Transaction>(self, transaction: &mut T) {
         let DropTableOperator {
             table_name,
             if_exists,
         } = self.op;
 
-        transaction.drop_table(&table_name, if_exists)?;
+        transaction
+            .borrow_mut()
+            .drop_table(&table_name, if_exists)?;
+        Ok(vec![])
     }
 }
+
+// impl DropTable {
+//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
+//     pub async fn _execute<T: Transaction>(self, transaction: &mut T) {
+//         let DropTableOperator {
+//             table_name,
+//             if_exists,
+//         } = self.op;
+
+//         transaction.drop_table(&table_name, if_exists)?;
+//     }
+// }

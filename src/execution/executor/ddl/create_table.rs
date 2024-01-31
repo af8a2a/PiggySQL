@@ -5,6 +5,7 @@ use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 use crate::types::tuple_builder::TupleBuilder;
 use futures_async_stream::try_stream;
+use tracing::debug;
 use std::cell::RefCell;
 
 pub struct CreateTable {
@@ -19,23 +20,35 @@ impl From<CreateTableOperator> for CreateTable {
 
 impl<T: Transaction> Executor<T> for CreateTable {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        unsafe { self._execute(transaction.as_ptr().as_mut().unwrap()) }
-    }
-}
-
-impl CreateTable {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute<T: Transaction>(self, transaction: &mut T) {
         let CreateTableOperator {
             table_name,
             columns,
             if_not_exists,
         } = self.op;
-        let _ = transaction.create_table(table_name.clone(), columns, if_not_exists)?;
+        let _ =
+            transaction
+                .borrow_mut()
+                .create_table(table_name.clone(), columns, if_not_exists)?;
         let tuple_builder = TupleBuilder::new_result();
         let tuple = tuple_builder
             .push_result("CREATE TABLE SUCCESS", format!("{}", table_name).as_str())?;
-
-        yield tuple;
+        Ok(vec![tuple])
     }
 }
+
+// impl CreateTable {
+//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
+//     pub async fn _execute<T: Transaction>(self, transaction: &mut T) {
+//         let CreateTableOperator {
+//             table_name,
+//             columns,
+//             if_not_exists,
+//         } = self.op;
+//         let _ = transaction.create_table(table_name.clone(), columns, if_not_exists)?;
+//         let tuple_builder = TupleBuilder::new_result();
+//         let tuple = tuple_builder
+//             .push_result("CREATE TABLE SUCCESS", format!("{}", table_name).as_str())?;
+
+//         yield tuple;
+//     }
+// }

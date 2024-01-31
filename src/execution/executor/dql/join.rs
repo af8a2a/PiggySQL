@@ -46,8 +46,8 @@ impl<T: Transaction> Executor<T> for HashJoin {
 }
 
 impl HashJoin {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute(self) {
+    pub fn _execute(self) -> BoxedExecutor {
+        let mut tuples = Vec::new();
         let HashJoin {
             on,
             ty,
@@ -77,9 +77,8 @@ impl HashJoin {
         // 1.construct hashtable, one hash key may contains multiple rows indices.
         // 2.merged all left tuples.
         let mut left_init_flag = false;
-        #[for_await]
-        for tuple in left_input {
-            let tuple: Tuple = tuple?;
+        for tuple in left_input?.iter() {
+            let tuple: Tuple = tuple.clone();
             let hash = Self::hash_row(&on_left_keys, &hash_random_state, &tuple)?;
 
             if !left_init_flag {
@@ -92,9 +91,8 @@ impl HashJoin {
 
         // probe phase
         let mut right_init_flag = false;
-        #[for_await]
-        for tuple in right_input {
-            let tuple: Tuple = tuple?;
+        for tuple in right_input?.iter() {
+            let tuple: Tuple = tuple.clone();
             let right_cols_len = tuple.columns.len();
             let hash = Self::hash_row(&on_right_keys, &hash_random_state, &tuple)?;
 
@@ -183,12 +181,13 @@ impl HashJoin {
             }
 
             for tuple in join_tuples {
-                yield tuple
+                tuples.push(tuple);
+                // yield tuple
             }
         }
 
         if matches!(ty, JoinType::Left | JoinType::Full) {
-            for (hash, tuples) in left_map {
+            for (hash, tuple) in left_map {
                 if used_set.contains(&hash) {
                     continue;
                 }
@@ -197,7 +196,7 @@ impl HashJoin {
                     mut values,
                     columns,
                     ..
-                } in tuples
+                } in tuple
                 {
                     let mut right_empties = join_columns[columns.len()..]
                         .iter()
@@ -205,15 +204,20 @@ impl HashJoin {
                         .collect_vec();
 
                     values.append(&mut right_empties);
-
-                    yield Tuple {
+                    tuples.push(Tuple {
                         id: None,
                         columns: join_columns.clone(),
                         values,
-                    }
+                    });
+                    // yield Tuple {
+                    //     id: None,
+                    //     columns: join_columns.clone(),
+                    //     values,
+                    // }
                 }
             }
         }
+        Ok(tuples)
     }
 
     fn columns_filling(tuple: &Tuple, join_columns: &mut Vec<ColumnRef>, force_nullable: bool) {

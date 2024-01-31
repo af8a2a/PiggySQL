@@ -26,19 +26,10 @@ impl From<(AggregateOperator, BoxedExecutor)> for SimpleAggExecutor {
 
 impl<T: Transaction> Executor<T> for SimpleAggExecutor {
     fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
-        self._execute()
-    }
-}
-
-impl SimpleAggExecutor {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute(self) {
         let mut accs = create_accumulators(&self.agg_calls);
         let mut columns_option = None;
-
-        #[for_await]
-        for tuple in self.input {
-            let tuple = tuple?;
+        let mut tuples = Vec::new();
+        for tuple in self.input?.iter() {
 
             columns_option.get_or_insert_with(|| {
                 self.agg_calls
@@ -60,15 +51,58 @@ impl SimpleAggExecutor {
                 acc.update_value(value)?;
             }
         }
-
         if let Some(columns) = columns_option {
             let values: Vec<ValueRef> = accs.into_iter().map(|acc| acc.evaluate()).try_collect()?;
-
-            yield Tuple {
+            tuples.push(Tuple {
                 id: None,
                 columns,
                 values,
-            };
+            });
         }
+
+        Ok(tuples)
     }
 }
+
+// impl SimpleAggExecutor {
+//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
+//     pub async fn _execute(self) {
+//         let mut accs = create_accumulators(&self.agg_calls);
+//         let mut columns_option = None;
+
+//         #[for_await]
+//         for tuple in self.input {
+//             let tuple = tuple?;
+
+//             columns_option.get_or_insert_with(|| {
+//                 self.agg_calls
+//                     .iter()
+//                     .map(|expr| expr.output_columns())
+//                     .collect_vec()
+//             });
+
+//             let values: Vec<ValueRef> = self
+//                 .agg_calls
+//                 .iter()
+//                 .map(|expr| match expr {
+//                     ScalarExpression::AggCall { args, .. } => args[0].eval(&tuple),
+//                     _ => unreachable!(),
+//                 })
+//                 .try_collect()?;
+
+//             for (acc, value) in accs.iter_mut().zip_eq(values.iter()) {
+//                 acc.update_value(value)?;
+//             }
+//         }
+
+//         if let Some(columns) = columns_option {
+//             let values: Vec<ValueRef> = accs.into_iter().map(|acc| acc.evaluate()).try_collect()?;
+
+//             yield Tuple {
+//                 id: None,
+//                 columns,
+//                 values,
+//             };
+//         }
+//     }
+// }

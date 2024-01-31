@@ -27,13 +27,7 @@ impl From<(LimitOperator, BoxedExecutor)> for Limit {
 
 impl<T: Transaction> Executor<T> for Limit {
     fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
-        self._execute()
-    }
-}
-
-impl Limit {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute(self) {
+        let mut tuples = Vec::new();
         let Limit {
             offset,
             limit,
@@ -41,21 +35,48 @@ impl Limit {
         } = self;
 
         if limit.is_some() && limit.unwrap() == 0 {
-            return Ok(());
+            return Ok(tuples);
         }
 
         let offset_val = offset.unwrap_or(0);
         let offset_limit = offset_val + limit.unwrap_or(1) - 1;
-
-        #[for_await]
-        for (i, tuple) in input.enumerate() {
+        for (i, tuple) in input?.iter().enumerate() {
             if i < offset_val {
                 continue;
             } else if i > offset_limit {
                 break;
             }
-
-            yield tuple?;
+            tuples.push(tuple.clone());
         }
+        Ok(tuples)
     }
 }
+
+// impl Limit {
+//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
+//     pub async fn _execute(self) {
+//         let Limit {
+//             offset,
+//             limit,
+//             input,
+//         } = self;
+
+//         if limit.is_some() && limit.unwrap() == 0 {
+//             return Ok(());
+//         }
+
+//         let offset_val = offset.unwrap_or(0);
+//         let offset_limit = offset_val + limit.unwrap_or(1) - 1;
+
+//         #[for_await]
+//         for (i, tuple) in input.enumerate() {
+//             if i < offset_val {
+//                 continue;
+//             } else if i > offset_limit {
+//                 break;
+//             }
+
+//             yield tuple?;
+//         }
+//     }
+// }

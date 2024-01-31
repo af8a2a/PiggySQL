@@ -2,6 +2,9 @@ mod engine;
 mod keycode;
 mod mvcc;
 mod table_codec;
+pub(crate) mod kip_impl;
+use kip_db::KernelError;
+
 use crate::catalog::{CatalogError, ColumnCatalog, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
@@ -29,8 +32,9 @@ pub trait Storage: Sync + Send + Clone + 'static {
 pub(crate) type Bounds = (Option<usize>, Option<usize>);
 type Projections = Vec<ScalarExpression>;
 
-pub trait Transaction: Sync + Send {
-    type IterType: Iter;
+pub trait Transaction: Sync + Send+'static {
+    type IterType<'a>: Iter;
+    type IndexIterType<'a>: Iter;
 
     /// The bounds is applied to the whole data batches, not per batch.
     ///
@@ -40,7 +44,7 @@ pub trait Transaction: Sync + Send {
         table_name: TableName,
         bounds: Bounds,
         projection: Projections,
-    ) -> Result<Self::IterType, StorageError>;
+    ) -> Result<Self::IterType<'_>, StorageError>;
 
     fn read_by_index(
         &self,
@@ -49,7 +53,7 @@ pub trait Transaction: Sync + Send {
         projection: Projections,
         index_meta: IndexMetaRef,
         binaries: Vec<ConstantBinary>,
-    ) -> Result<Self::IterType, StorageError>;
+    ) -> Result<Self::IndexIterType<'_>, StorageError>;
 
     fn add_index(
         &mut self,
@@ -163,6 +167,10 @@ pub enum StorageError {
 
     #[error("The table already exists")]
     TableExists,
+
+    #[error("kipdb error")]
+    KipDBError(KernelError),
+
 }
 
 // pub struct ScanIterator<E: StorageEngine> {
