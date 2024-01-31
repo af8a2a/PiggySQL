@@ -41,7 +41,9 @@ impl<T: Transaction> Executor<T> for AddColumn {
             } else {
                 tuple.values.push(Arc::new(DataValue::Null));
             }
-            transaction.borrow_mut().append(table_name, tuple.clone(), true)?;
+            transaction
+                .borrow_mut()
+                .append(table_name, tuple.clone(), true)?;
         }
         let col_id = transaction
             .borrow_mut()
@@ -137,6 +139,7 @@ impl From<(DropColumnOperator, BoxedExecutor)> for DropColumn {
 
 impl<T: Transaction> Executor<T> for DropColumn {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+        let mut transaction = transaction.borrow_mut();
         let DropColumnOperator {
             table_name,
             column_name,
@@ -170,11 +173,9 @@ impl<T: Transaction> Executor<T> for DropColumn {
             let _ = tuple.columns.remove(column_index);
             let _ = tuple.values.remove(column_index);
 
-            transaction.borrow_mut().append(table_name, tuple.clone(), true)?;
+            transaction.append(table_name, tuple.clone(), true)?;
         }
-        transaction
-            .borrow_mut()
-            .drop_column(table_name, column_name, *if_exists)?;
+        transaction.drop_column(table_name, column_name, *if_exists)?;
 
         let tuple_builder = TupleBuilder::new_result();
         let tuple = tuple_builder.push_result("ALTER TABLE SUCCESS", "1")?;

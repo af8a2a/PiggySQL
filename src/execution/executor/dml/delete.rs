@@ -22,8 +22,9 @@ impl From<(DeleteOperator, BoxedExecutor)> for Delete {
 
 impl<T: Transaction> Executor<T> for Delete {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+        let mut transaction= transaction.borrow_mut();
         let Delete { table_name, input } = self;
-        let option_index_metas = transaction.borrow_mut().table(table_name.clone()).map(|table_catalog| {
+        let option_index_metas = transaction.table(table_name.clone()).map(|table_catalog| {
             table_catalog
                 .all_columns()
                 .into_iter()
@@ -55,12 +56,12 @@ impl<T: Transaction> Executor<T> for Delete {
                             column_values: vec![value.clone()],
                         };
 
-                        transaction.borrow_mut().del_index(&table_name, &index)?;
+                        transaction.del_index(&table_name, &index)?;
                     }
                 }
 
                 if let Some(tuple_id) = tuple.id {
-                    transaction.borrow_mut().delete(&table_name, tuple_id)?;
+                    transaction.delete(&table_name, tuple_id)?;
                 }
             }
         }

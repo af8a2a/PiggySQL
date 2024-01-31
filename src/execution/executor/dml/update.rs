@@ -31,12 +31,13 @@ impl From<(UpdateOperator, BoxedExecutor, BoxedExecutor)> for Update {
 
 impl<T: Transaction> Executor<T> for Update {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+        let mut transaction = transaction.borrow_mut();
         let Update {
             table_name,
             input,
             values,
         } = self;
-        if let Some(table_catalog) = transaction.borrow().table(table_name.clone()).cloned() {
+        if let Some(table_catalog) = transaction.table(table_name.clone()).cloned() {
             let mut value_map = HashMap::new();
 
             for tuple in values?.iter() {
@@ -55,7 +56,7 @@ impl<T: Transaction> Executor<T> for Update {
                         if column.desc.is_primary {
                             let old_key = tuple.id.replace(value.clone()).unwrap();
 
-                            transaction.borrow_mut().delete(&table_name, old_key)?;
+                            transaction.delete(&table_name, old_key)?;
                             is_overwrite = false;
                         }
                         if column.desc.is_unique && value != &tuple.values[i] {
@@ -66,11 +67,11 @@ impl<T: Transaction> Executor<T> for Update {
                                     id: index_meta.id,
                                     column_values: vec![tuple.values[i].clone()],
                                 };
-                                transaction.borrow_mut().del_index(&table_name, &index)?;
+                                transaction.del_index(&table_name, &index)?;
 
                                 if !value.is_null() {
                                     index.column_values[0] = value.clone();
-                                    transaction.borrow_mut().add_index(
+                                    transaction.add_index(
                                         &table_name,
                                         index,
                                         vec![tuple.id.clone().unwrap()],
@@ -83,9 +84,7 @@ impl<T: Transaction> Executor<T> for Update {
                         tuple.values[i] = value.clone();
                     }
                 }
-                transaction
-                    .borrow_mut()
-                    .append(&table_name, tuple.clone(), is_overwrite)?;
+                transaction.append(&table_name, tuple.clone(), is_overwrite)?;
             }
         }
         Ok(vec![])
