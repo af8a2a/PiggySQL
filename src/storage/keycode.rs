@@ -34,7 +34,7 @@ pub fn decode_boolean(byte: u8) -> Result<bool, MVCCError> {
 }
 
 /// Decodes a boolean from a slice and shrinks the slice.
-pub fn take_boolean(bytes: &mut &[u8]) -> Result<bool, MVCCError> {
+pub fn take_boolean(bytes: &[u8]) -> Result<bool, MVCCError> {
     take_byte(bytes).and_then(decode_boolean)
 }
 
@@ -57,22 +57,22 @@ pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
 }
 
 /// Takes a single byte from a slice and shortens it, without any escaping.
-pub fn take_byte(bytes: &mut &[u8]) -> Result<u8, MVCCError> {
+pub fn take_byte(bytes: &[u8]) -> Result<u8, MVCCError> {
     if bytes.is_empty() {
         return Err(MVCCError::Serialization("Unexpected end of bytes".into()));
     }
     let b = bytes[0];
-    *bytes = &bytes[1..];
+    // *bytes = &bytes[1..];
     Ok(b)
 }
 
 /// Decodes a byte vector from a slice and shortens the slice. See encode_bytes() for format.
-pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>, MVCCError> {
+pub fn take_bytes(bytes: &[u8]) -> Result<Vec<u8>, MVCCError> {
     // Since we're generally decoding keys, and these are short, we begin allocating at half of
     // the byte size.
     let mut decoded = Vec::with_capacity(bytes.len() / 2);
     let mut iter = bytes.iter().enumerate();
-    let taken = loop {
+    loop {
         match iter.next().map(|(_, b)| b) {
             Some(0x00) => match iter.next() {
                 Some((i, 0x00)) => break i + 1,        // 0x00 0x00 is terminator
@@ -89,7 +89,7 @@ pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>, MVCCError> {
             None => return Err(MVCCError::Serialization("Unexpected end of bytes".into())),
         }
     };
-    *bytes = &bytes[taken..];
+    // *bytes = &bytes[taken..];
     Ok(decoded)
 }
 
@@ -175,7 +175,7 @@ pub fn decode_u64(bytes: [u8; 8]) -> u64 {
 }
 
 /// Decodes a u64 from a slice and shrinks the slice.
-pub fn take_u64(bytes: &mut &[u8]) -> Result<u64, MVCCError> {
+pub fn take_u64(bytes: &[u8]) -> Result<u64, MVCCError> {
     if bytes.len() < 8 {
         return Err(MVCCError::Serialization(format!(
             "Unable to decode u64 from {} bytes",
@@ -183,6 +183,6 @@ pub fn take_u64(bytes: &mut &[u8]) -> Result<u64, MVCCError> {
         )));
     }
     let n = decode_u64(bytes[0..8].try_into()?);
-    *bytes = &bytes[8..];
+    // *bytes = &bytes[8..];
     Ok(n)
 }

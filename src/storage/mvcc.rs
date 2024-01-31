@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     engine::{StorageEngine, StorageEngineError},
-    keycode::{encode_bytes, encode_u64, take_u64},
+    keycode::{encode_bytes, encode_u64, take_bytes, take_u64},
 };
 type Version = u64;
 
@@ -57,14 +57,19 @@ impl KeyPrefix {
 
 impl Key {
     pub fn decode(bytes: &[u8]) -> Result<Self, MVCCError> {
-        let bytes = &mut bytes;
-
         Ok(match bytes[0] {
             0x01 => Self::NextVersion,
             0x02 => Self::TxnActive(take_u64(bytes)?),
             0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
             0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?.into()),
-            0x05 => Self::Version(take_bytes(bytes)?.into()),
+            0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
+            0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
+            _ => {
+                return Err(MVCCError::Serialization(format!(
+                    "Invalid key prefix {:?}",
+                    bytes[0]
+                )))
+            }
         })
     }
 
@@ -76,7 +81,9 @@ impl Key {
             Key::TxnWrite(version, key) => {
                 Ok([&[0x04][..], &encode_u64(*version), &encode_bytes(&key)].concat())
             }
-            Key::Version(key, version) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
+            Key::Version(key, version) => {
+                Ok([&[0x05][..], &encode_bytes(&key), &encode_u64(*version)].concat())
+            }
             Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
         }
     }

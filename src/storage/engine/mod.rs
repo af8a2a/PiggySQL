@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 pub mod memory;
 
 pub trait StorageEngine: std::fmt::Display + Send + Sync {
@@ -25,17 +27,17 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync {
     /// Iterates over all key/value pairs starting with prefix.
     fn scan_prefix(&self, prefix: &[u8]) -> Self::ScanIterator<'_> {
         let start = std::ops::Bound::Included(prefix.to_vec());
-        // let end = match prefix.iter().rposition(|b| *b != 0xff) {
-        //     Some(i) => std::ops::Bound::Excluded(
-        //         prefix
-        //             .iter()
-        //             .take(i)
-        //             .copied()
-        //             .chain(std::iter::once(prefix[i] + 1))
-        //             .collect(),
-        //     ),
-        //     None => std::ops::Bound::Unbounded,
-        // };
+        let end = match prefix.iter().rposition(|b| *b != 0xff) {
+            Some(i) => std::ops::Bound::Excluded(
+                prefix
+                    .iter()
+                    .take(i)
+                    .copied()
+                    .chain(std::iter::once(prefix[i] + 1))
+                    .collect_vec(),
+            ),
+            None => std::ops::Bound::Unbounded,
+        };
         let end = std::ops::Bound::Unbounded;
         self.scan((start, end))
     }
