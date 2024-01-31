@@ -1,323 +1,226 @@
-// use std::{
-//     collections::HashSet, iter::Peekable, ops::{Bound, RangeBounds}, sync::Arc, vec
-// };
+use std::{
+    collections::HashSet,
+    iter::Peekable,
+    ops::{Bound, RangeBounds},
+    sync::Arc,
+    vec,
+};
 
-// use bytes::Bytes;
-// use itertools::Itertools;
-// use serde::{Deserialize, Serialize};
+use itertools::Itertools;
+use kip_db::kernel::lsm::version;
+use serde::{Deserialize, Serialize};
 
-// use super::engine::{KvScan, StorageEngine, StorageEngineError};
-// type Version = u64;
+use super::{
+    engine::{StorageEngine, StorageEngineError},
+    keycode::{encode_bytes, encode_u64, take_u64},
+};
+type Version = u64;
 
-// #[derive(Debug, Deserialize, Serialize)]
-// pub enum Key {
-//     /// The next available version.
-//     NextVersion,
-//     /// Active (uncommitted) transactions.
-//     TxnActive(Version),
-//     /// A snapshot of the active set at each version. Only written for
-//     /// versions where the active set is non-empty (excluding itself).
-//     TxnActiveSnapshot(Version),
-//     /// Keeps track of all keys written to by an active transaction (identified
-//     /// by its version), in case it needs to roll back.   
-//     /// Write set for a transaction version.
-//     TxnWrite(Version, Bytes),
-//     /// A versioned key/value pair.
-//     Version(Bytes, Version),
-//     /// Unversioned non-transactional key/value pairs. These exist separately
-//     /// from versioned keys, i.e. the unversioned key "foo" is entirely
-//     /// independent of the versioned key "foo@7". These are mostly used
-//     /// for metadata.
-//     Unversioned(Bytes),
-// }
-// /// MVCC key prefixes, for prefix scans. These must match the keys above,
-// /// including the enum variant index.
-// #[derive(Debug, Deserialize, Serialize)]
-// enum KeyPrefix {
-//     NextVersion,
-//     TxnActive,
-//     TxnActiveSnapshot,
-//     TxnWrite(Version),
-//     Version(Bytes),
-//     Unversioned,
-// }
-// impl KeyPrefix {
-//     fn encode(&self) -> Result<Vec<u8>, bincode::Error> {
-//         bincode::serialize(&self)
-//     }
-// }
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Key {
+    /// The next available version.
+    NextVersion,
+    /// Active (uncommitted) transactions.
+    TxnActive(Version),
+    /// A snapshot of the active set at each version. Only written for
+    /// versions where the active set is non-empty (excluding itself).
+    TxnActiveSnapshot(Version),
+    /// Keeps track of all keys written to by an active transaction (identified
+    /// by its version), in case it needs to roll back.   
+    /// Write set for a transaction version.
+    TxnWrite(Version, Vec<u8>),
+    /// A versioned key/value pair.
+    Version(Vec<u8>, Version),
+    /// Unversioned non-transactional key/value pairs. These exist separately
+    /// from versioned keys, i.e. the unversioned key "foo" is entirely
+    /// independent of the versioned key "foo@7". These are mostly used
+    /// for metadata.
+    Unversioned(Vec<u8>),
+}
+/// MVCC key prefixes, for prefix scans. These must match the keys above,
+/// including the enum variant index.
+#[derive(Debug, Deserialize, Serialize)]
+enum KeyPrefix {
+    TxnWrite(Version),
+    Version(Vec<u8>),
+    Unversioned,
+}
+impl KeyPrefix {
+    fn encode(&self) -> Result<Vec<u8>, MVCCError> {
+        match self {
+            KeyPrefix::TxnWrite(version) => Ok([&[0x04][..], &encode_u64(*version)].concat()),
+            KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
+            KeyPrefix::Unversioned => Ok(vec![0x06]),
+        }
+    }
+}
 
-// impl Key {
-//     pub fn decode(bytes: &[u8]) -> Result<Self, bincode::Error> {
-//         bincode::deserialize(bytes)
-//     }
+impl Key {
+    pub fn decode(bytes: &[u8]) -> Result<Self, MVCCError> {
+        let bytes = &mut bytes;
 
-//     pub fn encode(&self) -> Result<Vec<u8>, bincode::Error> {
-//         bincode::serialize(&self)
-//     }
-// }
+        Ok(match bytes[0] {
+            0x01 => Self::NextVersion,
+            0x02 => Self::TxnActive(take_u64(bytes)?),
+            0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
+            0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?.into()),
+            0x05 => Self::Version(take_bytes(bytes)?.into()),
+        })
+    }
 
-// pub struct MVCCTransaction<E: StorageEngine> {
-//     engine: Arc<E>,
-//     state: TransactionState,
-// }
+    pub fn encode(&self) -> Result<Vec<u8>, MVCCError> {
+        match self {
+            Key::NextVersion => Ok(vec![0x01]),
+            Key::TxnActive(version) => Ok([&[0x02][..], &encode_u64(*version)].concat()),
+            Key::TxnActiveSnapshot(version) => Ok([&[0x03][..], &encode_u64(*version)].concat()),
+            Key::TxnWrite(version, key) => {
+                Ok([&[0x04][..], &encode_u64(*version), &encode_bytes(&key)].concat())
+            }
+            Key::Version(key, version) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
+            Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
+        }
+    }
+}
 
-// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-// pub struct TransactionState {
-//     pub version: Version,
-//     pub read_only: bool,
-//     pub active: HashSet<Version>,
-// }
-// impl TransactionState {
-//     fn is_visible(&self, version: Version) -> bool {
-//         if self.active.contains(&version) {
-//             false
-//         } else if self.read_only {
-//             version < self.version
-//         } else {
-//             version <= self.version
-//         }
-//     }
-// }
+pub struct MVCCTransaction<E: StorageEngine> {
+    engine: Arc<E>,
+    state: TransactionState,
+}
 
-// impl<E: StorageEngine> MVCCTransaction<E> {
-//     pub fn begin(engine: Arc<E>) -> Result<Self, MVCCError> {
-//         let version = match engine.get(&Key::NextVersion.encode().expect("get next version error"))
-//         {
-//             Some(ref v) => bincode::deserialize(v)?,
-//             None => 1,
-//         };
-//         engine.set(
-//             &Key::NextVersion.encode()?,
-//             bincode::serialize(&(version + 1))?,
-//         )?;
-//         let active = Self::scan_active(engine.clone())?;
-//         if !active.is_empty() {
-//             engine.set(
-//                 &Key::TxnActiveSnapshot(version).encode()?,
-//                 bincode::serialize(&active)?,
-//             )?
-//         }
-//         engine.set(&Key::TxnActive(version).encode()?, vec![])?;
-//         Ok(Self {
-//             engine,
-//             state: TransactionState {
-//                 version,
-//                 read_only: false,
-//                 active,
-//             },
-//         })
-//     }
-//     pub fn commit(&self) -> Result<(), MVCCError> {
-//         if self.state.read_only {
-//             return Ok(());
-//         }
-//         let perfix = self
-//             .engine
-//             .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)
-//             .map(|(k, _)| k)
-//             .collect_vec();
-//         for key in perfix {
-//             self.engine.delete(&key)?;
-//         }
-//         self.engine
-//             .delete(&Key::TxnActive(self.state.version).encode()?)
-//             .expect("delete txn active error");
-//         Ok(())
-//     }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionState {
+    pub version: Version,
+    pub read_only: bool,
+    pub active: HashSet<Version>,
+}
+impl TransactionState {
+    fn is_visible(&self, version: Version) -> bool {
+        if self.active.contains(&version) {
+            false
+        } else if self.read_only {
+            version < self.version
+        } else {
+            version <= self.version
+        }
+    }
+}
+impl<E: StorageEngine> MVCCTransaction<E> {
+    pub fn begin(engine: Arc<E>) -> Result<MVCCTransaction<E>, MVCCError> {
+        todo!()
+    }
+}
 
-//     pub fn rollback(&self) -> Result<(), MVCCError> {
-//         if self.state.read_only {
-//             return Ok(());
-//         }
-//         let write_set = self
-//             .engine
-//             .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)
-//             .map(|(k, _)| k)
-//             .collect_vec();
-//         let mut rollback = Vec::new();
-//         for key in write_set {
-//             match Key::decode(&key)? {
-//                 Key::TxnWrite(_, key) => {
-//                     rollback.push(Key::Version(key, self.state.version).encode()?)
-//                 }
-//                 key => {
-//                     return Err(MVCCError::KeyError(format!(
-//                         "Expected TxnWrite, got:{:?}",
-//                         key
-//                     )));
-//                 }
-//             }
-//         }
-//         for key in rollback {
-//             self.engine.delete(&key)?;
-//         }
-//         self.engine
-//             .delete(&Key::TxnActive(self.state.version).encode()?);
-//         Ok(())
-//     }
-//     pub fn delete(&self, key: &[u8]) -> Result<(), MVCCError> {
-//         self.write_version(key, vec![])
-//     }
-//     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MVCCError> {
-//         let from = Key::Version(Bytes::copy_from_slice(key), 0).encode()?;
-//         let to = Key::Version(Bytes::copy_from_slice(key), self.state.version).encode()?;
-//         let mut scan = self.engine.scan(from..=to).rev();
-//         while let Some((key, value)) = scan.next() {
-//             match Key::decode(&key)? {
-//                 Key::Version(_, version) => {
-//                     if self.state.is_visible(version) {
-//                         return Ok(Some(value));
-//                     }
-//                 }
-//                 key => {
-//                     return Err(MVCCError::KeyError(format!(
-//                         "Expected Key::Version got {:?}",
-//                         key
-//                     )))
-//                 }
-//             }
-//         }
-//         Ok(None)
-//     }
+struct VersionIterator<'a, E: StorageEngine + 'a> {
+    txn: &'a TransactionState,
+    inner: E::ScanIterator<'a>,
+}
 
-//     fn write_version(&self, key: &[u8], value: Vec<u8>) -> Result<(), MVCCError> {
-//         if !self.state.read_only {
-//             return Err(MVCCError::ReadOnlyError("Read only".to_string()));
-//         }
-//         let from = Key::Version(
-//             Bytes::copy_from_slice(key),
-//             self.state
-//                 .active
-//                 .iter()
-//                 .min()
-//                 .copied()
-//                 .unwrap_or(self.state.version + 1),
-//         )
-//         .encode()?;
-//         let to = Key::Version(Bytes::copy_from_slice(key), Version::MAX).encode()?;
-//         if let Some((key, _)) = self.engine.scan(from..=to).last() {
-//             match Key::decode(&key)? {
-//                 Key::Version(_, version) => {
-//                     //被不可见事务修改
-//                     if !self.state.is_visible(version) {
-//                         return Err(MVCCError::Serialization);
-//                     }
-//                 }
-//                 key => {
-//                     return Err(MVCCError::InvalidVersion(format!("{:?}", key)));
-//                 }
-//             }
-//         }
-//         self.engine.set(
-//             &Key::TxnWrite(self.state.version, Bytes::copy_from_slice(key)).encode()?,
-//             vec![],
-//         )?;
-//         self.engine.set(
-//             &Key::Version(Bytes::copy_from_slice(key), self.state.version).encode()?,
-//             value,
-//         )?;
-//         Ok(())
-//     }
-//     fn scan_active(engine: Arc<E>) -> Result<HashSet<Version>, MVCCError> {
-//         let scan = engine
-//             .scan_prefix(&KeyPrefix::TxnActive.encode()?)
-//             .map(|(k, _)| k)
-//             .collect_vec();
-//         let mut active = HashSet::new();
-//         for key in scan {
-//             match Key::decode(&key)? {
-//                 Key::TxnActive(version) => active.insert(version),
-//                 _ => {
-//                     return Err(MVCCError::KeyError("Expected TxnActive".to_string()));
-//                 }
-//             };
-//         }
-//         Ok(active)  
-//     }
-//     pub fn scan<R: RangeBounds<Vec<u8>>>(&self, range: R) -> Result<KvScan, MVCCError> {
-//         let start = match range.start_bound() {
-//             Bound::Excluded(k) => {
-//                 Bound::Excluded(Key::Version(Bytes::copy_from_slice(k), u64::MAX).encode()?)
-//             }
-//             Bound::Included(k) => {
-//                 Bound::Included(Key::Version(Bytes::copy_from_slice(k), 0).encode()?)
-//             }
-//             Bound::Unbounded => Bound::Included(Key::Version(vec![].into(), 0).encode()?),
-//         };
-//         let end = match range.end_bound() {
-//             Bound::Excluded(k) => {
-//                 Bound::Excluded(Key::Version(Bytes::copy_from_slice(k), 0).encode()?)
-//             }
-//             Bound::Included(k) => {
-//                 Bound::Included(Key::Version(Bytes::copy_from_slice(k), u64::MAX).encode()?)
-//             }
-//             Bound::Unbounded => Bound::Excluded(KeyPrefix::Unversioned.encode()?),
-//         };
-        
-//         self.engine.scan(start..end).map(|iter|KvScan::n)
-//     }
-// }
+impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
+    fn new(txn: &'a TransactionState, inner: E::ScanIterator<'a>) -> Self {
+        Self { txn, inner }
+    }
+    /// Decodes a raw engine key into an MVCC key and version, returning None if
+    /// the version is not visible.
+    fn decode_visible(&self, key: &[u8]) -> Result<Option<(Vec<u8>, Version)>, MVCCError> {
+        let (key, version) = match Key::decode(key)? {
+            Key::Version(key, version) => (key.to_vec(), version),
+            key => {
+                return Err(MVCCError::KeyError(format!(
+                    "Expected Key::Version got {:?}",
+                    key
+                )))
+            }
+        };
+        if self.txn.is_visible(version) {
+            Ok(Some((key, version)))
+        } else {
+            Ok(None)
+        }
+    }
+    // Fallible next(), emitting the next item, or None if exhausted.
+    fn try_next(&mut self) -> Result<Option<(Vec<u8>, Version, Vec<u8>)>, MVCCError> {
+        while let Some((key, value)) = self.inner.next().transpose()? {
+            if let Some((key, version)) = self.decode_visible(&key)? {
+                return Ok(Some((key, version, value)));
+            }
+        }
+        Ok(None)
+    }
+    // Fallible next_back(), emitting the previous item, or None if exhausted.
+    fn try_next_back(&mut self) -> Result<Option<(Vec<u8>, Version, Vec<u8>)>, MVCCError> {
+        while let Some((key, value)) = self.inner.next_back().transpose()? {
+            if let Some((key, version)) = self.decode_visible(&key)? {
+                return Ok(Some((key, version, value)));
+            }
+        }
+        Ok(None)
+    }
+}
 
-// pub struct MvccScan {
-//     /// The augmented KV store iterator, with key (decoded) and value. Note that we don't retain
-//     /// the decoded version, so there will be multiple keys (for each version). We want the last.
-//     scan: Peekable<KvScan>,
-//     /// Keeps track of next_back() seen key, whose previous versions should be ignored.
-//     next_back_seen: Option<Vec<u8>>,
-// }
-// impl Iterator for MvccScan {
-//     type Item = Result<(Vec<u8>, Vec<u8>)>;
+impl<'a, E: StorageEngine> Iterator for VersionIterator<'a, E> {
+    type Item = Result<(Vec<u8>, Version, Vec<u8>), MVCCError>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.try_next().transpose()
+    }
+}
 
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.try_next().transpose()
-//     }
-// }
+impl<'a, E: StorageEngine> DoubleEndedIterator for VersionIterator<'a, E> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.try_next_back().transpose()
+    }
+}
 
-// impl MvccScan {
-//     fn try_next(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
-//         while let Some((key, value)) = self.scan.next() {
-//             // Only return the item if it is the last version of the key.
-//             if match self.scan.peek() {
-//                 Some((peek_key, _)) if *peek_key != key => true,
-//                 Some(_) => false,
-//                 Some(Err(e)) => return Err(e.clone()),
-//                 None => true,
-//             } {
-//                 // Only return non-deleted items.
-//                 if let Some(value) = deserialize(&value)? {
-//                     return Ok(Some((key, value)));
-//                 }
-//             }
-//         }
-//         Ok(None)
-//     }
+#[derive(Clone, Debug)]
+pub struct MVCC<E: StorageEngine> {
+    engine: Arc<E>,
+}
+impl<E: StorageEngine> MVCC<E> {
+    pub fn new(engine: Arc<E>) -> Self {
+        Self { engine }
+    }
+    pub fn begin(&self) -> Result<MVCCTransaction<E>, MVCCError> {
+        MVCCTransaction::begin(self.engine.clone())
+    }
 
-// }
-// impl DoubleEndedIterator for MvccScan {
-//     fn next_back(&mut self) -> Option<Self::Item> {
-//         self.try_next_back().transpose()
-//     }
-// }
+    pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MVCCError> {
+        self.engine
+            .get(&Key::Unversioned(key.to_vec()).encode()?)
+            .map_err(|e| MVCCError::from(e))
+    }
+    pub fn set_unversioned(&self, key: &[u8], value: Vec<u8>) -> Result<(), MVCCError> {
+        self.engine
+            .set(&Key::Unversioned(key.into()).encode()?, value)
+            .map_err(|e| MVCCError::from(e))
+    }
+}
 
+#[derive(Debug)]
+pub enum MVCCError {
+    InvalidVersion(String),
+    EncodeError(String),
+    StorageError(String),
+    ReadOnlyError(String),
+    KeyError(String),
+    Serialization(String),
+}
+impl From<bincode::Error> for MVCCError {
+    fn from(e: bincode::Error) -> Self {
+        MVCCError::EncodeError(format!("{:?}", e))
+    }
+}
+impl From<StorageEngineError> for MVCCError {
+    fn from(e: StorageEngineError) -> Self {
+        MVCCError::StorageError(format!("{:?}", e))
+    }
+}
+impl From<std::array::TryFromSliceError> for MVCCError {
+    fn from(err: std::array::TryFromSliceError) -> Self {
+        MVCCError::Serialization(err.to_string())
+    }
+}
 
-
-// #[derive(Debug)]
-// pub enum MVCCError {
-//     InvalidVersion(String),
-//     EncodeError(String),
-//     StorageError(String),
-//     ReadOnlyError(String),
-//     KeyError(String),
-//     Serialization,
-// }
-// impl From<bincode::Error> for MVCCError {
-//     fn from(e: bincode::Error) -> Self {
-//         MVCCError::EncodeError(format!("{:?}", e))
-//     }
-// }
-// impl From<StorageEngineError> for MVCCError {
-//     fn from(e: StorageEngineError) -> Self {
-//         MVCCError::StorageError(format!("{:?}", e))
-//     }
-// }
+impl From<std::string::FromUtf8Error> for MVCCError {
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        MVCCError::Serialization(err.to_string())
+    }
+}

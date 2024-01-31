@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use self::engine::StorageEngine;
 
-pub trait Storage: Sync + Send + Clone + 'static {
+pub trait Storage: Sync + Send + Clone  {
     type TransactionType: Transaction;
 
     #[allow(async_fn_in_trait)]

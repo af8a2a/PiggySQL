@@ -9,8 +9,9 @@
 //! Value:   Like above, with type prefix 0x00=Null 0x01=Boolean 0x02=Float 0x03=Integer 0x04=String
 
 // use crate::sql::types::Value;
-use crate::result::{Error, Result};
 use std::convert::TryInto;
+
+use super::mvcc::MVCCError;
 
 /// Encodes a boolean, using 0x00 for false and 0x01 for true.
 pub fn encode_boolean(bool: bool) -> u8 {
@@ -21,16 +22,19 @@ pub fn encode_boolean(bool: bool) -> u8 {
 }
 
 /// Decodes a boolean. See encode_boolean() for format.
-pub fn decode_boolean(byte: u8) -> Result<bool> {
+pub fn decode_boolean(byte: u8) -> Result<bool, MVCCError> {
     match byte {
         0x00 => Ok(false),
         0x01 => Ok(true),
-        b => Err(Error::Internal(format!("Invalid boolean value {:?}", b))),
+        b => Err(MVCCError::Serialization(format!(
+            "Invalid boolean value {:?}",
+            b
+        ))),
     }
 }
 
 /// Decodes a boolean from a slice and shrinks the slice.
-pub fn take_boolean(bytes: &mut &[u8]) -> Result<bool> {
+pub fn take_boolean(bytes: &mut &[u8]) -> Result<bool, MVCCError> {
     take_byte(bytes).and_then(decode_boolean)
 }
 
@@ -53,9 +57,9 @@ pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
 }
 
 /// Takes a single byte from a slice and shortens it, without any escaping.
-pub fn take_byte(bytes: &mut &[u8]) -> Result<u8> {
+pub fn take_byte(bytes: &mut &[u8]) -> Result<u8, MVCCError> {
     if bytes.is_empty() {
-        return Err(Error::Internal("Unexpected end of bytes".into()));
+        return Err(MVCCError::Serialization("Unexpected end of bytes".into()));
     }
     let b = bytes[0];
     *bytes = &bytes[1..];
@@ -63,7 +67,7 @@ pub fn take_byte(bytes: &mut &[u8]) -> Result<u8> {
 }
 
 /// Decodes a byte vector from a slice and shortens the slice. See encode_bytes() for format.
-pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>> {
+pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>, MVCCError> {
     // Since we're generally decoding keys, and these are short, we begin allocating at half of
     // the byte size.
     let mut decoded = Vec::with_capacity(bytes.len() / 2);
@@ -73,11 +77,16 @@ pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>> {
             Some(0x00) => match iter.next() {
                 Some((i, 0x00)) => break i + 1,        // 0x00 0x00 is terminator
                 Some((_, 0xff)) => decoded.push(0x00), // 0x00 0xff is escape sequence for 0x00
-                Some((_, b)) => return Err(Error::Value(format!("Invalid byte escape {:?}", b))),
-                None => return Err(Error::Value("Unexpected end of bytes".into())),
+                Some((_, b)) => {
+                    return Err(MVCCError::Serialization(format!(
+                        "Invalid byte escape {:?}",
+                        b
+                    )))
+                }
+                None => return Err(MVCCError::Serialization("Unexpected end of bytes".into())),
             },
             Some(b) => decoded.push(*b),
-            None => return Err(Error::Value("Unexpected end of bytes".into())),
+            None => return Err(MVCCError::Serialization("Unexpected end of bytes".into())),
         }
     };
     *bytes = &bytes[taken..];
@@ -105,9 +114,9 @@ pub fn decode_f64(mut bytes: [u8; 8]) -> f64 {
 }
 
 /// Decodes an f64 from a slice and shrinks the slice.
-pub fn take_f64(bytes: &mut &[u8]) -> Result<f64> {
+pub fn take_f64(bytes: &mut &[u8]) -> Result<f64,MVCCError> {
     if bytes.len() < 8 {
-        return Err(Error::Internal(format!(
+        return Err(MVCCError::Serialization(format!(
             "Unable to decode f64 from {} bytes",
             bytes.len()
         )));
@@ -132,9 +141,9 @@ pub fn decode_i64(mut bytes: [u8; 8]) -> i64 {
 }
 
 /// Decodes a i64 from a slice and shrinks the slice.
-pub fn take_i64(bytes: &mut &[u8]) -> Result<i64> {
+pub fn take_i64(bytes: &mut &[u8]) -> Result<i64,MVCCError> {
     if bytes.len() < 8 {
-        return Err(Error::Internal(format!(
+        return Err(MVCCError::Serialization(format!(
             "Unable to decode i64 from {} bytes",
             bytes.len()
         )));
@@ -150,7 +159,7 @@ pub fn encode_string(string: &str) -> Vec<u8> {
 }
 
 /// Decodes a string from a slice and shrinks the slice.
-pub fn take_string(bytes: &mut &[u8]) -> Result<String> {
+pub fn take_string(bytes: &mut &[u8]) -> Result<String, MVCCError> {
     Ok(String::from_utf8(take_bytes(bytes)?)?)
 }
 
@@ -166,9 +175,9 @@ pub fn decode_u64(bytes: [u8; 8]) -> u64 {
 }
 
 /// Decodes a u64 from a slice and shrinks the slice.
-pub fn take_u64(bytes: &mut &[u8]) -> Result<u64> {
+pub fn take_u64(bytes: &mut &[u8]) -> Result<u64, MVCCError> {
     if bytes.len() < 8 {
-        return Err(Error::Internal(format!(
+        return Err(MVCCError::Serialization(format!(
             "Unable to decode u64 from {} bytes",
             bytes.len()
         )));
@@ -177,4 +186,3 @@ pub fn take_u64(bytes: &mut &[u8]) -> Result<u64> {
     *bytes = &bytes[8..];
     Ok(n)
 }
-

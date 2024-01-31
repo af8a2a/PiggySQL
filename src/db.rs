@@ -243,7 +243,6 @@ mod test {
             .run("insert into t3 (a, b) values (4, 4444), (5, 5222), (6, 1.00)")
             .await?;
 
-
         println!("full t1:");
         let tuples_full_fields_t1 = kipsql.run("select * from t1").await?;
         println!("{}", create_table(&tuples_full_fields_t1));
@@ -394,7 +393,6 @@ mod test {
         let delete_after_full_t1 = kipsql.run("select * from t1").await?;
         println!("{}", create_table(&delete_after_full_t1));
 
-
         println!("drop t1:");
         let _ = kipsql.run("drop table t1").await?;
 
@@ -404,5 +402,4 @@ mod test {
 
         Ok(())
     }
-
 }
