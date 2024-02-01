@@ -1,11 +1,11 @@
 mod engine;
 mod keycode;
-mod mvcc;
-mod table_codec;
 pub(crate) mod kip_impl;
+pub mod mvcc;
+mod table_codec;
 use kip_db::KernelError;
 
-use crate::catalog::{CatalogError, ColumnCatalog, TableCatalog, TableName};
+use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::storage::table_codec::TableCodec;
@@ -20,8 +20,9 @@ use std::ops::SubAssign;
 use std::sync::Arc;
 
 use self::engine::StorageEngine;
+use self::mvcc::{MVCCError, Scan};
 
-pub trait Storage: Sync + Send + Clone  {
+pub trait Storage: Sync + Send + Clone {
     type TransactionType: Transaction;
 
     #[allow(async_fn_in_trait)]
@@ -32,7 +33,7 @@ pub trait Storage: Sync + Send + Clone  {
 pub(crate) type Bounds = (Option<usize>, Option<usize>);
 type Projections = Vec<ScalarExpression>;
 
-pub trait Transaction: Sync + Send+'static {
+pub trait Transaction: Sync + Send + 'static {
     type IterType<'a>: Iter;
     type IndexIterType<'a>: Iter;
 
@@ -171,256 +172,266 @@ pub enum StorageError {
     #[error("kipdb error")]
     KipDBError(KernelError),
 
+    #[error("MVCC layer error")]
+    MvccLayerError(MVCCError),
+}
+impl From<MVCCError> for StorageError {
+    fn from(value: MVCCError) -> Self {
+        StorageError::MvccLayerError(value)
+    }
 }
 
-// pub struct ScanIterator<E: StorageEngine> {
-//     offset: usize,
-//     limit: Option<usize>,
-//     projections: Projections,
+pub struct MVCCIter<'a, E: StorageEngine> {
+    offset: usize,
+    limit: Option<usize>,
+    projection: Projections,
+    all_columns: Vec<ColumnRef>,
+    scan: Scan<'a, E>,
+}
 
-//     index_meta: IndexMetaRef,
-//     table: TableCatalog,
+impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
+    fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError> {
+        let mut iter = self.scan.iter();
+        while self.offset > 0 {
+            let _ = iter.next();
+            self.offset -= 1;
+        }
+        if let Some(num) = self.limit {
+            if num == 0 {
+                return Ok(None);
+            }
+        }
+        while let Some(item) = iter.next() {
+            if let Ok((_, value)) = item.map_err(|e| StorageError::from(e)) {
+                let tuple = tuple_projection(
+                    &mut self.limit,
+                    &self.projection,
+                    TableCodec::decode_tuple(self.all_columns.clone(), &value),
+                )?;
 
-//     // for buffering data
-//     index_values: VecDeque<IndexValue>,
-//     binaries: VecDeque<ConstantBinary>,
-//     txn: mvcc::MVCCTransaction<E>,
-// }
+                return Ok(Some(tuple));
+            }
+        }
 
-// impl<E: StorageEngine> ScanIterator<E> {
-//     fn is_empty(&self) -> bool {
-//         self.index_values.is_empty() && self.binaries.is_empty()
-//     }
-// }
-// impl<E: StorageEngine> Iter for ScanIterator<E> {
-//     fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError> {
-//         if matches!(self.limit, Some(0)) || self.is_empty() {
-//             self.binaries.clear();
+        Ok(None)
+    }
+}
+pub struct MVCCIndexIter<'a, E: StorageEngine> {
+    offset: usize,
+    limit: Option<usize>,
+    projections: Projections,
 
-//             return Ok(None);
-//         }
+    index_meta: IndexMetaRef,
+    table: &'a TableCatalog,
+    tx: &'a mvcc::MVCCTransaction<E>,
 
-//         todo!()
-//     }
-// }
-// pub struct TransactionImpl<E: StorageEngine> {
-//     txn: mvcc::MVCCTransaction<E>,
-// }
+    // for buffering data
+    index_values: VecDeque<IndexValue>,
+    binaries: VecDeque<ConstantBinary>,
+    scope_iter: Option<Scan<'a, E>>,
+}
 
-// impl<E: StorageEngine> Transaction for TransactionImpl<E> {
-//     type IterType = ScanIterator<E>;
+impl<E: StorageEngine> MVCCIndexIter<'_, E> {
+    fn offset_move(offset: &mut usize) -> bool {
+        if *offset > 0 {
+            offset.sub_assign(1);
 
-//     fn read(
-//         &self,
-//         table_name: TableName,
-//         bounds: Bounds,
-//         projection: Projections,
-//     ) -> Result<Self::IterType, StorageError> {
-//         todo!()
-//     }
+            true
+        } else {
+            false
+        }
+    }
+    fn val_to_key(&self, val: ValueRef) -> Result<Vec<u8>, TypeError> {
+        if self.index_meta.is_unique {
+            let index = Index::new(self.index_meta.id, vec![val]);
 
-//     fn read_by_index(
-//         &self,
-//         table_name: TableName,
-//         bounds: Bounds,
-//         projection: Projections,
-//         index_meta: IndexMetaRef,
-//         binaries: Vec<ConstantBinary>,
-//     ) -> Result<Self::IterType, StorageError> {
-//         todo!()
-//     }
+            TableCodec::encode_index_key(&self.table.name, &index)
+        } else {
+            TableCodec::encode_tuple_key(&self.table.name, &val)
+        }
+    }
+    fn get_tuple_by_id(&mut self, tuple_id: &TupleId) -> Result<Option<Tuple>, StorageError> {
+        let key = TableCodec::encode_tuple_key(&self.table.name, &tuple_id)?;
 
-//     fn add_index(
-//         &mut self,
-//         table_name: &str,
-//         index: Index,
-//         tuple_ids: Vec<TupleId>,
-//         is_unique: bool,
-//     ) -> Result<(), StorageError> {
-//         todo!()
-//     }
+        self.tx
+            .get(&key)?
+            .map(|bytes| {
+                let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
 
-//     fn del_index(&mut self, table_name: &str, index: &Index) -> Result<(), StorageError> {
-//         todo!()
-//     }
+                tuple_projection(&mut self.limit, &self.projections, tuple)
+            })
+            .transpose()
+    }
 
-//     fn append(
-//         &mut self,
-//         table_name: &str,
-//         tuple: Tuple,
-//         is_overwrite: bool,
-//     ) -> Result<(), StorageError> {
-//         todo!()
-//     }
+    fn is_empty(&self) -> bool {
+        self.scope_iter.is_none() && self.index_values.is_empty() && self.binaries.is_empty()
+    }
+}
 
-//     fn delete(&mut self, table_name: &str, tuple_id: TupleId) -> Result<(), StorageError> {
-//         todo!()
-//     }
+impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
+    fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError> {
+        if matches!(self.limit, Some(0)) || self.is_empty() {
+            self.scope_iter = None;
+            self.binaries.clear();
 
-//     fn add_column(
-//         &mut self,
-//         table_name: &TableName,
-//         column: &ColumnCatalog,
-//         if_not_exists: bool,
-//     ) -> Result<ColumnId, StorageError> {
-//         todo!()
-//     }
+            return Ok(None);
+        }
+        // 2. try get tuple on index_values and until it empty
+        loop {
+            if let Some(value) = self.index_values.pop_front() {
+                if Self::offset_move(&mut self.offset) {
+                    continue;
+                }
+                match value {
+                    IndexValue::PrimaryKey(tuple) => {
+                        let tuple = tuple_projection(&mut self.limit, &self.projections, tuple)?;
 
-//     fn drop_column(
-//         &mut self,
-//         table_name: &TableName,
-//         column: &str,
-//         if_exists: bool,
-//     ) -> Result<(), StorageError> {
-//         todo!()
-//     }
+                        return Ok(Some(tuple));
+                    }
+                    IndexValue::Normal(tuple_id) => {
+                        if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
+                            return Ok(Some(tuple));
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        assert!(self.index_values.is_empty());
 
-//     fn create_table(
-//         &mut self,
-//         table_name: TableName,
-//         columns: Vec<ColumnCatalog>,
-//         if_not_exists: bool,
-//     ) -> Result<TableName, StorageError> {
-//         todo!()
-//     }
+        todo!()
+    }
+}
 
-//     fn drop_table(&mut self, table_name: &str, if_exists: bool) -> Result<(), StorageError> {
-//         todo!()
-//     }
+pub struct MVCCTransaction<E: StorageEngine> {
+    tx: mvcc::MVCCTransaction<E>,
+}
+impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
+    type IterType<'a> = MVCCIter<'a, E>;
 
-//     fn drop_data(&mut self, table_name: &str) -> Result<(), StorageError> {
-//         todo!()
-//     }
+    type IndexIterType<'a> = MVCCIndexIter<'a, E>;
 
-//     fn table(&self, table_name: TableName) -> Option<&TableCatalog> {
-//         todo!()
-//     }
+    fn read(
+        &self,
+        table_name: TableName,
+        bounds: Bounds,
+        projection: Projections,
+    ) -> Result<Self::IterType<'_>, StorageError> {
+        let all_columns = self
+            .table(table_name.clone())
+            .ok_or(StorageError::TableNotFound)?
+            .all_columns();
+        let (min, max) = TableCodec::tuple_bound(&table_name);
+        Ok(MVCCIter {
+            offset: bounds.0.unwrap_or(0),
+            limit: bounds.1,
+            projection,
+            all_columns,
+            scan: self.tx.scan(min..=max)?,
+        })
+    }
 
-//     fn show_tables(&self) -> Result<Vec<String>, StorageError> {
-//         todo!()
-//     }
+    fn read_by_index(
+        &self,
+        table_name: TableName,
+        (offset_option, limit_option): Bounds,
+        projection: Projections,
+        index_meta: IndexMetaRef,
+        binaries: Vec<ConstantBinary>,
+    ) -> Result<Self::IndexIterType<'_>, StorageError> {
+        let table = self
+            .table(table_name.clone())
+            .ok_or(StorageError::TableNotFound)?;
+        let offset = offset_option.unwrap_or(0);
+        Ok(IndexIter {
+            offset,
+            limit: limit_option,
+            projections,
+            index_meta,
+            table,
+            index_values: VecDeque::new(),
+            binaries: VecDeque::from(binaries),
+            tx: &self.tx,
+            scope_iter: None,
+        })
+    }
 
-//     async fn commit(self) -> Result<(), StorageError> {
-//         todo!()
-//     }
+    fn add_index(
+        &mut self,
+        table_name: &str,
+        index: Index,
+        tuple_ids: Vec<TupleId>,
+        is_unique: bool,
+    ) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//     async fn rollback(self) -> Result<(), StorageError> {
-//         todo!()
-//     }
-// }
+    fn del_index(&mut self, table_name: &str, index: &Index) -> Result<(), StorageError> {
+        todo!()
+    }
 
-// pub struct IndexIter<'a, E: StorageEngine> {
-//     offset: usize,
-//     limit: Option<usize>,
-//     projections: Projections,
+    fn append(
+        &mut self,
+        table_name: &str,
+        tuple: Tuple,
+        is_overwrite: bool,
+    ) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//     index_meta: IndexMetaRef,
-//     table: &'a TableCatalog,
-//     tx: &'a mvcc::MVCCTransaction<E>,
+    fn delete(&mut self, table_name: &str, tuple_id: TupleId) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//     // for buffering data
-//     index_values: VecDeque<IndexValue>,
-//     binaries: VecDeque<ConstantBinary>,
-//     // scope_iter: Option<mvcc::TransactionIter<'a>>,
-// }
+    fn add_column(
+        &mut self,
+        table_name: &TableName,
+        column: &ColumnCatalog,
+        if_not_exists: bool,
+    ) -> Result<ColumnId, StorageError> {
+        todo!()
+    }
 
-// impl<E: StorageEngine> IndexIter<'_, E> {
-//     fn offset_move(offset: &mut usize) -> bool {
-//         if *offset > 0 {
-//             offset.sub_assign(1);
+    fn drop_column(
+        &mut self,
+        table_name: &TableName,
+        column: &str,
+        if_exists: bool,
+    ) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//             true
-//         } else {
-//             false
-//         }
-//     }
+    fn create_table(
+        &mut self,
+        table_name: TableName,
+        columns: Vec<ColumnCatalog>,
+        if_not_exists: bool,
+    ) -> Result<TableName, StorageError> {
+        todo!()
+    }
 
-//     fn val_to_key(&self, val: ValueRef) -> Result<Vec<u8>, TypeError> {
-//         if self.index_meta.is_unique {
-//             let index = Index::new(self.index_meta.id, vec![val]);
+    fn drop_table(&mut self, table_name: &str, if_exists: bool) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//             TableCodec::encode_index_key(&self.table.name, &index)
-//         } else {
-//             TableCodec::encode_tuple_key(&self.table.name, &val)
-//         }
-//     }
+    fn drop_data(&mut self, table_name: &str) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//     fn get_tuple_by_id(&mut self, tuple_id: &TupleId) -> Result<Option<Tuple>, StorageError> {
-//         let key = TableCodec::encode_tuple_key(&self.table.name, &tuple_id)?;
+    fn table(&self, table_name: TableName) -> Option<&TableCatalog> {
+        todo!()
+    }
 
-//         self.tx
-//             .get(&key)
-//             .expect("get tuple failed")
-//             .map(|bytes| {
-//                 let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
+    fn show_tables(&self) -> Result<Vec<String>, StorageError> {
+        todo!()
+    }
 
-//                 tuple_projection(&mut self.limit, &self.projections, tuple)
-//             })
-//             .transpose()
-//     }
+    async fn commit(self) -> Result<(), StorageError> {
+        todo!()
+    }
 
-//     fn is_empty(&self) -> bool {
-//         self.index_values.is_empty() && self.binaries.is_empty()
-//     }
-// }
-
-// impl<E: StorageEngine> Iter for IndexIter<'_,E>{
-//     fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError> {
-//         // 1. check limit
-//         if matches!(self.limit, Some(0)) || self.is_empty() {
-//             self.binaries.clear();
-
-//             return Ok(None);
-//         }
-//         // 2. try get tuple on index_values and until it empty
-//         loop {
-//             if let Some(value) = self.index_values.pop_front() {
-//                 if Self::offset_move(&mut self.offset) {
-//                     continue;
-//                 }
-//                 match value {
-//                     IndexValue::PrimaryKey(tuple) => {
-//                         let tuple = tuple_projection(&mut self.limit, &self.projections, tuple)?;
-
-//                         return Ok(Some(tuple));
-//                     }
-//                     IndexValue::Normal(tuple_id) => {
-//                         if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
-//                             return Ok(Some(tuple));
-//                         }
-//                     }
-//                 }
-//             } else {
-//                 break;
-//             }
-//         }
-//         assert!(self.index_values.is_empty());
-//         // 3. If the current expression is a Scope,
-//         // an iterator will be generated for reading the IndexValues of the Scope.
-//         if let Some(iter) = &mut self.scope_iter {
-//             let mut has_next = false;
-//             while let Some((_, value_option)) = iter.try_next()? {
-//                 if let Some(value) = value_option {
-//                     if self.index_meta.is_primary {
-//                         let tuple = TableCodec::decode_tuple(self.table.all_columns(), &value);
-
-//                         self.index_values.push_back(IndexValue::PrimaryKey(tuple));
-//                     } else {
-//                         for tuple_id in TableCodec::decode_index(&value)? {
-//                             self.index_values.push_back(IndexValue::Normal(tuple_id));
-//                         }
-//                     }
-//                     has_next = true;
-//                     break;
-//                 }
-//             }
-//             if !has_next {
-//                 self.scope_iter = None;
-//             }
-//             return self.next_tuple();
-//         }
-
-
-//         todo!()
-//     }
-// }
+    async fn rollback(self) -> Result<(), StorageError> {
+        todo!()
+    }
+}

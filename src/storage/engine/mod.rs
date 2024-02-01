@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 pub mod memory;
 
-pub trait StorageEngine: std::fmt::Display + Send + Sync {
+pub trait StorageEngine: std::fmt::Display + Send + Sync+'static {
     /// The iterator returned by scan(). Traits can't return "impl Trait", and
     /// we don't want to use trait objects, so the type must be specified.
     type ScanIterator<'a>: DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>), StorageEngineError>>
