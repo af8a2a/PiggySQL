@@ -14,6 +14,7 @@ use crate::types::index::{Index, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
+use core::slice::SlicePattern;
 use std::collections::{Bound, VecDeque};
 use std::mem;
 use std::ops::{RangeBounds, SubAssign};
@@ -316,6 +317,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                 has_next = true;
                 break;
             }
+            drop(iter);
             if !has_next {
                 self.scope_iter = None;
             }
@@ -354,9 +356,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                     // let l=|min_bound:Bound<Vec<u8>>,max_bound:Bound<Vec<u8>>|->RangeBounds<Vec<u8>>{
                     //     (min_bound..max_bound)
                     // };
-                    let iter = self
-                        .tx
-                        .scan(encode_min,encode_max)?;
+                    let iter = self.tx.scan(encode_min, encode_max)?;
                     self.scope_iter = Some(iter);
                 }
                 ConstantBinary::Eq(val) => {
@@ -443,11 +443,33 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         tuple_ids: Vec<TupleId>,
         is_unique: bool,
     ) -> Result<(), StorageError> {
-        todo!()
+        let (key, value) = TableCodec::encode_index(table_name, &index, &tuple_ids)?;
+
+        if let Some(bytes) = self.tx.get(&key)? {
+            if is_unique {
+                let old_tuple_ids = TableCodec::decode_index(&bytes)?;
+
+                if old_tuple_ids[0] != tuple_ids[0] {
+                    return Err(StorageError::DuplicateUniqueValue);
+                } else {
+                    return Ok(());
+                }
+            } else {
+                todo!("联合索引")
+            }
+        }
+
+        self.tx.set(key.as_slice(), value.to_vec())?;
+
+        Ok(())
     }
 
     fn del_index(&mut self, table_name: &str, index: &Index) -> Result<(), StorageError> {
-        todo!()
+        let key = TableCodec::encode_index_key(table_name, index)?;
+
+        self.tx.delete(&key)?;
+
+        Ok(())
     }
 
     fn append(
@@ -456,11 +478,21 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         tuple: Tuple,
         is_overwrite: bool,
     ) -> Result<(), StorageError> {
-        todo!()
+        let (key, value) = TableCodec::encode_tuple(table_name, &tuple)?;
+
+        if !is_overwrite && self.tx.get(&key)?.is_some() {
+            return Err(StorageError::DuplicatePrimaryKey);
+        }
+        self.tx.set(&key, value.to_vec())?;
+
+        Ok(())
     }
 
     fn delete(&mut self, table_name: &str, tuple_id: TupleId) -> Result<(), StorageError> {
-        todo!()
+        let key = TableCodec::encode_tuple_key(table_name, &tuple_id)?;
+        self.tx.delete(&key)?;
+
+        Ok(())
     }
 
     fn add_column(
@@ -469,7 +501,42 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         column: &ColumnCatalog,
         if_not_exists: bool,
     ) -> Result<ColumnId, StorageError> {
-        todo!()
+        if let Some(mut catalog) = self.table(table_name.clone()).cloned() {
+            if !column.nullable && column.default_value().is_none() {
+                return Err(StorageError::NeedNullAbleOrDefault);
+            }
+
+            for col in catalog.all_columns() {
+                if col.name() == column.name() {
+                    if if_not_exists {
+                        return Ok(col.id().unwrap());
+                    } else {
+                        return Err(StorageError::DuplicateColumn);
+                    }
+                }
+            }
+
+            let col_id = catalog.add_column(column.clone())?;
+
+            if column.desc.is_unique {
+                let meta_ref = catalog.add_index_meta(
+                    format!("uk_{}", column.name()),
+                    vec![col_id],
+                    true,
+                    false,
+                );
+                let (key, value) = TableCodec::encode_index_meta(table_name, meta_ref)?;
+                self.tx.set(&key, value.to_vec())?;
+            }
+
+            let column = catalog.get_column_by_id(&col_id).unwrap();
+            let (key, value) = TableCodec::encode_column(&table_name, column)?;
+            self.tx.set(&key, value.to_vec())?;
+
+            Ok(col_id)
+        } else {
+            Err(StorageError::TableNotFound)
+        }
     }
 
     fn drop_column(
@@ -478,7 +545,32 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         column: &str,
         if_exists: bool,
     ) -> Result<(), StorageError> {
-        todo!()
+        if let Some(catalog) = self.table(table_name.clone()).cloned() {
+            let column = catalog.get_column_by_name(column).unwrap();
+
+            if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
+                let (index_meta_key, _) = TableCodec::encode_index_meta(table_name, index_meta)?;
+                self.tx.delete(&index_meta_key)?;
+
+                let (index_min, index_max) = TableCodec::index_bound(table_name, &index_meta.id);
+                Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
+            }
+            let (key, _) = TableCodec::encode_column(&table_name, column)?;
+
+            match self.tx.delete(&key) {
+                Ok(_) => (),
+                Err(MVCCError::KeyError(e)) => {
+                    if !if_exists {
+                        Err(MVCCError::KeyError(e))?;
+                    }
+                }
+                err => err?,
+            }
+
+            Ok(())
+        } else {
+            Err(StorageError::TableNotFound)
+        }
     }
 
     fn create_table(
@@ -487,19 +579,65 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         columns: Vec<ColumnCatalog>,
         if_not_exists: bool,
     ) -> Result<TableName, StorageError> {
-        todo!()
+        let (table_key, value) = TableCodec::encode_root_table(&table_name)?;
+        if self.tx.get(&table_key)?.is_some() {
+            if if_not_exists {
+                return Ok(table_name);
+            }
+            return Err(StorageError::TableExists);
+        }
+        self.tx.set(&table_key, value.to_vec())?;
+
+        let mut table_catalog = TableCatalog::new(table_name.clone(), columns)?;
+
+        Self::create_index_meta_for_table(&mut self.tx, &mut table_catalog)?;
+
+        for column in table_catalog.columns.values() {
+            let (key, value) = TableCodec::encode_column(&table_name, column)?;
+            self.tx.set(&key, value.to_vec())?;
+        }
+
+        Ok(table_name)
     }
 
     fn drop_table(&mut self, table_name: &str, if_exists: bool) -> Result<(), StorageError> {
-        todo!()
+        if self.table(Arc::new(table_name.to_string())).is_none() {
+            if if_exists {
+                return Ok(());
+            } else {
+                return Err(StorageError::TableNotFound);
+            }
+        }
+        self.drop_data(table_name)?;
+
+        let (column_min, column_max) = TableCodec::columns_bound(table_name);
+        Self::_drop_data(&mut self.tx, &column_min, &column_max)?;
+
+        let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(table_name);
+        Self::_drop_data(&mut self.tx, &index_meta_min, &index_meta_max)?;
+
+        self.tx
+            .delete(&TableCodec::encode_root_table_key(table_name))?;
+
+        Ok(())
     }
 
     fn drop_data(&mut self, table_name: &str) -> Result<(), StorageError> {
-        todo!()
+        let (tuple_min, tuple_max) = TableCodec::tuple_bound(table_name);
+        Self::_drop_data(&mut self.tx, &tuple_min, &tuple_max)?;
+
+        let (index_min, index_max) = TableCodec::all_index_bound(table_name);
+        Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
+
+        Ok(())
     }
 
     fn table(&self, table_name: TableName) -> Option<&TableCatalog> {
-        todo!()
+        // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
+        let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
+        let indexes = Self::index_meta_collect(&table_name, &self.tx)?;
+
+        Some(TableCatalog::new_with_indexes(table_name.clone(), columns, indexes))
     }
 
     fn show_tables(&self) -> Result<Vec<String>, StorageError> {
@@ -512,5 +650,88 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
     async fn rollback(self) -> Result<(), StorageError> {
         todo!()
+    }
+}
+
+impl<E: StorageEngine> MVCCTransaction<E> {
+    fn create_index_meta_for_table(
+        tx: &mut mvcc::MVCCTransaction<E>,
+        table: &mut TableCatalog,
+    ) -> Result<(), StorageError> {
+        let table_name = table.name.clone();
+
+        for col in table
+            .all_columns()
+            .into_iter()
+            .filter(|col| col.desc.is_index())
+        {
+            let is_primary = col.desc.is_primary;
+            // FIXME: composite indexes may exist on future
+            let prefix = if is_primary { "pk" } else { "uk" };
+
+            if let Some(col_id) = col.id() {
+                let meta_ref = table.add_index_meta(
+                    format!("{}_{}", prefix, col.name()),
+                    vec![col_id],
+                    col.desc.is_unique,
+                    is_primary,
+                );
+                let (key, value) = TableCodec::encode_index_meta(&table_name, meta_ref)?;
+
+                tx.set(&key, value.to_vec())?;
+            }
+        }
+        Ok(())
+    }
+    fn _drop_data(
+        tx: &mut mvcc::MVCCTransaction<E>,
+        min: &[u8],
+        max: &[u8],
+    ) -> Result<(), StorageError> {
+        let mut scan = tx.scan(Bound::Included(min.to_vec()), Bound::Included(max.to_vec()))?;
+        let mut iter = scan.iter();
+        let mut data_keys = vec![];
+
+        while let Ok(Some((key, _))) = iter.next().transpose() {
+            data_keys.push(key);
+        }
+
+        for key in data_keys {
+            tx.delete(&key)?
+        }
+
+        Ok(())
+    }
+    fn index_meta_collect(name: &str, tx: &mvcc::MVCCTransaction<E>) -> Option<Vec<IndexMetaRef>> {
+        let (index_min, index_max) = TableCodec::index_meta_bound(name);
+        let mut index_metas = vec![];
+        let mut index_scan = tx
+            .scan(Bound::Included(index_min), Bound::Included(index_max))
+            .expect("scan index meta error");
+        let mut index_iter = index_scan.iter();
+
+        while let Ok(Some((_, value_option))) = index_iter.next().transpose() {
+            if let Ok(index_meta) = TableCodec::decode_index_meta(&value_option) {
+                index_metas.push(Arc::new(index_meta));
+            }
+        }
+
+        Some(index_metas)
+    }
+
+    fn column_collect(
+        table_name: TableName,
+        tx: &mvcc::MVCCTransaction<E>,
+    ) -> Result<Vec<ColumnCatalog>, StorageError> {
+        let (column_min, column_max) = TableCodec::columns_bound(&table_name);
+        let mut scan = tx.scan(Bound::Included(column_min), Bound::Included(column_max))?;
+        let mut column_iter = scan.iter();
+        let mut columns = vec![];
+
+        while let Ok(Some((_, value))) = column_iter.next().transpose() {
+            columns.push(TableCodec::decode_column(&value)?);
+        }
+
+        Ok(columns)
     }
 }

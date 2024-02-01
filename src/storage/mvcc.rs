@@ -6,8 +6,6 @@ use std::{
     vec,
 };
 
-use itertools::Itertools;
-use kip_db::kernel::lsm::version;
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -141,6 +139,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 active,
             },
         })
+    }
+    
+    pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), MVCCError> {
+        self.write_version(key, Some(value))
     }
 
     pub fn read_only(&self) -> bool {
