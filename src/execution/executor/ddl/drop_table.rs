@@ -29,15 +29,3 @@ impl<T: Transaction> Executor<T> for DropTable {
         Ok(vec![])
     }
 }
-
-// impl DropTable {
-//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-//     pub async fn _execute<T: Transaction>(self, transaction: &mut T) {
-//         let DropTableOperator {
-//             table_name,
-//             if_exists,
-//         } = self.op;
-
-//         transaction.drop_table(&table_name, if_exists)?;
-//     }
-// }

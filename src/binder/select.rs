@@ -206,7 +206,6 @@ impl<'a, T: Transaction> Binder<'a, T> {
         let table_catalog = self
             .context
             .table(table_name.clone())
-            .cloned()
             .ok_or_else(|| BindError::InvalidTable(format!("bind table {}", table)))?;
 
         self.context
@@ -300,12 +299,10 @@ impl<'a, T: Transaction> Binder<'a, T> {
         let left_table = self
             .context
             .table(left_table.clone())
-            .cloned()
             .ok_or_else(|| BindError::InvalidTable(format!("Left: {} not found", left_table)))?;
         let right_table = self
             .context
             .table(right_table.clone())
-            .cloned()
             .ok_or_else(|| BindError::InvalidTable(format!("Right: {} not found", right_table)))?;
 
         let on = match joint_condition {

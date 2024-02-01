@@ -99,7 +99,7 @@ pub trait Transaction: Sync + Send + 'static {
 
     fn drop_table(&mut self, table_name: &str, if_exists: bool) -> Result<(), StorageError>;
     fn drop_data(&mut self, table_name: &str) -> Result<(), StorageError>;
-    fn table(&self, table_name: TableName) -> Option<&TableCatalog>;
+    fn table(&self, table_name: TableName) -> Option<TableCatalog>;
 
     fn show_tables(&self) -> Result<Vec<String>, StorageError>;
 
@@ -223,7 +223,7 @@ pub struct MVCCIndexIter<'a, E: StorageEngine> {
     projection: Projections,
 
     index_meta: IndexMetaRef,
-    table: &'a TableCatalog,
+    table: TableCatalog,
     tx: &'a mvcc::MVCCTransaction<E>,
 
     // for buffering data
@@ -501,7 +501,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         column: &ColumnCatalog,
         if_not_exists: bool,
     ) -> Result<ColumnId, StorageError> {
-        if let Some(mut catalog) = self.table(table_name.clone()).cloned() {
+        if let Some(mut catalog) = self.table(table_name.clone()) {
             if !column.nullable && column.default_value().is_none() {
                 return Err(StorageError::NeedNullAbleOrDefault);
             }
@@ -545,7 +545,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         column: &str,
         if_exists: bool,
     ) -> Result<(), StorageError> {
-        if let Some(catalog) = self.table(table_name.clone()).cloned() {
+        if let Some(catalog) = self.table(table_name.clone()) {
             let column = catalog.get_column_by_name(column).unwrap();
 
             if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
@@ -632,12 +632,15 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         Ok(())
     }
 
-    fn table(&self, table_name: TableName) -> Option<&TableCatalog> {
+    fn table(&self, table_name: TableName) -> Option<TableCatalog> {
         // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
         let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
         let indexes = Self::index_meta_collect(&table_name, &self.tx)?;
 
-        Some(TableCatalog::new_with_indexes(table_name.clone(), columns, indexes))
+        Some(
+            TableCatalog::new_with_indexes(table_name.clone(), columns, indexes)
+                .expect("fetch table error"),
+        )
     }
 
     fn show_tables(&self) -> Result<Vec<String>, StorageError> {
@@ -645,11 +648,15 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     }
 
     async fn commit(self) -> Result<(), StorageError> {
-        todo!()
+        self.tx.commit();
+
+        Ok(())
     }
 
     async fn rollback(self) -> Result<(), StorageError> {
-        todo!()
+        self.tx.rollback();
+
+        Ok(())
     }
 }
 

@@ -26,7 +26,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     if_not_exists,
                     column_def,
                 } => {
-                    let plan = ScanOperator::build(table_name.clone(), table);
+                    let plan = ScanOperator::build(table_name.clone(), &table);
 
                     LogicalPlan {
                         operator: Operator::AddColumn(AddColumnOperator {
@@ -42,7 +42,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     if_exists,
                     ..
                 } => {
-                    let plan = ScanOperator::build(table_name.clone(), table);
+                    let plan = ScanOperator::build(table_name.clone(),&table);
                     let column_name = column_name.value.clone();
 
                     LogicalPlan {

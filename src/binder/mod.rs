@@ -47,7 +47,7 @@ impl<'a, T: Transaction> BinderContext<'a, T> {
         }
     }
 
-    pub fn table(&self, table_name: TableName) -> Option<&TableCatalog> {
+    pub fn table(&self, table_name: TableName) -> Option<TableCatalog> {
         if let Some(real_name) = self.table_aliases.get(table_name.as_ref()) {
             self.transaction.table(real_name.clone())
         } else {
