@@ -1,13 +1,13 @@
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::planner::operator::limit::LimitOperator;
-use crate::storage::{Iter, Transaction};
-use crate::types::tuple::Tuple;
+use crate::storage::{Transaction};
+
 use futures::StreamExt;
-use futures_async_stream::try_stream;
+
 use std::cell::RefCell;
-use std::ops::Deref;
-use std::sync::Arc;
+
+
 
 pub struct Limit {
     offset: Option<usize>,

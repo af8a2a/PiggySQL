@@ -4,7 +4,7 @@ use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
 use crate::types::errors::TypeError;
 use crate::types::tuple::Tuple;
-use futures::future::ok;
+
 use futures_async_stream::try_stream;
 use std::cell::RefCell;
 

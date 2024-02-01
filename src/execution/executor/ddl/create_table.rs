@@ -1,11 +1,11 @@
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::planner::operator::create_table::CreateTableOperator;
 use crate::storage::Transaction;
-use crate::types::tuple::Tuple;
+
 use crate::types::tuple_builder::TupleBuilder;
-use futures_async_stream::try_stream;
-use tracing::debug;
+
+
 use std::cell::RefCell;
 
 pub struct CreateTable {

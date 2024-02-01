@@ -17,7 +17,7 @@ use crate::types::ColumnId;
 use core::slice::SlicePattern;
 use std::collections::{Bound, VecDeque};
 use std::mem;
-use std::ops::{RangeBounds, SubAssign};
+use std::ops::{SubAssign};
 use std::sync::Arc;
 
 use self::engine::StorageEngine;

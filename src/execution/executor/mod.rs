@@ -3,13 +3,12 @@ pub(crate) mod dml;
 pub(crate) mod dql;
 pub(crate) mod show;
 
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell};
 
 use crate::{
-    catalog::ColumnCatalog,
     planner::{operator::Operator, LogicalPlan},
-    storage::{StorageError, Transaction},
-    types::{tuple::Tuple, value::DataValue},
+    storage::{Transaction},
+    types::{tuple::Tuple},
 };
 
 use self::{

@@ -27,7 +27,7 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync+'static {
     /// Iterates over all key/value pairs starting with prefix.
     fn scan_prefix(&self, prefix: &[u8]) -> Self::ScanIterator<'_> {
         let start = std::ops::Bound::Included(prefix.to_vec());
-        let end = match prefix.iter().rposition(|b| *b != 0xff) {
+        let _end = match prefix.iter().rposition(|b| *b != 0xff) {
             Some(i) => std::ops::Bound::Excluded(
                 prefix
                     .iter()

@@ -1,9 +1,9 @@
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::planner::operator::sort::{SortField, SortOperator};
 use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
-use futures_async_stream::try_stream;
+
 use std::cell::RefCell;
 use std::cmp::Ordering;
 

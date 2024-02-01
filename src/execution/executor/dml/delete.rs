@@ -1,11 +1,11 @@
 use crate::catalog::TableName;
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::planner::operator::delete::DeleteOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
-use crate::types::tuple::Tuple;
-use futures_async_stream::try_stream;
+
+
 use itertools::Itertools;
 use std::cell::RefCell;
 

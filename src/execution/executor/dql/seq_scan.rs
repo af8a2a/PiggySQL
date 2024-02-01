@@ -6,8 +6,8 @@ use crate::types::tuple::Tuple;
 use futures_async_stream::try_stream;
 use itertools::Itertools;
 use std::cell::RefCell;
-use std::ops::Deref;
-use std::sync::Arc;
+
+
 
 pub(crate) struct SeqScan {
     op: ScanOperator,

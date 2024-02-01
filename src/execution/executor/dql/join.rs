@@ -2,7 +2,7 @@ use crate::planner::operator::join::JoinType;
 
 use crate::catalog::{ColumnCatalog, ColumnRef};
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::expression::ScalarExpression;
 use crate::planner::operator::join::{JoinCondition, JoinOperator};
 use crate::storage::Transaction;
@@ -10,7 +10,7 @@ use crate::types::errors::TypeError;
 use crate::types::tuple::Tuple;
 use crate::types::value::DataValue;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt, RandomState};
-use futures_async_stream::try_stream;
+
 use itertools::Itertools;
 use std::cell::RefCell;
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 use crate::catalog::{TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;

@@ -1,12 +1,12 @@
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::expression::ScalarExpression;
 use crate::planner::operator::aggregate::AggregateOperator;
 use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 use crate::types::value::ValueRef;
 use ahash::{HashMap, HashMapExt};
-use futures_async_stream::try_stream;
+
 use itertools::Itertools;
 use std::cell::RefCell;
 

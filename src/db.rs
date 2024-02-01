@@ -1,16 +1,16 @@
 use sqlparser::parser::ParserError;
 use std::cell::RefCell;
-use std::path::PathBuf;
-use tracing::Level;
+
+
 
 use crate::binder::{BindError, Binder, BinderContext};
 use crate::execution::executor::{build, BoxedExecutor};
 use crate::execution::ExecutorError;
 use crate::parser::parse as parse_sql;
-use crate::planner::LogicalPlan;
+
 use crate::storage::{Storage, StorageError, Transaction};
 use crate::types::tuple::Tuple;
-use tracing_subscriber::FmtSubscriber;
+
 
 pub struct Database<S: Storage> {
     pub(crate) storage: S,

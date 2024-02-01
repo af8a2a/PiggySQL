@@ -1,9 +1,9 @@
 use crate::binder::BindError;
 use crate::execution::executor::BoxedExecutor;
 use crate::planner::operator::alter_table::{AddColumnOperator, DropColumnOperator};
-use crate::types::tuple::Tuple;
+
 use crate::types::value::DataValue;
-use crate::{execution::ExecutorError, types::tuple_builder::TupleBuilder};
+use crate::{types::tuple_builder::TupleBuilder};
 use std::cell::RefCell;
 use std::sync::Arc;
 

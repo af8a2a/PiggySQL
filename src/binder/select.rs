@@ -412,7 +412,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
 
         for (table, join_option) in bind_tables.values() {
             if let Some(join_type) = join_option {
-                let (left_force_nullable, right_force_nullable) = match (join_type) {
+                let (left_force_nullable, right_force_nullable) = match join_type {
                     JoinType::Inner => (false, false),
                     JoinType::Left => (false, true),
                     JoinType::Right => (true, false),
