@@ -16,7 +16,7 @@ use crate::types::value::ValueRef;
 use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
 use std::mem;
-use std::ops::SubAssign;
+use std::ops::{RangeBounds, SubAssign};
 use std::sync::Arc;
 
 use self::engine::StorageEngine;
@@ -219,7 +219,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
 pub struct MVCCIndexIter<'a, E: StorageEngine> {
     offset: usize,
     limit: Option<usize>,
-    projections: Projections,
+    projection: Projections,
 
     index_meta: IndexMetaRef,
     table: &'a TableCatalog,
@@ -258,7 +258,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
             .map(|bytes| {
                 let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
 
-                tuple_projection(&mut self.limit, &self.projections, tuple)
+                tuple_projection(&mut self.limit, &self.projection, tuple)
             })
             .transpose()
     }
@@ -284,7 +284,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                 }
                 match value {
                     IndexValue::PrimaryKey(tuple) => {
-                        let tuple = tuple_projection(&mut self.limit, &self.projections, tuple)?;
+                        let tuple = tuple_projection(&mut self.limit, &self.projection, tuple)?;
 
                         return Ok(Some(tuple));
                     }
@@ -299,8 +299,87 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
             }
         }
         assert!(self.index_values.is_empty());
+        if let Some(iter) = &mut self.scope_iter {
+            let mut iter = iter.iter();
+            let mut has_next = false;
 
-        todo!()
+            while let Ok(Some((_, value))) = iter.next().transpose() {
+                if self.index_meta.is_primary {
+                    let tuple = TableCodec::decode_tuple(self.table.all_columns(), &value);
+
+                    self.index_values.push_back(IndexValue::PrimaryKey(tuple));
+                } else {
+                    for tuple_id in TableCodec::decode_index(&value)? {
+                        self.index_values.push_back(IndexValue::Normal(tuple_id));
+                    }
+                }
+                has_next = true;
+                break;
+            }
+            if !has_next {
+                self.scope_iter = None;
+            }
+            return self.next_tuple();
+        }
+        // 4. When `scope_iter` and `index_values` do not have a value, use the next expression to iterate
+        if let Some(binary) = self.binaries.pop_front() {
+            match binary {
+                ConstantBinary::Scope { min, max } => {
+                    let table_name = &self.table.name;
+                    let index_meta = &self.index_meta;
+
+                    let bound_encode = |bound: Bound<ValueRef>| -> Result<_, StorageError> {
+                        match bound {
+                            Bound::Included(val) => Ok(Bound::Included(self.val_to_key(val)?)),
+                            Bound::Excluded(val) => Ok(Bound::Excluded(self.val_to_key(val)?)),
+                            Bound::Unbounded => Ok(Bound::Unbounded),
+                        }
+                    };
+                    let check_bound = |value: &mut Bound<Vec<u8>>, bound: Vec<u8>| {
+                        if matches!(value, Bound::Unbounded) {
+                            let _ = mem::replace(value, Bound::Included(bound));
+                        }
+                    };
+                    let (bound_min, bound_max) = if index_meta.is_unique {
+                        TableCodec::index_bound(table_name, &index_meta.id)
+                    } else {
+                        TableCodec::tuple_bound(table_name)
+                    };
+
+                    let mut encode_min = bound_encode(min)?;
+                    check_bound(&mut encode_min, bound_min);
+
+                    let mut encode_max = bound_encode(max)?;
+                    check_bound(&mut encode_max, bound_max);
+                    // let l=|min_bound:Bound<Vec<u8>>,max_bound:Bound<Vec<u8>>|->RangeBounds<Vec<u8>>{
+                    //     (min_bound..max_bound)
+                    // };
+                    let iter = self
+                        .tx
+                        .scan(encode_min,encode_max)?;
+                    self.scope_iter = Some(iter);
+                }
+                ConstantBinary::Eq(val) => {
+                    let key = self.val_to_key(val)?;
+                    if let Some(bytes) = self.tx.get(&key)? {
+                        if self.index_meta.is_unique {
+                            for tuple_id in TableCodec::decode_index(&bytes)? {
+                                self.index_values.push_back(IndexValue::Normal(tuple_id));
+                            }
+                        } else if self.index_meta.is_primary {
+                            let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
+
+                            self.index_values.push_back(IndexValue::PrimaryKey(tuple));
+                        } else {
+                            todo!()
+                        }
+                    }
+                    self.scope_iter = None;
+                }
+                _ => (),
+            }
+        }
+        self.next_tuple()
     }
 }
 
@@ -328,7 +407,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             limit: bounds.1,
             projection,
             all_columns,
-            scan: self.tx.scan(min..=max)?,
+            scan: self.tx.scan(Bound::Included(min), Bound::Included(max))?,
         })
     }
 
@@ -344,10 +423,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             .table(table_name.clone())
             .ok_or(StorageError::TableNotFound)?;
         let offset = offset_option.unwrap_or(0);
-        Ok(IndexIter {
+        Ok(MVCCIndexIter {
             offset,
             limit: limit_option,
-            projections,
+            projection,
             index_meta,
             table,
             index_values: VecDeque::new(),

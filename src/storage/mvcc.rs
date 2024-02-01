@@ -250,13 +250,13 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             .map_err(|e| MVCCError::from(e))
     }
 
-    pub fn scan<R: RangeBounds<Vec<u8>>>(&self, range: R) -> Result<Scan<E>, MVCCError> {
-        let start = match range.start_bound() {
+    pub fn scan(&self, start:Bound<Vec<u8>>,end:Bound<Vec<u8>>) -> Result<Scan<E>, MVCCError> {
+        let start = match start {
             Bound::Excluded(k) => Bound::Excluded(Key::Version(k.clone(), u64::MAX).encode()?),
             Bound::Included(k) => Bound::Included(Key::Version(k.clone(), 0).encode()?),
             Bound::Unbounded => Bound::Included(Key::Version(vec![], 0).encode()?),
         };
-        let end = match range.end_bound() {
+        let end = match end {
             Bound::Excluded(k) => Bound::Excluded(Key::Version(k.clone(), 0).encode()?),
             Bound::Included(k) => Bound::Included(Key::Version(k.clone(), u64::MAX).encode()?),
             Bound::Unbounded => Bound::Excluded(KeyPrefix::Unversioned.encode()?),
