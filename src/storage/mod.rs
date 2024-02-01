@@ -3,7 +3,6 @@ mod keycode;
 pub(crate) mod kip_impl;
 pub mod mvcc;
 mod table_codec;
-use kip_db::KernelError;
 
 use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
@@ -14,7 +13,6 @@ use crate::types::index::{Index, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use core::slice::SlicePattern;
 use std::collections::{Bound, VecDeque};
 use std::mem;
 use std::ops::{SubAssign};
@@ -170,8 +168,6 @@ pub enum StorageError {
     #[error("The table already exists")]
     TableExists,
 
-    #[error("kipdb error")]
-    KipDBError(KernelError),
 
     #[error("MVCC layer error")]
     MvccLayerError(MVCCError),
@@ -459,7 +455,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             }
         }
 
-        self.tx.set(key.as_slice(), value.to_vec())?;
+        self.tx.set(&key, value.to_vec())?;
 
         Ok(())
     }
@@ -648,13 +644,13 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     }
 
     async fn commit(self) -> Result<(), StorageError> {
-        self.tx.commit();
+        self.tx.commit()?;
 
         Ok(())
     }
 
     async fn rollback(self) -> Result<(), StorageError> {
-        self.tx.rollback();
+        self.tx.rollback()?;
 
         Ok(())
     }

@@ -3,7 +3,6 @@ use crate::execution::ExecutorError;
 use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
 use crate::types::tuple::Tuple;
-use futures_async_stream::try_stream;
 use itertools::Itertools;
 use std::cell::RefCell;
 
@@ -38,19 +37,3 @@ impl<T: Transaction> Executor<T> for SeqScan {
     }
 }
 
-impl SeqScan {
-    #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-    pub async fn _execute<T: Transaction>(self, transaction: &T) {
-        let ScanOperator {
-            table_name,
-            columns,
-            limit,
-            ..
-        } = self.op;
-        let mut iter = transaction.read(table_name, limit, columns)?;
-
-        while let Some(tuple) = iter.next_tuple()? {
-            yield tuple;
-        }
-    }
-}

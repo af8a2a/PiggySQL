@@ -2,7 +2,7 @@ use itertools::Itertools;
 
 pub mod memory;
 
-pub trait StorageEngine: std::fmt::Display + Send + Sync+'static {
+pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
     /// The iterator returned by scan(). Traits can't return "impl Trait", and
     /// we don't want to use trait objects, so the type must be specified.
     type ScanIterator<'a>: DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>), StorageEngineError>>
@@ -27,7 +27,7 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync+'static {
     /// Iterates over all key/value pairs starting with prefix.
     fn scan_prefix(&self, prefix: &[u8]) -> Self::ScanIterator<'_> {
         let start = std::ops::Bound::Included(prefix.to_vec());
-        let _end = match prefix.iter().rposition(|b| *b != 0xff) {
+        let end = match prefix.iter().rposition(|b| *b != 0xff) {
             Some(i) => std::ops::Bound::Excluded(
                 prefix
                     .iter()
@@ -38,7 +38,6 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync+'static {
             ),
             None => std::ops::Bound::Unbounded,
         };
-        let end = std::ops::Bound::Unbounded;
         self.scan((start, end))
     }
 }
