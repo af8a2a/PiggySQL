@@ -1,8 +1,5 @@
 use std::{
-    collections::HashSet,
-    ops::{Bound, RangeBounds},
-    sync::Arc,
-    vec,
+    collections::HashSet, io::Read, ops::{Bound, RangeBounds}, sync::Arc, vec
 };
 
 use serde::{Deserialize, Serialize};
@@ -796,4 +793,65 @@ pub mod tests {
 
         Ok(())
     }
+
+    #[test]
+    // Write skew is when t1 reads a and writes it to b while t2 reads b and
+    // writes it to a. Snapshot isolation DOES NOT prevent this, which is
+    // expected, so we assert the current behavior. Fixing this requires
+    // implementing serializable snapshot isolation.
+    fn anomaly_write_skew() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))])?;
+
+        let t1 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false)?;
+
+        assert_eq!(t1.get(b"a")?, Some(vec![1]));
+        assert_eq!(t2.get(b"b")?, Some(vec![2]));
+
+        t1.set(b"b", vec![1])?;
+        t2.set(b"a", vec![2])?;
+
+        t1.commit()?;
+        t2.commit()?;
+
+        Ok(())
+    }
+    #[test]
+    /// Scan should be isolated from future and uncommitted transactions.
+    fn scan_isolation() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+
+        let t1 = mvcc.begin(false)?;
+        t1.set(b"a", vec![1])?;
+        t1.set(b"b", vec![1])?;
+        t1.set(b"d", vec![1])?;
+        t1.set(b"e", vec![1])?;
+        t1.commit()?;
+
+        let t2 = mvcc.begin(false)?;
+        t2.set(b"a", vec![2])?;
+        t2.delete(b"b")?;
+        t2.set(b"c", vec![2])?;
+
+        let t3 = mvcc.begin(true)?;
+
+        let t4 = mvcc.begin(false)?;
+        t4.set(b"d", vec![3])?;
+        t4.delete(b"e")?;
+        t4.set(b"f", vec![3])?;
+        t4.commit()?;
+
+        assert_scan!(t3.scan(Bound::Unbounded,Bound::Unbounded)? => {
+            b"a" => [1], // uncommitted update
+            b"b" => [1], // uncommitted delete
+            // b"c" is uncommitted write
+            b"d" => [1], // future update
+            b"e" => [1], // future delete
+            // b"f" is future write
+        });
+
+        Ok(())
+    }
+
 }
