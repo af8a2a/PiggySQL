@@ -48,6 +48,7 @@ impl StorageEngine for Memory {
     }
 
     fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), StorageEngineError> {
+
         self.data.insert(key.to_vec(), value);
         Ok(())
     }
