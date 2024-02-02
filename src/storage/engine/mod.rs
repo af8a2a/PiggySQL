@@ -38,6 +38,9 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
             ),
             None => std::ops::Bound::Unbounded,
         };
+        eprintln!("start encode:{:?}",start);
+        eprintln!("end encode:{:?}",end);
+
         self.scan((start, end))
     }
 }

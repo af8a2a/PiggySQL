@@ -302,7 +302,8 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         // Normally, KeyPrefix::Version will only match all versions of the
         // exact given key. We want all keys maching the prefix, so we chop off
         // the KeyCode byte slice terminator 0x0000 at the end.
-        let prefix = KeyPrefix::Version(prefix.into()).encode()?;
+        let mut prefix = KeyPrefix::Version(prefix.into()).encode()?;
+        prefix.truncate(prefix.len()-2);
         Ok(Scan::from_prefix(self.engine.clone(), &self.state, prefix))
     }
 
@@ -1073,4 +1074,42 @@ pub mod tests {
 
         Ok(())
     }
+    #[test]
+    /// Tests unversioned key/value pairs, via set/get_unversioned().
+    fn unversioned() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+
+        // Interleave versioned and unversioned writes.
+        mvcc.set_unversioned(b"a", vec![0])?;
+
+        let t1 = mvcc.begin(false)?;
+        t1.set(b"a", vec![1])?;
+        t1.set(b"b", vec![1])?;
+        t1.set(b"c", vec![1])?;
+        t1.commit()?;
+
+        mvcc.set_unversioned(b"b", vec![0])?;
+        mvcc.set_unversioned(b"d", vec![0])?;
+
+        // Scans should not see the unversioned writes.
+        let t2 = mvcc.begin(true)?;
+        assert_scan!(t2.scan(Bound::Unbounded,Bound::Unbounded)? => {
+            b"a" => [1],
+            b"b" => [1],
+            b"c" => [1],
+        });
+
+        // Unversioned gets should not see MVCC writes.
+        assert_eq!(mvcc.get_unversioned(b"a")?, Some(vec![0]));
+        assert_eq!(mvcc.get_unversioned(b"b")?, Some(vec![0]));
+        assert_eq!(mvcc.get_unversioned(b"c")?, None);
+        assert_eq!(mvcc.get_unversioned(b"d")?, Some(vec![0]));
+
+        // Replacing an unversioned key should be fine.
+        mvcc.set_unversioned(b"a", vec![1])?;
+        assert_eq!(mvcc.get_unversioned(b"a")?, Some(vec![1]));
+
+        Ok(())
+    }
+
 }
