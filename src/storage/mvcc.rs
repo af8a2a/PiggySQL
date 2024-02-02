@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     engine::{StorageEngine, StorageEngineError},
-    keycode::{encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
+    keycode::{decode_u64, encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
 };
 type Version = u64;
 
@@ -131,7 +131,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             Some(ref v) => deserialize(v)?,
             None => 1,
         };
-        engine.set(&Key::NextVersion.encode()?, encode_u64(version + 1).into())?;
+        engine.set(&Key::NextVersion.encode()?, serialize(&(version + 1))?)?;
 
         let active = Self::scan_active(&engine)?;
         //创建这个事务运行时的快照
@@ -141,6 +141,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 serialize(&active)?,
             )?
         }
+        //设置活跃事务
         engine.set(&Key::TxnActive(version).encode()?, vec![])?;
         Ok(Self {
             engine,
@@ -152,20 +153,18 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         })
     }
     pub fn begin_as_of(engine: Arc<E>, version: Version) -> Result<MVCCTransaction<E>, MVCCError> {
-        let mut active = HashSet::new();
         let snapshot = engine
             .get(&Key::TxnActiveSnapshot(version).encode()?)?
             .expect("fetch snapshot error");
-        active = deserialize(&snapshot)?;
+        let active = deserialize(&snapshot)?;
         Ok(Self {
             engine,
             state: TransactionState {
                 version,
-                read_only:true,
+                read_only: true,
                 active,
             },
         })
-
     }
     pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), MVCCError> {
         self.write_version(key, Some(value))
@@ -716,7 +715,7 @@ pub mod tests {
 
         t1.set(b"deleted", vec![1])?;
         t1.write_version(b"deleted", None)?;
-        t1.write_version(b"tombstone", None);
+        t1.write_version(b"tombstone", None)?;
         t1.commit()?;
 
         let t1 = mvcc.begin(true)?;
@@ -797,5 +796,4 @@ pub mod tests {
 
         Ok(())
     }
-
 }
