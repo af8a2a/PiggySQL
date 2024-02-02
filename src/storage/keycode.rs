@@ -26,7 +26,7 @@ pub fn decode_boolean(byte: u8) -> Result<bool, MVCCError> {
     match byte {
         0x00 => Ok(false),
         0x01 => Ok(true),
-        b => Err(MVCCError::Serialization(format!(
+        b => Err(MVCCError::Internal(format!(
             "Invalid boolean value {:?}",
             b
         ))),
@@ -39,7 +39,7 @@ pub fn take_boolean(bytes: &mut &[u8]) -> Result<bool, MVCCError> {
 }
 
 /// Encodes a byte vector. 0x00 is escaped as 0x00 0xff, and 0x00 0x00 is used as a terminator.
-/// See: https://activesphere.com/blog/2018/08/17/order-preserving-serialization
+/// See: https://activesphere.com/blog/2018/08/17/order-preserving-Internal
 pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
     // flat_map() obscures Iterator.size_hint(), so we explicitly allocate.
     // See also: https://github.com/rust-lang/rust/issues/45840
@@ -59,7 +59,7 @@ pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
 /// Takes a single byte from a slice and shortens it, without any escaping.
 pub fn take_byte(bytes:&mut &[u8]) -> Result<u8, MVCCError> {
     if bytes.is_empty() {
-        return Err(MVCCError::Serialization("Unexpected end of bytes".into()));
+        return Err(MVCCError::Internal("Unexpected end of bytes".into()));
     }
     let b = bytes[0];
      *bytes = &bytes[1..];
@@ -78,15 +78,15 @@ pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>, MVCCError> {
                 Some((i, 0x00)) => break i + 1,        // 0x00 0x00 is terminator
                 Some((_, 0xff)) => decoded.push(0x00), // 0x00 0xff is escape sequence for 0x00
                 Some((_, b)) => {
-                    return Err(MVCCError::Serialization(format!(
+                    return Err(MVCCError::Internal(format!(
                         "Invalid byte escape {:?}",
                         b
                     )))
                 }
-                None => return Err(MVCCError::Serialization("Unexpected end of bytes".into())),
+                None => return Err(MVCCError::Internal("Unexpected end of bytes".into())),
             },
             Some(b) => decoded.push(*b),
-            None => return Err(MVCCError::Serialization("Unexpected end of bytes".into())),
+            None => return Err(MVCCError::Internal("Unexpected end of bytes".into())),
         }
     };
      *bytes = &bytes[taken..];
@@ -116,7 +116,7 @@ pub fn decode_f64(mut bytes: [u8; 8]) -> f64 {
 /// Decodes an f64 from a slice and shrinks the slice.
 pub fn take_f64(bytes: &mut &[u8]) -> Result<f64,MVCCError> {
     if bytes.len() < 8 {
-        return Err(MVCCError::Serialization(format!(
+        return Err(MVCCError::Internal(format!(
             "Unable to decode f64 from {} bytes",
             bytes.len()
         )));
@@ -143,7 +143,7 @@ pub fn decode_i64(mut bytes: [u8; 8]) -> i64 {
 /// Decodes a i64 from a slice and shrinks the slice.
 pub fn take_i64(bytes: &mut &[u8]) -> Result<i64,MVCCError> {
     if bytes.len() < 8 {
-        return Err(MVCCError::Serialization(format!(
+        return Err(MVCCError::Internal(format!(
             "Unable to decode i64 from {} bytes",
             bytes.len()
         )));
@@ -177,7 +177,7 @@ pub fn decode_u64(bytes: [u8; 8]) -> u64 {
 /// Decodes a u64 from a slice and shrinks the slice.
 pub fn take_u64(bytes:&mut &[u8]) -> Result<u64, MVCCError> {
     if bytes.len() < 8 {
-        return Err(MVCCError::Serialization(format!(
+        return Err(MVCCError::Internal(format!(
             "Unable to decode u64 from {} bytes",
             bytes.len()
         )));

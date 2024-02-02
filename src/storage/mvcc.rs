@@ -1,5 +1,9 @@
 use std::{
-    collections::HashSet, io::Read, ops::{Bound, RangeBounds}, sync::Arc, vec
+    collections::HashSet,
+    io::Read,
+    ops::{Bound, RangeBounds},
+    sync::Arc,
+    vec,
 };
 
 use serde::{Deserialize, Serialize};
@@ -76,7 +80,7 @@ impl Key {
             0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
             0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
             _ => {
-                return Err(MVCCError::Serialization(format!(
+                return Err(MVCCError::Internal(format!(
                     "Invalid key prefix {:?}",
                     bytes[0]
                 )))
@@ -246,7 +250,8 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 Key::Version(_, version) => {
                     //被不可见事务修改
                     if !self.state.is_visible(version) {
-                        return Err(MVCCError::Internal("Write conflict".into()));
+                        //我们尚未实现可序列化隔离等级,无法处理W-W冲突
+                        return Err(MVCCError::Serialization);
                     }
                 }
                 key => {
@@ -291,6 +296,14 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             start,
             end,
         ))
+    }
+
+    pub fn scan_prefix(&self, prefix: &[u8]) -> Result<Scan<E>, MVCCError> {
+        // Normally, KeyPrefix::Version will only match all versions of the
+        // exact given key. We want all keys maching the prefix, so we chop off
+        // the KeyCode byte slice terminator 0x0000 at the end.
+        let prefix = KeyPrefix::Version(prefix.into()).encode()?;
+        Ok(Scan::from_prefix(self.engine.clone(), &self.state, prefix))
     }
 
     /// 向存储引擎写入tombstone.
@@ -546,14 +559,14 @@ impl<'a, E: StorageEngine> DoubleEndedIterator for ScanIterator<'a, E> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MVCCError {
     InvalidVersion(String),
     EncodeError(String),
     StorageError(String),
     Internal(String),
     KeyError(String),
-    Serialization(String),
+    Serialization,
 }
 impl From<bincode::Error> for MVCCError {
     fn from(e: bincode::Error) -> Self {
@@ -567,13 +580,13 @@ impl From<StorageEngineError> for MVCCError {
 }
 impl From<std::array::TryFromSliceError> for MVCCError {
     fn from(err: std::array::TryFromSliceError) -> Self {
-        MVCCError::Serialization(err.to_string())
+        MVCCError::Internal(err.to_string())
     }
 }
 
 impl From<std::string::FromUtf8Error> for MVCCError {
     fn from(err: std::string::FromUtf8Error) -> Self {
-        MVCCError::Serialization(err.to_string())
+        MVCCError::Internal(err.to_string())
     }
 }
 
@@ -853,5 +866,211 @@ pub mod tests {
 
         Ok(())
     }
+    #[test]
+    /// Tests that the key encoding is resistant to key/version overlap.
+    /// For example, a naïve concatenation of keys and versions would
+    /// produce incorrect ordering in this case:
+    ///
+    // 00|00 00 00 00 00 00 00 01
+    // 00 00 00 00 00 00 00 00 02|00 00 00 00 00 00 00 02
+    // 00|00 00 00 00 00 00 00 03
+    fn scan_key_version_encoding() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
 
+        let t1 = mvcc.begin(false)?;
+        t1.set(&[0], vec![1])?;
+        t1.commit()?;
+
+        let t2 = mvcc.begin(false)?;
+        t2.set(&[0], vec![2])?;
+        t2.set(&[0, 0, 0, 0, 0, 0, 0, 0, 2], vec![2])?;
+        t2.commit()?;
+
+        let t3 = mvcc.begin(false)?;
+        t3.set(&[0], vec![3])?;
+        t3.commit()?;
+
+        let t4 = mvcc.begin(true)?;
+        assert_scan!(t4.scan(Bound::Unbounded,Bound::Unbounded)? => {
+            b"\x00" => [3],
+            b"\x00\x00\x00\x00\x00\x00\x00\x00\x02" => [2],
+        });
+        Ok(())
+    }
+    #[test]
+    /// Sets should work on both existing, missing, and deleted keys, and be
+    /// idempotent.
+    fn set() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)])?;
+
+        let t1 = mvcc.begin(false)?;
+        t1.set(b"key", vec![2])?; // update
+        t1.set(b"tombstone", vec![2])?; // update tombstone
+        t1.set(b"new", vec![1])?; // new write
+        t1.set(b"new", vec![1])?; // idempotent
+        t1.set(b"new", vec![2])?; // update own
+        t1.commit()?;
+
+        Ok(())
+    }
+
+    #[test]
+    /// Set should return serialization errors both for uncommitted versions
+    /// (past and future), and future committed versions.
+    fn set_conflict() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+
+        let t1 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false)?;
+        let t3 = mvcc.begin(false)?;
+        let t4 = mvcc.begin(false)?;
+
+        t1.set(b"a", vec![1])?;
+        t3.set(b"c", vec![3])?;
+        t4.set(b"d", vec![4])?;
+        t4.commit()?;
+
+        assert_eq!(t2.set(b"a", vec![2]), Err(MVCCError::Serialization)); // past uncommitted
+        assert_eq!(t2.set(b"c", vec![2]), Err(MVCCError::Serialization)); // future uncommitted
+        assert_eq!(t2.set(b"d", vec![2]), Err(MVCCError::Serialization)); // future committed
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests that transaction rollback properly rolls back uncommitted writes,
+    /// allowing other concurrent transactions to write the keys.
+    fn rollback() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        mvcc.setup(vec![
+            (b"a", 1, Some(&[0])),
+            (b"b", 1, Some(&[0])),
+            (b"c", 1, Some(&[0])),
+            (b"d", 1, Some(&[0])),
+        ])?;
+
+        // t2 will be rolled back. t1 and t3 are concurrent transactions.
+        let t1 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false)?;
+        let t3 = mvcc.begin(false)?;
+
+        t1.set(b"a", vec![1])?;
+        t2.set(b"b", vec![2])?;
+        t2.delete(b"c")?;
+        t3.set(b"d", vec![3])?;
+
+        // Both t1 and t3 will get serialization errors with t2.
+        assert_eq!(t1.set(b"b", vec![1]), Err(MVCCError::Serialization));
+        assert_eq!(t3.set(b"c", vec![3]), Err(MVCCError::Serialization));
+
+        // When t2 is rolled back, none of its writes will be visible, and t1
+        // and t3 can perform their writes and successfully commit.
+        t2.rollback()?;
+
+        let t4 = mvcc.begin(true)?;
+        assert_scan!(t4.scan(Bound::Unbounded,Bound::Unbounded)? => {
+            b"a" => [0],
+            b"b" => [0],
+            b"c" => [0],
+            b"d" => [0],
+        });
+
+        t1.set(b"b", vec![1])?;
+        t3.set(b"c", vec![3])?;
+        t1.commit()?;
+        t3.commit()?;
+
+        let t5 = mvcc.begin(true)?;
+        assert_scan!(t5.scan(Bound::Unbounded,Bound::Unbounded)? => {
+            b"a" => [1],
+            b"b" => [1],
+            b"c" => [3],
+            b"d" => [3],
+        });
+
+        Ok(())
+    }
+    #[test]
+    // A dirty write is when t2 overwrites an uncommitted value written by t1.
+    // Snapshot isolation prevents this.
+    fn anomaly_dirty_write() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+
+        let t1 = mvcc.begin(false)?;
+        t1.set(b"key", vec![1])?;
+
+        let t2 = mvcc.begin(false)?;
+        assert_eq!(t2.set(b"key", vec![2]), Err(MVCCError::Serialization));
+
+        Ok(())
+    }
+
+    #[test]
+    // A dirty read is when t2 can read an uncommitted value set by t1.
+    // Snapshot isolation prevents this.
+    fn anomaly_dirty_read() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+
+        let t1 = mvcc.begin(false)?;
+        t1.set(b"key", vec![1])?;
+
+        let t2 = mvcc.begin(false)?;
+        assert_eq!(t2.get(b"key")?, None);
+
+        Ok(())
+    }
+    #[test]
+    // A lost update is when t1 and t2 both read a value and update it, where
+    // t2's update replaces t1. Snapshot isolation prevents this.
+    fn anomaly_lost_update() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        mvcc.setup(vec![(b"key", 1, Some(&[0]))])?;
+
+        let t1 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false)?;
+
+        t1.get(b"key")?;
+        t2.get(b"key")?;
+
+        t1.set(b"key", vec![1])?;
+        assert_eq!(t2.set(b"key", vec![2]), Err(MVCCError::Serialization));
+        t1.commit()?;
+
+        Ok(())
+    }
+
+    #[test]
+    // A phantom read is when t1 reads entries matching some predicate, but a
+    // modification by t2 changes which entries that match the predicate such
+    // that a later read by t1 returns them. Snapshot isolation prevents this.
+    //
+    // We use a prefix scan as our predicate.
+    fn anomaly_phantom_read() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        mvcc.setup(vec![
+            (b"a", 1, Some(&[0])),
+            (b"ba", 1, Some(&[0])),
+            (b"bb", 1, Some(&[0])),
+        ])?;
+
+        let t1 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false)?;
+
+        assert_scan!(t1.scan_prefix(b"b")? => {
+            b"ba" => [0],
+            b"bb" => [0],
+        });
+
+        t2.delete(b"ba")?;
+        t2.set(b"bc", vec![2])?;
+        t2.commit()?;
+
+        assert_scan!(t1.scan_prefix(b"b")? => {
+            b"ba" => [0],
+            b"bb" => [0],
+        });
+
+        Ok(())
+    }
 }
