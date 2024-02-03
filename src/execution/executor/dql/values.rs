@@ -30,4 +30,3 @@ impl<T: Transaction> Executor<T> for Values {
             .collect_vec())
     }
 }
-

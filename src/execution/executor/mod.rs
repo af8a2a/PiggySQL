@@ -3,12 +3,12 @@ pub(crate) mod dml;
 pub(crate) mod dql;
 pub(crate) mod show;
 
-use std::{cell::RefCell};
+use std::cell::RefCell;
 
 use crate::{
     planner::{operator::Operator, LogicalPlan},
-    storage::{Transaction},
-    types::{tuple::Tuple},
+    storage::Transaction,
+    types::tuple::Tuple,
 };
 
 use self::{
@@ -97,7 +97,7 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &RefCell<T>) -> Box
             let input = build(childrens.remove(0), transaction);
             let values = build(childrens.remove(0), transaction);
 
-            Update::from((op, input, values)).execute(transaction)
+            Update::from((op, input,values)).execute(transaction)
         }
         Operator::Delete(op) => {
             let input = build(childrens.remove(0), transaction);

@@ -30,20 +30,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
             let bind_table_name = Some(table_name.to_string());
 
             let mut columns = Vec::with_capacity(assignments.len());
-            let mut row = Vec::with_capacity(assignments.len());
+            let mut set_expr = Vec::with_capacity(assignments.len());
 
             for assignment in assignments {
                 //set x= expr,  the expr as value
-                let value = match self.bind_expr(&assignment.value)? {
-                    ScalarExpression::Constant(value) => Ok::<ValueRef, BindError>(value),
-                    ScalarExpression::Unary { op, expr, ty } => todo!(),
-                    ScalarExpression::Binary { op, left_expr, right_expr, ty } => {
-                        //to support set x=x+1
-                        let rhs=left_expr.eval(tuple)
-                    },
-                    _=>unimplemented!()
-
-                }?;
+                let value = self.bind_expr(&assignment.value)?;
 
                 for ident in &assignment.id {
                     match self.bind_column_ref_from_identifiers(
@@ -51,20 +42,19 @@ impl<'a, T: Transaction> Binder<'a, T> {
                         bind_table_name.as_ref(),
                     )? {
                         ScalarExpression::ColumnRef(catalog) => {
-                            value.check_len(catalog.datatype())?;
                             columns.push(catalog);
-                            row.push(value.clone());
+                            set_expr.push(value.clone());
                         }
                         _ => unreachable!(),
                     }
                 }
             }
 
-            let values_plan = self.bind_values(vec![row], columns);
+            let values_plan = self.bind_values(vec![], columns);
 
             Ok(LogicalPlan {
-                operator: Operator::Update(UpdateOperator { table_name }),
-                childrens: vec![plan, values_plan],
+                operator: Operator::Update(UpdateOperator { set_expr, table_name }),
+                childrens: vec![plan,values_plan],
             })
         } else {
             unreachable!("only table")

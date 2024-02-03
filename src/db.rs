@@ -188,6 +188,7 @@ mod test {
         database.run("insert into  t1 values (1,1)")?;
 
         let batch = database.run("update t1 set c2=c2+1")?;
+        let batch = database.run("select * from t1")?;
 
         println!("{:#?}", batch);
         Ok(())

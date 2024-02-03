@@ -1,30 +1,37 @@
 use crate::catalog::TableName;
 use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::ExecutorError;
+use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 use crate::types::tuple::Tuple;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct Update {
     table_name: TableName,
-    input: BoxedExecutor,
-    values: BoxedExecutor,
+    input: BoxedExecutor,  //select source for update
+    values: BoxedExecutor, //select source for update
+    set_expr: Vec<ScalarExpression>,
 }
 
 impl From<(UpdateOperator, BoxedExecutor, BoxedExecutor)> for Update {
     fn from(
-        (UpdateOperator { table_name }, input, values): (
-            UpdateOperator,
-            BoxedExecutor,
-            BoxedExecutor,
-        ),
+        (
+            UpdateOperator {
+                set_expr,
+                table_name,
+            },
+            input,
+            values,
+        ): (UpdateOperator, BoxedExecutor, BoxedExecutor),
     ) -> Self {
         Update {
             table_name,
             input,
             values,
+            set_expr,
         }
     }
 }
@@ -36,8 +43,11 @@ impl<T: Transaction> Executor<T> for Update {
             table_name,
             input,
             values,
+            set_expr,
         } = self;
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
+            //避免halloween问题
+            let mut unique_set = HashSet::new();
             let mut value_map = HashMap::new();
 
             for tuple in values?.iter() {
@@ -48,18 +58,23 @@ impl<T: Transaction> Executor<T> for Update {
                     value_map.insert(columns[i].id(), values[i].clone());
                 }
             }
+            //Seqscan遍历元组
             for tuple in input?.iter_mut() {
                 let mut is_overwrite = true;
 
                 for (i, column) in tuple.columns.iter().enumerate() {
-                    if let Some(value) = value_map.get(&column.id()) {
+                    if !unique_set.contains(&column.id()) && value_map.contains_key(&column.id()) {
+                        let value = set_expr[i].eval(tuple)?;
+                        unique_set.insert(column.id());
                         if column.desc.is_primary {
-                            let old_key = tuple.id.replace(value.clone()).unwrap();
-
-                            transaction.delete(&table_name, old_key)?;
-                            is_overwrite = false;
+                            //refuse to update primary key
+                            // let old_key = tuple.id.replace(value.clone()).unwrap();
+                            // transaction.delete(&table_name, old_key)?;
+                            // is_overwrite = false;
+                            return Err(ExecutorError::InternalError("Update Primary key".into()));
                         }
-                        if column.desc.is_unique && value != &tuple.values[i] {
+                        //更新索引
+                        if column.desc.is_unique && value != tuple.values[i] {
                             if let Some(index_meta) =
                                 table_catalog.get_unique_index(&column.id().unwrap())
                             {
