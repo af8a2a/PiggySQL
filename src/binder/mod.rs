@@ -171,15 +171,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     self.bind_delete(table, selection)?
                 }
             }
+            Statement::Explain { statement, .. } => {
+                todo!()
+            }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,
             // Statement::ShowTables { .. } => self.bind_show_tables()?,
-            // Statement::Copy {
-            //     source,
-            //     to,
-            //     target,
-            //     options,
-            //     ..
-            // } => self.bind_copy(source.clone(), *to, target.clone(), options)?,
             _ => return Err(BindError::UnsupportedStmt(stmt.to_string())),
         };
         Ok(plan)

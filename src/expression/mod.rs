@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::fmt::{self, Display};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -312,6 +312,44 @@ impl ScalarExpression {
         }
     }
 }
+
+// impl Display for ScalarExpression{
+//     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+//         match self {
+//             ScalarExpression::Constant(c) => {
+//                 write!(f, "{}", c)
+//             },
+//             ScalarExpression::ColumnRef(col) => {
+//                 write!(f, "{}", col.name())
+//             },
+//             ScalarExpression::Alias { expr, alias } => {
+//                 write!(f, "{} as {}", expr,alias)
+//             },
+//             ScalarExpression::TypeCast { expr, ty } => unimplemented!(),
+//             ScalarExpression::IsNull { negated, expr } => {
+//                 write!(f, "{} is null", expr)
+//             },
+//             ScalarExpression::Unary { op, expr, ty } => {
+//                 write!(f, "{}", self)
+//             },
+//             ScalarExpression::Binary { op, left_expr, right_expr, ty } => {
+//                 write!(f, "{}", self)
+//             },
+//             ScalarExpression::AggCall { distinct, kind, args, ty } => {
+//                 let mut str=String::new();
+//                 match kind{
+//                     Aggregate::Avg => todo!(),
+//                     Aggregate::Max => todo!(),
+//                     Aggregate::Min => todo!(),
+//                     Aggregate::Sum => todo!(),
+//                     Aggregate::Count => todo!(),
+//                 }
+//             },
+//             ScalarExpression::In { negated, expr, args } => todo!(),
+//         }
+//     }
+// }
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum UnaryOperator {

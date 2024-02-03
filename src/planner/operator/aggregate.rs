@@ -1,7 +1,12 @@
+use std::fmt::Display;
+
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+
 use crate::planner::LogicalPlan;
 use crate::{expression::ScalarExpression, planner::operator::Operator};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AggregateOperator {
     pub groupby_exprs: Vec<ScalarExpression>,
     pub agg_calls: Vec<ScalarExpression>,
