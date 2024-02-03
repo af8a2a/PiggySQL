@@ -1,6 +1,5 @@
 pub mod engine;
 mod keycode;
-pub(crate) mod kip_impl;
 pub mod mvcc;
 mod table_codec;
 
