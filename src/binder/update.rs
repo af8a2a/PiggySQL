@@ -33,9 +33,16 @@ impl<'a, T: Transaction> Binder<'a, T> {
             let mut row = Vec::with_capacity(assignments.len());
 
             for assignment in assignments {
+                //set x= expr,  the expr as value
                 let value = match self.bind_expr(&assignment.value)? {
                     ScalarExpression::Constant(value) => Ok::<ValueRef, BindError>(value),
-                    _ => unreachable!(),
+                    ScalarExpression::Unary { op, expr, ty } => todo!(),
+                    ScalarExpression::Binary { op, left_expr, right_expr, ty } => {
+                        //to support set x=x+1
+                        let rhs=left_expr.eval(tuple)
+                    },
+                    _=>unimplemented!()
+
                 }?;
 
                 for ident in &assignment.id {
