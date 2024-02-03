@@ -1,5 +1,9 @@
+use itertools::Itertools;
+
+use crate::catalog::ColumnRef;
+
 use self::{
-    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_table::CreateTableOperator, delete::DeleteOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::JoinOperator, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
+    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_table::CreateTableOperator, delete::DeleteOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
 };
 
 pub mod aggregate;
@@ -37,4 +41,50 @@ pub enum Operator {
     DropColumn(DropColumnOperator),
     CreateTable(CreateTableOperator),
     DropTable(DropTableOperator),
+}
+impl Operator {
+    pub fn referenced_columns(&self, only_column_ref: bool) -> Vec<ColumnRef> {
+        match self {
+            Operator::Aggregate(op) => op
+                .agg_calls
+                .iter()
+                .chain(op.groupby_exprs.iter())
+                .flat_map(|expr| expr.referenced_columns(only_column_ref))
+                .collect_vec(),
+            Operator::Filter(op) => op.predicate.referenced_columns(only_column_ref),
+            Operator::Join(op) => {
+                let mut exprs = Vec::new();
+
+                if let JoinCondition::On { on, filter } = &op.on {
+                    for (left_expr, right_expr) in on {
+                        exprs.append(&mut left_expr.referenced_columns(only_column_ref));
+                        exprs.append(&mut right_expr.referenced_columns(only_column_ref));
+                    }
+
+                    if let Some(filter_expr) = filter {
+                        exprs.append(&mut filter_expr.referenced_columns(only_column_ref));
+                    }
+                }
+                exprs
+            }
+            Operator::Project(op) => op
+                .exprs
+                .iter()
+                .flat_map(|expr| expr.referenced_columns(only_column_ref))
+                .collect_vec(),
+            Operator::Scan(op) => op
+                .columns
+                .iter()
+                .flat_map(|expr| expr.referenced_columns(only_column_ref))
+                .collect_vec(),
+            Operator::Sort(op) => op
+                .sort_fields
+                .iter()
+                .map(|field| &field.expr)
+                .flat_map(|expr| expr.referenced_columns(only_column_ref))
+                .collect_vec(),
+            Operator::Values(op) => op.columns.clone(),
+            _ => vec![],
+        }
+    }
 }
