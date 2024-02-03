@@ -7,7 +7,12 @@ use crate::binder::{BindError, Binder, BinderContext};
 use crate::execution::executor::{build, BoxedExecutor};
 use crate::execution::ExecutorError;
 
+use crate::optimizer::heuristic::batch::HepBatchStrategy;
+use crate::optimizer::heuristic::optimizer::HepOptimizer;
+use crate::optimizer::rule::RuleImpl;
+use crate::optimizer::OptimizerError;
 use crate::parser;
+use crate::planner::LogicalPlan;
 use crate::storage::{MVCCLayer, Storage, StorageError, Transaction};
 use crate::types::tuple::Tuple;
 
@@ -55,10 +60,34 @@ impl<S: Storage> Database<S> {
         }));
         let source_plan = binder.bind(&stmts[0])?;
         // println!("source_plan plan: {:#?}", source_plan);
-
+        let best_plan = Self::default_optimizer(source_plan).find_best()?;
         // println!("best_plan plan: {:#?}", best_plan);
 
-        Ok(build(source_plan, &transaction))
+        Ok(build(best_plan, &transaction))
+    }
+
+    fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
+        HepOptimizer::new(source_plan)
+            .batch(
+                "Column Pruning".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::ColumnPruning],
+            )
+            .batch(
+                "Simplify Filter".to_string(),
+                HepBatchStrategy::fix_point_topdown(10),
+                vec![RuleImpl::ConstantFolder],
+            )
+            // .batch(
+            //     "Predicate Pushdown".to_string(),
+            //     HepBatchStrategy::fix_point_topdown(10),
+            //     vec![RuleImpl::PushPredicateIntoScan],
+            // )
+            .batch(
+                "Limit Pushdown".to_string(),
+                HepBatchStrategy::fix_point_topdown(10),
+                vec![RuleImpl::PushLimitIntoTableScan],
+            )
     }
 }
 
@@ -109,12 +138,12 @@ pub enum DatabaseError {
     ),
     #[error("Internal error: {0}")]
     InternalError(String),
-    // #[error("optimizer error: {0}")]
-    // OptimizerError(
-    //     #[source]
-    //     #[from]
-    //     OptimizerError,
-    // ),
+    #[error("optimizer error: {0}")]
+    OptimizerError(
+        #[source]
+        #[from]
+        OptimizerError,
+    ),
 }
 
 #[cfg(test)]
