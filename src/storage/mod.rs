@@ -104,10 +104,10 @@ pub trait Transaction: Sync + Send + 'static {
     fn show_tables(&self) -> Result<Vec<String>, StorageError>;
 
     #[allow(async_fn_in_trait)]
-    async fn commit(self) -> Result<(), StorageError>;
+    fn commit(self) -> Result<(), StorageError>;
 
     #[allow(async_fn_in_trait)]
-    async fn rollback(self) -> Result<(), StorageError>;
+    fn rollback(self) -> Result<(), StorageError>;
 }
 
 enum IndexValue {
@@ -649,13 +649,13 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         todo!()
     }
 
-    async fn commit(self) -> Result<(), StorageError> {
+    fn commit(self) -> Result<(), StorageError> {
         self.tx.commit()?;
 
         Ok(())
     }
 
-    async fn rollback(self) -> Result<(), StorageError> {
+    fn rollback(self) -> Result<(), StorageError> {
         self.tx.rollback()?;
 
         Ok(())
@@ -767,9 +767,11 @@ impl<E: StorageEngine> Storage for MVCCLayer<E> {
 
 #[cfg(test)]
 mod test {
-    use futures::future::ok;
 
-    use crate::{catalog::ColumnDesc, types::{value::DataValue, LogicalType}};
+    use crate::{
+        catalog::ColumnDesc,
+        types::{value::DataValue, LogicalType},
+    };
 
     use self::engine::memory::Memory;
 
@@ -830,25 +832,19 @@ mod test {
         )?;
         let mut iter = transaction.read(
             Arc::new("test".to_string()),
-            (Some(1), Some(1)),
+            (None, None),
             vec![ScalarExpression::ColumnRef(columns[0].clone())],
         )?;
 
-        let tuples =iter.fetch_tuple()?;
-        if let Some(tuples)=tuples{
-            assert_eq!(
-                tuples[0].id,
-                Some(Arc::new(DataValue::Int32(Some(2))))
-            );
-            assert_eq!(
-                tuples[0].values,
-                vec![
-                    Arc::new(DataValue::Int32(Some(1))),
-                    Arc::new(DataValue::Boolean(Some(true))),
-                ],
-            );
+        let tuples = iter.fetch_tuple()?;
+        println!("{:#?}",tuples);
+
+        if let Some(tuples) = tuples {
+            assert_eq!(tuples[0].id, Some(Arc::new(DataValue::Int32(Some(1)))));
+            assert_eq!(tuples[0].values, vec![Arc::new(DataValue::Int32(Some(1))),],);
+            assert_eq!(tuples[1].id, Some(Arc::new(DataValue::Int32(Some(2)))));
+            assert_eq!(tuples[1].values, vec![Arc::new(DataValue::Int32(Some(2))),],);
         }
         Ok(())
     }
-
 }
