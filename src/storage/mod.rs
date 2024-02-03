@@ -1,4 +1,4 @@
-mod engine;
+pub mod engine;
 mod keycode;
 pub(crate) mod kip_impl;
 pub mod mvcc;
