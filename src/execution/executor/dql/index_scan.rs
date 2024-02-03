@@ -31,12 +31,11 @@ impl<T: Transaction> Executor<T> for IndexScan {
         let (index_meta, binaries) = index_by.ok_or(TypeError::InvalidType)?;
         let mut iter =
             transaction.read_by_index(table_name, limit, columns, index_meta, binaries)?;
-        let mut tuples = Vec::new();
-        while let Some(tuple) = iter.next_tuple()? {
-            tuples.push(tuple);
-            // yield tuple;
-        }
+        let tuples = iter.fetch_tuple()?.expect("unwrap tuple error");
+        // while let Some(tuple) = iter.fetch_tuple()? {
+        //     tuples.push(tuple);
+        //     // yield tuple;
+        // }
         Ok(tuples)
-        // unsafe { self._execute(transaction.as_ptr().as_ref().unwrap()) }
     }
 }

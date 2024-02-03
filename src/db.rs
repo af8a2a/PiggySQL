@@ -12,81 +12,81 @@ use crate::storage::{Storage, StorageError, Transaction};
 use crate::types::tuple::Tuple;
 
 
-pub struct Database<S: Storage> {
-    pub(crate) storage: S,
-}
+// pub struct Database<S: Storage> {
+//     pub(crate) storage: S,
+// }
 
 
-impl<S: Storage> Database<S> {
-    /// Create a new Database instance.
-    pub fn new(storage: S) -> Result<Self, DatabaseError> {
-        Ok(Database { storage })
-    }
+// impl<S: Storage> Database<S> {
+//     /// Create a new Database instance.
+//     pub fn new(storage: S) -> Result<Self, DatabaseError> {
+//         Ok(Database { storage })
+//     }
 
-    /// Run SQL queries.
-    pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
-        let transaction = self.storage.transaction().await?;
-        let transaction = RefCell::new(transaction);
-        // let mut stream = Self::_run(sql, &transaction)?;
-        let tuples = Self::_run(sql, &transaction)?;
+//     /// Run SQL queries.
+//     pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+//         let transaction = self.storage.transaction().await?;
+//         let transaction = RefCell::new(transaction);
+//         // let mut stream = Self::_run(sql, &transaction)?;
+//         let tuples = Self::_run(sql, &transaction)?;
 
-        transaction.into_inner().commit().await?;
+//         transaction.into_inner().commit().await?;
 
-        Ok(tuples?)
-    }
+//         Ok(tuples?)
+//     }
 
-    pub async fn new_transaction(&self) -> Result<DBTransaction<S>, DatabaseError> {
-        let transaction = self.storage.transaction().await?;
+//     pub async fn new_transaction(&self) -> Result<DBTransaction<S>, DatabaseError> {
+//         let transaction = self.storage.transaction().await?;
 
-        Ok(DBTransaction {
-            inner: RefCell::new(transaction),
-        })
-    }
+//         Ok(DBTransaction {
+//             inner: RefCell::new(transaction),
+//         })
+//     }
 
-    fn _run(
-        sql: &str,
-        transaction: &RefCell<<S as Storage>::TransactionType>,
-    ) -> Result<BoxedExecutor, DatabaseError> {
-        // parse
-        let stmts = parse_sql(sql).unwrap();
-        if stmts.is_empty() {
-            return Err(DatabaseError::EmptyStatement);
-        }
-        let binder = Binder::new(BinderContext::new(unsafe {
-            transaction.as_ptr().as_ref().unwrap()
-        }));
-        /// Build a logical plan.
-        ///
-        /// SELECT a,b FROM t1 ORDER BY a LIMIT 1;
-        /// Scan(t1)
-        ///   Sort(a)
-        ///     Limit(1)
-        ///       Project(a,b)
-        let source_plan = binder.bind(&stmts[0])?;
-        // println!("source_plan plan: {:#?}", source_plan);
+//     fn _run(
+//         sql: &str,
+//         transaction: &RefCell<<S as Storage>::TransactionType>,
+//     ) -> Result<BoxedExecutor, DatabaseError> {
+//         // parse
+//         let stmts = parse_sql(sql).unwrap();
+//         if stmts.is_empty() {
+//             return Err(DatabaseError::EmptyStatement);
+//         }
+//         let binder = Binder::new(BinderContext::new(unsafe {
+//             transaction.as_ptr().as_ref().unwrap()
+//         }));
+//         /// Build a logical plan.
+//         ///
+//         /// SELECT a,b FROM t1 ORDER BY a LIMIT 1;
+//         /// Scan(t1)
+//         ///   Sort(a)
+//         ///     Limit(1)
+//         ///       Project(a,b)
+//         let source_plan = binder.bind(&stmts[0])?;
+//         // println!("source_plan plan: {:#?}", source_plan);
 
-        // println!("best_plan plan: {:#?}", best_plan);
+//         // println!("best_plan plan: {:#?}", best_plan);
 
-        Ok(build(source_plan, &transaction))
-    }
-}
+//         Ok(build(source_plan, &transaction))
+//     }
+// }
 
-pub struct DBTransaction<S: Storage> {
-    inner: RefCell<S::TransactionType>,
-}
+// pub struct DBTransaction<S: Storage> {
+//     inner: RefCell<S::TransactionType>,
+// }
 
-impl<S: Storage> DBTransaction<S> {
-    pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
-        let stream = Database::<S>::_run(sql, &self.inner)?;
-        Ok(stream?)
-    }
+// impl<S: Storage> DBTransaction<S> {
+//     pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+//         let stream = Database::<S>::_run(sql, &self.inner)?;
+//         Ok(stream?)
+//     }
 
-    pub async fn commit(self) -> Result<(), DatabaseError> {
-        self.inner.into_inner().commit().await?;
+//     pub async fn commit(self) -> Result<(), DatabaseError> {
+//         self.inner.into_inner().commit().await?;
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
 #[derive(thiserror::Error, Debug)]
 pub enum DatabaseError {

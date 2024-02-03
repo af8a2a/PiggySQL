@@ -4,6 +4,8 @@ pub(crate) mod kip_impl;
 pub mod mvcc;
 mod table_codec;
 
+use itertools::Itertools;
+
 use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
@@ -15,17 +17,17 @@ use crate::types::value::ValueRef;
 use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
 use std::mem;
-use std::ops::{SubAssign};
+use std::ops::SubAssign;
 use std::sync::Arc;
 
 use self::engine::StorageEngine;
-use self::mvcc::{MVCCError, Scan};
+use self::mvcc::{MVCCError, Scan, ScanIterator, MVCC};
 
-pub trait Storage: Sync + Send + Clone {
+pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
 
     #[allow(async_fn_in_trait)]
-    async fn transaction(&self) -> Result<Self::TransactionType, StorageError>;
+    fn transaction(&self) -> Result<Self::TransactionType, StorageError>;
 }
 
 /// Optional bounds of the reader, of the form (offset, limit).
@@ -114,7 +116,7 @@ enum IndexValue {
 }
 
 pub trait Iter: Sync + Send {
-    fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError>;
+    fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>, StorageError>;
 }
 
 pub(crate) fn tuple_projection(
@@ -168,7 +170,6 @@ pub enum StorageError {
     #[error("The table already exists")]
     TableExists,
 
-
     #[error("MVCC layer error")]
     MvccLayerError(MVCCError),
 }
@@ -187,7 +188,7 @@ pub struct MVCCIter<'a, E: StorageEngine> {
 }
 
 impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
-    fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError> {
+    fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>, StorageError> {
         let mut iter = self.scan.iter();
         while self.offset > 0 {
             let _ = iter.next();
@@ -198,19 +199,22 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
                 return Ok(None);
             }
         }
-        while let Some(item) = iter.next() {
-            if let Ok((_, value)) = item.map_err(|e| StorageError::from(e)) {
-                let tuple = tuple_projection(
+        let tuples = iter
+            .filter(|item| item.is_ok())
+            .map(|item| {
+                item.map_err(|e| StorageError::from(e))
+                    .expect("unwarp item error")
+            })
+            .map(|(_, value)| {
+                tuple_projection(
                     &mut self.limit,
                     &self.projection,
                     TableCodec::decode_tuple(self.all_columns.clone(), &value),
-                )?;
-
-                return Ok(Some(tuple));
-            }
-        }
-
-        Ok(None)
+                )
+                .expect("projection tuple error")
+            })
+            .collect_vec();
+        Ok(Some(tuples))
     }
 }
 pub struct MVCCIndexIter<'a, E: StorageEngine> {
@@ -266,116 +270,118 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
 }
 
 impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
-    fn next_tuple(&mut self) -> Result<Option<Tuple>, StorageError> {
-        if matches!(self.limit, Some(0)) || self.is_empty() {
-            self.scope_iter = None;
-            self.binaries.clear();
+    fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>, StorageError> {
+        let mut tuples = Vec::new();
 
-            return Ok(None);
-        }
         // 2. try get tuple on index_values and until it empty
         loop {
-            if let Some(value) = self.index_values.pop_front() {
-                if Self::offset_move(&mut self.offset) {
-                    continue;
-                }
-                match value {
-                    IndexValue::PrimaryKey(tuple) => {
-                        let tuple = tuple_projection(&mut self.limit, &self.projection, tuple)?;
-
-                        return Ok(Some(tuple));
-                    }
-                    IndexValue::Normal(tuple_id) => {
-                        if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
-                            return Ok(Some(tuple));
-                        }
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-        assert!(self.index_values.is_empty());
-        if let Some(iter) = &mut self.scope_iter {
-            let mut iter = iter.iter();
-            let mut has_next = false;
-
-            while let Ok(Some((_, value))) = iter.next().transpose() {
-                if self.index_meta.is_primary {
-                    let tuple = TableCodec::decode_tuple(self.table.all_columns(), &value);
-
-                    self.index_values.push_back(IndexValue::PrimaryKey(tuple));
-                } else {
-                    for tuple_id in TableCodec::decode_index(&value)? {
-                        self.index_values.push_back(IndexValue::Normal(tuple_id));
-                    }
-                }
-                has_next = true;
-                break;
-            }
-            drop(iter);
-            if !has_next {
+            if matches!(self.limit, Some(0)) || self.is_empty() {
                 self.scope_iter = None;
+                self.binaries.clear();
+
+                break;
             }
-            return self.next_tuple();
-        }
-        // 4. When `scope_iter` and `index_values` do not have a value, use the next expression to iterate
-        if let Some(binary) = self.binaries.pop_front() {
-            match binary {
-                ConstantBinary::Scope { min, max } => {
-                    let table_name = &self.table.name;
-                    let index_meta = &self.index_meta;
-
-                    let bound_encode = |bound: Bound<ValueRef>| -> Result<_, StorageError> {
-                        match bound {
-                            Bound::Included(val) => Ok(Bound::Included(self.val_to_key(val)?)),
-                            Bound::Excluded(val) => Ok(Bound::Excluded(self.val_to_key(val)?)),
-                            Bound::Unbounded => Ok(Bound::Unbounded),
+            loop {
+                if let Some(value) = self.index_values.pop_front() {
+                    if Self::offset_move(&mut self.offset) {
+                        continue;
+                    }
+                    match value {
+                        IndexValue::PrimaryKey(tuple) => {
+                            let tuple = tuple_projection(&mut self.limit, &self.projection, tuple)?;
+                            tuples.push(tuple);
                         }
-                    };
-                    let check_bound = |value: &mut Bound<Vec<u8>>, bound: Vec<u8>| {
-                        if matches!(value, Bound::Unbounded) {
-                            let _ = mem::replace(value, Bound::Included(bound));
-                        }
-                    };
-                    let (bound_min, bound_max) = if index_meta.is_unique {
-                        TableCodec::index_bound(table_name, &index_meta.id)
-                    } else {
-                        TableCodec::tuple_bound(table_name)
-                    };
-
-                    let mut encode_min = bound_encode(min)?;
-                    check_bound(&mut encode_min, bound_min);
-
-                    let mut encode_max = bound_encode(max)?;
-                    check_bound(&mut encode_max, bound_max);
-                    // let l=|min_bound:Bound<Vec<u8>>,max_bound:Bound<Vec<u8>>|->RangeBounds<Vec<u8>>{
-                    //     (min_bound..max_bound)
-                    // };
-                    let iter = self.tx.scan(encode_min, encode_max)?;
-                    self.scope_iter = Some(iter);
-                }
-                ConstantBinary::Eq(val) => {
-                    let key = self.val_to_key(val)?;
-                    if let Some(bytes) = self.tx.get(&key)? {
-                        if self.index_meta.is_unique {
-                            for tuple_id in TableCodec::decode_index(&bytes)? {
-                                self.index_values.push_back(IndexValue::Normal(tuple_id));
+                        IndexValue::Normal(tuple_id) => {
+                            if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
+                                tuples.push(tuple);
                             }
-                        } else if self.index_meta.is_primary {
-                            let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
-
-                            self.index_values.push_back(IndexValue::PrimaryKey(tuple));
-                        } else {
-                            todo!()
                         }
                     }
+                } else {
+                    break;
+                }
+            }
+            assert!(self.index_values.is_empty());
+            if let Some(iter) = &mut self.scope_iter {
+                let mut iter = iter.iter();
+                let mut has_next = false;
+
+                while let Ok(Some((_, value))) = iter.next().transpose() {
+                    if self.index_meta.is_primary {
+                        let tuple = TableCodec::decode_tuple(self.table.all_columns(), &value);
+
+                        self.index_values.push_back(IndexValue::PrimaryKey(tuple));
+                    } else {
+                        for tuple_id in TableCodec::decode_index(&value)? {
+                            self.index_values.push_back(IndexValue::Normal(tuple_id));
+                        }
+                    }
+                    has_next = true;
+                    break;
+                }
+                drop(iter);
+                if !has_next {
                     self.scope_iter = None;
                 }
-                _ => (),
+                continue;
+                // return self.next_tuple();
+            }
+            // 4. When `scope_iter` and `index_values` do not have a value, use the next expression to iterate
+            if let Some(binary) = self.binaries.pop_front() {
+                match binary {
+                    ConstantBinary::Scope { min, max } => {
+                        let table_name = &self.table.name;
+                        let index_meta = &self.index_meta;
+
+                        let bound_encode = |bound: Bound<ValueRef>| -> Result<_, StorageError> {
+                            match bound {
+                                Bound::Included(val) => Ok(Bound::Included(self.val_to_key(val)?)),
+                                Bound::Excluded(val) => Ok(Bound::Excluded(self.val_to_key(val)?)),
+                                Bound::Unbounded => Ok(Bound::Unbounded),
+                            }
+                        };
+                        let check_bound = |value: &mut Bound<Vec<u8>>, bound: Vec<u8>| {
+                            if matches!(value, Bound::Unbounded) {
+                                let _ = mem::replace(value, Bound::Included(bound));
+                            }
+                        };
+                        let (bound_min, bound_max) = if index_meta.is_unique {
+                            TableCodec::index_bound(table_name, &index_meta.id)
+                        } else {
+                            TableCodec::tuple_bound(table_name)
+                        };
+
+                        let mut encode_min = bound_encode(min)?;
+                        check_bound(&mut encode_min, bound_min);
+
+                        let mut encode_max = bound_encode(max)?;
+                        check_bound(&mut encode_max, bound_max);
+                        let iter = self.tx.scan(encode_min, encode_max)?;
+                        self.scope_iter = Some(iter);
+                    }
+                    ConstantBinary::Eq(val) => {
+                        let key = self.val_to_key(val)?;
+                        if let Some(bytes) = self.tx.get(&key)? {
+                            if self.index_meta.is_unique {
+                                for tuple_id in TableCodec::decode_index(&bytes)? {
+                                    self.index_values.push_back(IndexValue::Normal(tuple_id));
+                                }
+                            } else if self.index_meta.is_primary {
+                                let tuple =
+                                    TableCodec::decode_tuple(self.table.all_columns(), &bytes);
+
+                                self.index_values.push_back(IndexValue::PrimaryKey(tuple));
+                            } else {
+                                todo!()
+                            }
+                        }
+                        self.scope_iter = None;
+                    }
+                    _ => (),
+                }
             }
         }
-        self.next_tuple()
+        Ok(Some(tuples))
     }
 }
 
@@ -737,4 +743,112 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
         Ok(columns)
     }
+}
+#[derive(Clone, Debug)]
+pub struct MVCCLayer<E: StorageEngine> {
+    layer: mvcc::MVCC<E>,
+}
+impl<E: StorageEngine> MVCCLayer<E> {
+    pub fn new(engine: E) -> Self {
+        Self {
+            layer: MVCC::new(Arc::new(engine)),
+        }
+    }
+}
+impl<E: StorageEngine> Storage for MVCCLayer<E> {
+    type TransactionType = MVCCTransaction<E>;
+
+    fn transaction(&self) -> Result<Self::TransactionType, StorageError> {
+        Ok(MVCCTransaction {
+            tx: self.layer.begin(false)?,
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use futures::future::ok;
+
+    use crate::{catalog::ColumnDesc, types::{value::DataValue, LogicalType}};
+
+    use self::engine::memory::Memory;
+
+    use super::*;
+    #[test]
+    fn test_in_storage_works_with_data() -> Result<(), StorageError> {
+        let storage = MVCCLayer::new(Memory::new());
+        let mut transaction = storage.transaction()?;
+        let columns = vec![
+            Arc::new(ColumnCatalog::new(
+                "c1".to_string(),
+                false,
+                ColumnDesc::new(LogicalType::Integer, true, false, None),
+                None,
+            )),
+            Arc::new(ColumnCatalog::new(
+                "c2".to_string(),
+                false,
+                ColumnDesc::new(LogicalType::Boolean, false, false, None),
+                None,
+            )),
+        ];
+        let source_columns = columns
+            .iter()
+            .map(|col_ref| ColumnCatalog::clone(&col_ref))
+            .collect_vec();
+        let _ = transaction.create_table(Arc::new("test".to_string()), source_columns, false)?;
+        let table_catalog = transaction.table(Arc::new("test".to_string()));
+        assert!(table_catalog.is_some());
+        assert!(table_catalog
+            .unwrap()
+            .get_column_id_by_name(&"c1".to_string())
+            .is_some());
+
+        transaction.append(
+            &"test".to_string(),
+            Tuple {
+                id: Some(Arc::new(DataValue::Int32(Some(1)))),
+                columns: columns.clone(),
+                values: vec![
+                    Arc::new(DataValue::Int32(Some(1))),
+                    Arc::new(DataValue::Boolean(Some(true))),
+                ],
+            },
+            false,
+        )?;
+        transaction.append(
+            &"test".to_string(),
+            Tuple {
+                id: Some(Arc::new(DataValue::Int32(Some(2)))),
+                columns: columns.clone(),
+                values: vec![
+                    Arc::new(DataValue::Int32(Some(2))),
+                    Arc::new(DataValue::Boolean(Some(false))),
+                ],
+            },
+            false,
+        )?;
+        let mut iter = transaction.read(
+            Arc::new("test".to_string()),
+            (Some(1), Some(1)),
+            vec![ScalarExpression::ColumnRef(columns[0].clone())],
+        )?;
+
+        let tuples =iter.fetch_tuple()?;
+        if let Some(tuples)=tuples{
+            assert_eq!(
+                tuples[0].id,
+                Some(Arc::new(DataValue::Int32(Some(2))))
+            );
+            assert_eq!(
+                tuples[0].values,
+                vec![
+                    Arc::new(DataValue::Int32(Some(1))),
+                    Arc::new(DataValue::Boolean(Some(true))),
+                ],
+            );
+        }
+        Ok(())
+    }
+
 }

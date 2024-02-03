@@ -28,10 +28,11 @@ impl<T: Transaction> Executor<T> for SeqScan {
         } = self.op;
         let transaction=transaction.borrow();
         let mut iter = transaction.read(table_name, limit, columns)?;
-        let mut tuples = Vec::new();
-        while let Some(tuple) = iter.next_tuple()? {
-            tuples.push(tuple);
-        }
+        // let mut tuples = Vec::new();
+        let tuples = iter.fetch_tuple()?.expect("unwrap tuple error");
+        // while let Some(tuple) = iter.next_tuple()? {
+        //     tuples.push(tuple);
+        // }
         Ok(tuples)
         // unsafe { self._execute(transaction.as_ptr().as_ref().unwrap()) }
     }
