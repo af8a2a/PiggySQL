@@ -31,17 +31,3 @@ impl<T: Transaction> Executor<T> for Values {
     }
 }
 
-// impl Values {
-//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-//     pub async fn _execute(self) {
-//         let ValuesOperator { columns, rows } = self.op;
-
-//         for values in rows {
-//             yield Tuple {
-//                 id: None,
-//                 columns: columns.clone(),
-//                 values,
-//             };
-//         }
-//     }
-// }

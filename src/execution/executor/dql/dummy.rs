@@ -1,7 +1,7 @@
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::storage::Transaction;
-use crate::types::tuple::Tuple;
+
 
 use std::cell::RefCell;
 

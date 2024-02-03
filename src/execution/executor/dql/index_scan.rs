@@ -1,9 +1,9 @@
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+
 use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
 use crate::types::errors::TypeError;
-use crate::types::tuple::Tuple;
+
 
 use std::cell::RefCell;
 

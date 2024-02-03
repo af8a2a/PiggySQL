@@ -21,7 +21,7 @@ use std::ops::SubAssign;
 use std::sync::Arc;
 
 use self::engine::StorageEngine;
-use self::mvcc::{MVCCError, Scan, ScanIterator, MVCC};
+use self::mvcc::{MVCCError, Scan, MVCC};
 
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;

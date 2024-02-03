@@ -41,29 +41,3 @@ impl<T: Transaction> Executor<T> for Projection {
         Ok(tuples)
     }
 }
-
-// impl Projection {
-//     #[try_stream(boxed, ok = Tuple, error = ExecutorError)]
-//     pub async fn _execute(self) {
-//         let Projection { exprs, input } = self;
-
-//         #[for_await]
-//         for tuple in input {
-//             let tuple = tuple?;
-
-//             let mut columns = Vec::with_capacity(exprs.len());
-//             let mut values = Vec::with_capacity(exprs.len());
-
-//             for expr in exprs.iter() {
-//                 values.push(expr.eval(&tuple)?);
-//                 columns.push(expr.output_columns());
-//             }
-
-//             yield Tuple {
-//                 id: None,
-//                 columns,
-//                 values,
-//             };
-//         }
-//     }
-// }

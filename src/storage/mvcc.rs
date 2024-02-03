@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    io::Read,
     ops::{Bound, RangeBounds},
     sync::Arc,
     vec,
@@ -10,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     engine::{StorageEngine, StorageEngineError},
-    keycode::{decode_u64, encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
+    keycode::{encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
 };
 type Version = u64;
 
