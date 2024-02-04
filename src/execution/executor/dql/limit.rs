@@ -37,17 +37,24 @@ impl<T: Transaction> Executor<T> for Limit {
         if limit.is_some() && limit.unwrap() == 0 {
             return Ok(tuples);
         }
+        let input=input?;
+        // println!("limit input tuple {}", input.len());
 
         let offset_val = offset.unwrap_or(0);
-        let offset_limit = offset_val + limit.unwrap_or(1) - 1;
-        for (i, tuple) in input?.iter().enumerate() {
-            if i < offset_val {
-                continue;
-            } else if i > offset_limit {
+        let limit = limit.unwrap_or(usize::MAX);
+        // println!("offset  {}", offset_val);
+        // println!("limit  {}", limit);
+
+        for (i, tuple) in input.iter().skip(offset_val).enumerate() {
+            // if i < offset_val {
+            //     continue;
+            // }
+              if i >= limit {
                 break;
             }
             tuples.push(tuple.clone());
         }
+        println!("limit collect tuple {}", tuples.len());
         Ok(tuples)
     }
 }

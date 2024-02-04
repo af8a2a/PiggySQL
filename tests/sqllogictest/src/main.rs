@@ -23,6 +23,7 @@ fn main() {
         let mut tester = Runner::new(db);
 
         if let Err(err) = tester.run_file(filepath) {
+            
             panic!("test error: {}", err);
         }
         println!("-> Pass!\n\n")

@@ -201,8 +201,6 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
         // };
         let tuples = iter
             .filter(|item| item.is_ok())
-            .skip(self.offset)
-            .take(self.limit.unwrap_or(usize::MAX) as usize)
             .map(|item| {
                 item.map_err(|e| StorageError::from(e))
                     .expect("unwarp item error")
@@ -215,7 +213,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
                 .expect("projection tuple error")
             })
             .collect_vec();
-
+        println!("scan collect tuple {}", tuples.len());
         Ok(Some(tuples))
     }
 }
@@ -290,7 +288,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                     }
                     match value {
                         IndexValue::PrimaryKey(tuple) => {
-                            let tuple = tuple_projection( &self.projection, tuple)?;
+                            let tuple = tuple_projection(&self.projection, tuple)?;
                             tuples.push(tuple);
                         }
                         IndexValue::Normal(tuple_id) => {

@@ -3,6 +3,7 @@ use crate::types::value::{DataValue, ValueRef};
 use comfy_table::{Cell, Table};
 use integer_encoding::FixedInt;
 use itertools::Itertools;
+use std::fmt::Display;
 use std::sync::Arc;
 
 const BITS_MAX_INDEX: usize = 8;
@@ -14,6 +15,20 @@ pub struct Tuple {
     pub id: Option<TupleId>,
     pub columns: Vec<ColumnRef>,
     pub values: Vec<ValueRef>,
+}
+
+impl Display for Tuple {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        s += "[";
+        let mut tuple = vec![];
+        for val in self.values.iter() {
+            tuple.push(format!("{}", val));
+        }
+        s += &tuple.iter().join(",");
+        s += "]";
+        write!(f, "{:?}", self.values)
+    }
 }
 
 impl Tuple {
