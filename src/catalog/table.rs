@@ -8,6 +8,7 @@ use crate::types::ColumnId;
 use super::column::{ColumnCatalog, ColumnRef};
 
 pub type TableName = Arc<String>;
+pub type IndexName = Arc<String>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TableCatalog {

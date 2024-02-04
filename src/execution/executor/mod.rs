@@ -115,5 +115,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &RefCell<T>) -> Box
         }
         Operator::CreateTable(op) => CreateTable::from(op).execute(transaction),
         Operator::DropTable(op) => DropTable::from(op).execute(transaction),
+        Operator::CreateIndex(_) => todo!(),
     }
 }

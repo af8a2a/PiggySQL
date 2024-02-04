@@ -9,7 +9,7 @@ mod insert;
 mod select;
 mod show;
 mod update;
-
+mod create_index;
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -174,6 +174,9 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 }
             }
             Statement::Explain {  .. } => {
+                todo!()
+            }
+            Statement::CreateIndex { name, table_name, columns, .. }=>{
                 todo!()
             }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,

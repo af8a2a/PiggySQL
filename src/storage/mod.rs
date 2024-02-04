@@ -4,8 +4,9 @@ pub mod mvcc;
 mod table_codec;
 
 use itertools::Itertools;
+use sqlparser::ast::OrderByExpr;
 
-use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, TableCatalog, TableName};
+use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::storage::table_codec::TableCodec;
@@ -18,7 +19,6 @@ use std::collections::{Bound, VecDeque};
 use std::mem;
 use std::ops::SubAssign;
 use std::sync::Arc;
-
 
 use self::engine::StorageEngine;
 use self::mvcc::{MVCCError, Scan, MVCC};
@@ -108,6 +108,18 @@ pub trait Transaction: Sync + Send + 'static {
 
     #[allow(async_fn_in_trait)]
     fn rollback(self) -> Result<(), StorageError>;
+
+    fn create_index(
+        &mut self,
+        table_name: TableName,
+        index_name: IndexName,
+        column_name: &str,
+    ) -> Result<(), StorageError>;
+    fn drop_index(
+        &mut self,
+        table_name: TableName,
+        index_name: IndexName,
+    ) -> Result<(), StorageError>;
 }
 
 enum IndexValue {
@@ -658,6 +670,36 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         self.tx.rollback()?;
 
         Ok(())
+    }
+
+    fn create_index(
+        &mut self,
+        table_name: TableName,
+        index_name: IndexName,
+        column_name: &str,
+    ) -> Result<(), StorageError> {
+        let table = self.table(table_name);
+        if let Some(mut table) = table {
+            //todo error handling
+            let column_id = table
+                .get_column_id_by_name(column_name)
+                .expect("column not found");
+            table.add_index_meta(index_name.to_string(), vec![column_id], true, false);
+            //update index meta
+            Self::create_index_meta_for_table(&mut self.tx, &mut table)?;
+        }
+        Ok(())
+    }
+
+    fn drop_index(&mut self, table_name: TableName, index_name:IndexName) -> Result<(), StorageError> {
+        let table = self.table(table_name);
+        if let Some(mut table) = table {
+            table.indexes.retain(|idx|idx.name!=index_name.to_string());
+            //update index meta
+            Self::create_index_meta_for_table(&mut self.tx, &mut table)?;
+        }
+        Ok(())
+
     }
 }
 

@@ -1,4 +1,4 @@
-# PiggySQL - a relational database for educational purpose
+# PiggySQL - a relational database for l purpose
 - DDL
   - [x] Create
     - [x] Create Table

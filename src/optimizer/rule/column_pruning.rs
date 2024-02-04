@@ -110,10 +110,7 @@ impl ColumnPruning {
                 Self::recollect_apply(op_ref_columns, true, graph.children_at(node_id)[0], graph);
             }
             // DDL Single Plan
-            Operator::CreateTable(_)
-            | Operator::DropTable(_)
-            | Operator::AddColumn(_)
-            | Operator::DropColumn(_) => (),
+            _ => (),
         }
     }
 

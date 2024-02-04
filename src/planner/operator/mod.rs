@@ -3,11 +3,12 @@ use itertools::Itertools;
 use crate::catalog::ColumnRef;
 
 use self::{
-    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_table::CreateTableOperator, delete::DeleteOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
+    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
 };
 
 pub mod aggregate;
 pub mod alter_table;
+pub mod create_index;
 pub mod create_table;
 pub mod delete;
 pub mod drop_table;
@@ -41,6 +42,7 @@ pub enum Operator {
     DropColumn(DropColumnOperator),
     CreateTable(CreateTableOperator),
     DropTable(DropTableOperator),
+    CreateIndex(CreateIndexOperator)
 }
 impl Operator {
     pub fn referenced_columns(&self, only_column_ref: bool) -> Vec<ColumnRef> {
