@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use lazy_static::lazy_static;
 use sqlparser::ast::Statement;
 use sqlparser::parser::ParserError;
 
@@ -39,7 +40,7 @@ impl<S: Storage> Session<S> {
         if stmts.is_empty() {
             return Err(DatabaseError::EmptyStatement);
         }
-
+        let mut tuple = Vec::new();
         let stmt = &stmts[0];
         match stmt {
             Statement::StartTransaction { .. } if self.txn.is_some() => {
@@ -69,13 +70,22 @@ impl<S: Storage> Session<S> {
                     return Err(DatabaseError::EmptyStatement);
                 }
                 if let Some(txn) = &mut self.txn {
-                    return Ok(txn.run_with_stmt(statement)?);
+                    tuple = txn.run_with_stmt(statement)?;
                 }
             }
-
-            _ => todo!(),
+            //DQL
+            statement @ Statement::Query(..) => {
+                let txn = self.db.new_transaction()?;
+                tuple = txn.run_with_stmt(statement)?;
+                txn.rollback()?;
+            }
+            statement => {
+                let txn = self.db.new_transaction()?;
+                tuple = txn.run_with_stmt(statement)?;
+                txn.commit()?;
+            }
         };
-        Ok(vec![])
+        Ok(tuple)
     }
 }
 
@@ -86,15 +96,15 @@ impl<S: Storage> Database<S> {
     }
 
     // /// Run SQL queries.
-    // pub fn run(&self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
-    //     let transaction = self.storage.transaction()?;
-    //     let transaction = RefCell::new(transaction);
-    //     let tuples = Self::_run(sql, &transaction)?;
+    pub fn run(&self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+        let transaction = self.storage.transaction()?;
+        let transaction = RefCell::new(transaction);
+        let tuples = Self::_run(sql, &transaction)?;
 
-    //     transaction.into_inner().commit()?;
+        transaction.into_inner().commit()?;
 
-    //     Ok(tuples?)
-    // }
+        Ok(tuples?)
+    }
 
     pub fn new_transaction(&self) -> Result<DBTransaction<S>, DatabaseError> {
         let transaction = self.storage.transaction()?;
@@ -104,57 +114,55 @@ impl<S: Storage> Database<S> {
         })
     }
 
-    // fn _run(
-    //     sql: &str,
-    //     transaction: &RefCell<<S as Storage>::TransactionType>,
-    // ) -> Result<BoxedExecutor, DatabaseError> {
-    //     // parse
-    //     let stmts = parser::parse(sql).unwrap();
-    //     if stmts.is_empty() {
-    //         return Err(DatabaseError::EmptyStatement);
-    //     }
-    //     let binder = Binder::new(BinderContext::new(unsafe {
-    //         transaction.as_ptr().as_ref().unwrap()
-    //     }));
-    //     let source_plan = binder.bind(&stmts[0])?;
-    //     // println!("source_plan plan: {:#?}", source_plan);
-    //     let best_plan = Self::default_optimizer(source_plan).find_best()?;
-    //     // println!("best_plan plan: {:#?}", best_plan);
+    fn _run(
+        sql: &str,
+        transaction: &RefCell<<S as Storage>::TransactionType>,
+    ) -> Result<BoxedExecutor, DatabaseError> {
+        // parse
+        let stmts = parser::parse(sql).unwrap();
+        if stmts.is_empty() {
+            return Err(DatabaseError::EmptyStatement);
+        }
+        let binder = Binder::new(BinderContext::new(transaction));
+        let source_plan = binder.bind(&stmts[0])?;
+        // println!("source_plan plan: {:#?}", source_plan);
+        let best_plan = Self::default_optimizer(source_plan).find_best()?;
+        // println!("best_plan plan: {:#?}", best_plan);
 
-    //     Ok(build(best_plan, &transaction))
-    // }
+        Ok(build(best_plan, &transaction))
+    }
 
-    // fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
-    //     HepOptimizer::new(source_plan)
-    //         .batch(
-    //             "Column Pruning".to_string(),
-    //             HepBatchStrategy::once_topdown(),
-    //             vec![RuleImpl::ColumnPruning],
-    //         )
-    //         .batch(
-    //             "Simplify Filter".to_string(),
-    //             HepBatchStrategy::fix_point_topdown(10),
-    //             vec![RuleImpl::SimplifyFilter, RuleImpl::ConstantFolder],
-    //         )
-    //         .batch(
-    //             "Predicate Pushdown".to_string(),
-    //             HepBatchStrategy::fix_point_topdown(10),
-    //             vec![
-    //                 RuleImpl::PushPredicateThroughJoin,
-    //                 //  RuleImpl::PushPredicateIntoScan,
-    //             ],
-    //         )
-    //         .batch(
-    //             "Combine Operators".to_string(),
-    //             HepBatchStrategy::fix_point_topdown(10),
-    //             vec![RuleImpl::CollapseProject, RuleImpl::CombineFilter],
-    //         )
-    //         .batch(
-    //             "Limit Pushdown".to_string(),
-    //             HepBatchStrategy::fix_point_topdown(10),
-    //             vec![RuleImpl::PushLimitIntoTableScan],
-    //         )
-    // }
+    fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
+        HepOptimizer::new(source_plan)
+            .batch(
+                "Column Pruning".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::ColumnPruning],
+            )
+            .batch(
+                "Simplify Filter".to_string(),
+                HepBatchStrategy::fix_point_topdown(10),
+                vec![RuleImpl::SimplifyFilter, RuleImpl::ConstantFolder],
+            )
+            .batch(
+                "Predicate Pushdown".to_string(),
+                HepBatchStrategy::fix_point_topdown(10),
+                vec![
+                    RuleImpl::PushPredicateThroughJoin,
+                    //  RuleImpl::PushPredicateIntoScan,
+                ],
+            )
+            .batch(
+                "Combine Operators".to_string(),
+                HepBatchStrategy::fix_point_topdown(10),
+                vec![RuleImpl::CollapseProject, RuleImpl::CombineFilter],
+            )
+            .batch(
+                "Limit Pushdown".to_string(),
+                HepBatchStrategy::fix_point_topdown(10),
+                vec![RuleImpl::PushLimitIntoTableScan],
+            )
+    }
 }
 
 pub struct DBTransaction<S: Storage> {
@@ -162,10 +170,10 @@ pub struct DBTransaction<S: Storage> {
 }
 
 impl<S: Storage> DBTransaction<S> {
-    // pub fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
-    //     let stream = Database::<S>::_run(sql, &self.inner)?;
-    //     Ok(stream?)
-    // }
+    pub fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+        let stream = Database::<S>::_run(sql, &self.inner)?;
+        Ok(stream?)
+    }
     pub fn run_with_stmt(&self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
         let binder = Binder::new(BinderContext::new(&self.inner));
         let source_plan = binder.bind(&stmt)?;
@@ -288,202 +296,201 @@ mod test {
 
         assert_eq!(tuple, vec![]);
 
-
         Ok(())
     }
 
-    //     #[test]
-    //     fn test_transaction_sql() -> Result<(), DatabaseError> {
-    //         let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        #[test]
+        fn test_transaction_sql() -> Result<(), DatabaseError> {
+            let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
-    //         let mut tx_1 = database.new_transaction()?;
+            let mut tx_1 = database.new_transaction()?;
 
-    //         let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
-    //         eprintln!("create table t1");
-    //         let _ = tx_1.run("insert into t1 values(0, 0)")?;
-    //         let _ = tx_1.run("insert into t1 values(1, 1)")?;
-    //         eprintln!("insert into t1");
-    //         // let _ = tx_2.run("insert into t1 values(2, 2)")?;
-    //         // let _ = tx_2.run("insert into t1 values(3, 3)")?;
+            let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
+            eprintln!("create table t1");
+            let _ = tx_1.run("insert into t1 values(0, 0)")?;
+            let _ = tx_1.run("insert into t1 values(1, 1)")?;
+            eprintln!("insert into t1");
+            // let _ = tx_2.run("insert into t1 values(2, 2)")?;
+            // let _ = tx_2.run("insert into t1 values(3, 3)")?;
 
-    //         let tuples_1 = tx_1.run("select * from t1")?;
-    //         assert_eq!(tuples_1.len(), 2);
+            let tuples_1 = tx_1.run("select * from t1")?;
+            assert_eq!(tuples_1.len(), 2);
 
-    //         assert_eq!(
-    //             tuples_1[0].values,
-    //             vec![
-    //                 Arc::new(DataValue::Int32(Some(0))),
-    //                 Arc::new(DataValue::Int32(Some(0)))
-    //             ]
-    //         );
-    //         assert_eq!(
-    //             tuples_1[1].values,
-    //             vec![
-    //                 Arc::new(DataValue::Int32(Some(1))),
-    //                 Arc::new(DataValue::Int32(Some(1)))
-    //             ]
-    //         );
-    //         tx_1.commit()?;
+            assert_eq!(
+                tuples_1[0].values,
+                vec![
+                    Arc::new(DataValue::Int32(Some(0))),
+                    Arc::new(DataValue::Int32(Some(0)))
+                ]
+            );
+            assert_eq!(
+                tuples_1[1].values,
+                vec![
+                    Arc::new(DataValue::Int32(Some(1))),
+                    Arc::new(DataValue::Int32(Some(1)))
+                ]
+            );
+            tx_1.commit()?;
 
-    //         Ok(())
-    //     }
-    //     #[test]
+            Ok(())
+        }
+        #[test]
 
-    //     fn test_crud_sql() -> Result<(), DatabaseError> {
-    //         let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        fn test_crud_sql() -> Result<(), DatabaseError> {
+            let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
-    //         let _ = database.run(
-    //             "create table t1 (a int primary key, b int unique null, k int, z varchar unique null)",
-    //         )?;
-    //         let _ =
-    //             database.run("create table t2 (c int primary key, d int unsigned null, e datetime)")?;
-    //         let _ = database.run("insert into t1 (a, b, k, z) values (-99, 1, 1, 'k'), (-1, 2, 2, 'i'), (5, 3, 2, 'p'), (29, 4, 2, 'db')")?;
-    //         let _ = database.run("insert into t2 (d, c, e) values (2, 1, '2021-05-20 21:00:00'), (3, 4, '2023-09-10 00:00:00')")?;
-    //         let _ = database.run("create table t3 (a int primary key, b decimal(4,2))")?;
-    //         let _ = database.run("insert into t3 (a, b) values (1, 1111), (2, 2.01), (3, 3.00)")?;
-    //         let _ = database.run("insert into t3 (a, b) values (4, 4444), (5, 5222), (6, 1.00)")?;
+            let _ = database.run(
+                "create table t1 (a int primary key, b int unique null, k int, z varchar unique null)",
+            )?;
+            let _ =
+                database.run("create table t2 (c int primary key, d int unsigned null, e datetime)")?;
+            let _ = database.run("insert into t1 (a, b, k, z) values (-99, 1, 1, 'k'), (-1, 2, 2, 'i'), (5, 3, 2, 'p'), (29, 4, 2, 'db')")?;
+            let _ = database.run("insert into t2 (d, c, e) values (2, 1, '2021-05-20 21:00:00'), (3, 4, '2023-09-10 00:00:00')")?;
+            let _ = database.run("create table t3 (a int primary key, b decimal(4,2))")?;
+            let _ = database.run("insert into t3 (a, b) values (1, 1111), (2, 2.01), (3, 3.00)")?;
+            let _ = database.run("insert into t3 (a, b) values (4, 4444), (5, 5222), (6, 1.00)")?;
 
-    //         println!("full t1:");
-    //         let tuples_full_fields_t1 = database.run("select * from t1")?;
-    //         println!("{}", create_table(&tuples_full_fields_t1));
+            println!("full t1:");
+            let tuples_full_fields_t1 = database.run("select * from t1")?;
+            println!("{}", create_table(&tuples_full_fields_t1));
 
-    //         println!("full t2:");
-    //         let tuples_full_fields_t2 = database.run("select * from t2")?;
-    //         println!("{}", create_table(&tuples_full_fields_t2));
+            println!("full t2:");
+            let tuples_full_fields_t2 = database.run("select * from t2")?;
+            println!("{}", create_table(&tuples_full_fields_t2));
 
-    //         //todo
-    //         println!("projection_and_filter:");
-    //         let tuples_projection_and_filter = database.run("select a from t1 where b > 1")?;
-    //         println!("{}", create_table(&tuples_projection_and_filter));
+            //todo
+            println!("projection_and_filter:");
+            let tuples_projection_and_filter = database.run("select a from t1 where b > 1")?;
+            println!("{}", create_table(&tuples_projection_and_filter));
 
-    //         println!("projection_and_sort:");
-    //         let tuples_projection_and_sort = database.run("select * from t1 order by a, b")?;
-    //         println!("{}", create_table(&tuples_projection_and_sort));
+            println!("projection_and_sort:");
+            let tuples_projection_and_sort = database.run("select * from t1 order by a, b")?;
+            println!("{}", create_table(&tuples_projection_and_sort));
 
-    //         println!("like t1 1:");
-    //         let tuples_like_1_t1 = database.run("select * from t1 where z like '%k'")?;
-    //         println!("{}", create_table(&tuples_like_1_t1));
+            println!("like t1 1:");
+            let tuples_like_1_t1 = database.run("select * from t1 where z like '%k'")?;
+            println!("{}", create_table(&tuples_like_1_t1));
 
-    //         println!("like t1 2:");
-    //         let tuples_like_2_t1 = database.run("select * from t1 where z like '_b'")?;
-    //         println!("{}", create_table(&tuples_like_2_t1));
+            println!("like t1 2:");
+            let tuples_like_2_t1 = database.run("select * from t1 where z like '_b'")?;
+            println!("{}", create_table(&tuples_like_2_t1));
 
-    //         println!("not like t1:");
-    //         let tuples_not_like_t1 = database.run("select * from t1 where z not like '_b'")?;
-    //         println!("{}", create_table(&tuples_not_like_t1));
+            println!("not like t1:");
+            let tuples_not_like_t1 = database.run("select * from t1 where z not like '_b'")?;
+            println!("{}", create_table(&tuples_not_like_t1));
 
-    //         println!("in t1:");
-    //         let tuples_in_t1 = database.run("select * from t1 where a in (5, 29)")?;
-    //         println!("{}", create_table(&tuples_in_t1));
+            println!("in t1:");
+            let tuples_in_t1 = database.run("select * from t1 where a in (5, 29)")?;
+            println!("{}", create_table(&tuples_in_t1));
 
-    //         println!("not in t1:");
-    //         let tuples_not_in_t1 = database.run("select * from t1 where a not in (5, 29)")?;
-    //         println!("{}", create_table(&tuples_not_in_t1));
+            println!("not in t1:");
+            let tuples_not_in_t1 = database.run("select * from t1 where a not in (5, 29)")?;
+            println!("{}", create_table(&tuples_not_in_t1));
 
-    //         println!("limit:");
-    //         let tuples_limit = database.run("select * from t1 limit 1 offset 1")?;
-    //         println!("{}", create_table(&tuples_limit));
+            println!("limit:");
+            let tuples_limit = database.run("select * from t1 limit 1 offset 1")?;
+            println!("{}", create_table(&tuples_limit));
 
-    //         println!("inner join:");
-    //         let tuples_inner_join = database.run("select * from t1 inner join t2 on a = c")?;
-    //         println!("{}", create_table(&tuples_inner_join));
+            println!("inner join:");
+            let tuples_inner_join = database.run("select * from t1 inner join t2 on a = c")?;
+            println!("{}", create_table(&tuples_inner_join));
 
-    //         println!("left join:");
-    //         let tuples_left_join = database.run("select * from t1 left join t2 on a = c")?;
-    //         println!("{}", create_table(&tuples_left_join));
+            println!("left join:");
+            let tuples_left_join = database.run("select * from t1 left join t2 on a = c")?;
+            println!("{}", create_table(&tuples_left_join));
 
-    //         println!("right join:");
-    //         let tuples_right_join = database.run("select * from t1 right join t2 on a = c")?;
-    //         println!("{}", create_table(&tuples_right_join));
+            println!("right join:");
+            let tuples_right_join = database.run("select * from t1 right join t2 on a = c")?;
+            println!("{}", create_table(&tuples_right_join));
 
-    //         println!("full join:");
-    //         let tuples_full_join = database.run("select * from t1 full join t2 on a = c")?;
-    //         println!("{}", create_table(&tuples_full_join));
+            println!("full join:");
+            let tuples_full_join = database.run("select * from t1 full join t2 on a = c")?;
+            println!("{}", create_table(&tuples_full_join));
 
-    //         println!("count agg:");
-    //         let tuples_count_agg = database.run("select count(d) from t2")?;
-    //         println!("{}", create_table(&tuples_count_agg));
+            println!("count agg:");
+            let tuples_count_agg = database.run("select count(d) from t2")?;
+            println!("{}", create_table(&tuples_count_agg));
 
-    //         println!("count wildcard agg:");
-    //         let tuples_count_wildcard_agg = database.run("select count(*) from t2")?;
-    //         println!("{}", create_table(&tuples_count_wildcard_agg));
+            println!("count wildcard agg:");
+            let tuples_count_wildcard_agg = database.run("select count(*) from t2")?;
+            println!("{}", create_table(&tuples_count_wildcard_agg));
 
-    //         println!("count distinct agg:");
-    //         let tuples_count_distinct_agg = database.run("select count(distinct d) from t2")?;
-    //         println!("{}", create_table(&tuples_count_distinct_agg));
+            println!("count distinct agg:");
+            let tuples_count_distinct_agg = database.run("select count(distinct d) from t2")?;
+            println!("{}", create_table(&tuples_count_distinct_agg));
 
-    //         println!("sum agg:");
-    //         let tuples_sum_agg = database.run("select sum(d) from t2")?;
-    //         println!("{}", create_table(&tuples_sum_agg));
+            println!("sum agg:");
+            let tuples_sum_agg = database.run("select sum(d) from t2")?;
+            println!("{}", create_table(&tuples_sum_agg));
 
-    //         println!("sum distinct agg:");
-    //         let tuples_sum_distinct_agg = database.run("select sum(distinct d) from t2")?;
-    //         println!("{}", create_table(&tuples_sum_distinct_agg));
+            println!("sum distinct agg:");
+            let tuples_sum_distinct_agg = database.run("select sum(distinct d) from t2")?;
+            println!("{}", create_table(&tuples_sum_distinct_agg));
 
-    //         println!("avg agg:");
-    //         let tuples_avg_agg = database.run("select avg(d) from t2")?;
-    //         println!("{}", create_table(&tuples_avg_agg));
+            println!("avg agg:");
+            let tuples_avg_agg = database.run("select avg(d) from t2")?;
+            println!("{}", create_table(&tuples_avg_agg));
 
-    //         println!("min_max agg:");
-    //         let tuples_min_max_agg = database.run("select min(d), max(d) from t2")?;
-    //         println!("{}", create_table(&tuples_min_max_agg));
+            println!("min_max agg:");
+            let tuples_min_max_agg = database.run("select min(d), max(d) from t2")?;
+            println!("{}", create_table(&tuples_min_max_agg));
 
-    //         println!("group agg:");
-    //         let tuples_group_agg = database.run("select c, max(d) from t2 group by c having c = 1")?;
-    //         println!("{}", create_table(&tuples_group_agg));
+            println!("group agg:");
+            let tuples_group_agg = database.run("select c, max(d) from t2 group by c having c = 1")?;
+            println!("{}", create_table(&tuples_group_agg));
 
-    //         println!("alias:");
-    //         let tuples_group_agg = database.run("select c as o from t2")?;
-    //         println!("{}", create_table(&tuples_group_agg));
+            println!("alias:");
+            let tuples_group_agg = database.run("select c as o from t2")?;
+            println!("{}", create_table(&tuples_group_agg));
 
-    //         println!("alias agg:");
-    //         let tuples_group_agg =
-    //             database.run("select c, max(d) as max_d from t2 group by c having c = 1")?;
-    //         println!("{}", create_table(&tuples_group_agg));
+            println!("alias agg:");
+            let tuples_group_agg =
+                database.run("select c, max(d) as max_d from t2 group by c having c = 1")?;
+            println!("{}", create_table(&tuples_group_agg));
 
-    //         println!("time max:");
-    //         let tuples_time_max = database.run("select max(e) as max_time from t2")?;
-    //         println!("{}", create_table(&tuples_time_max));
+            println!("time max:");
+            let tuples_time_max = database.run("select max(e) as max_time from t2")?;
+            println!("{}", create_table(&tuples_time_max));
 
-    //         println!("time where:");
-    //         let tuples_time_where_t2 = database.run("select (c + 1) from t2 where e > '2021-05-20'")?;
-    //         println!("{}", create_table(&tuples_time_where_t2));
+            println!("time where:");
+            let tuples_time_where_t2 = database.run("select (c + 1) from t2 where e > '2021-05-20'")?;
+            println!("{}", create_table(&tuples_time_where_t2));
 
-    //         assert!(database.run("select max(d) from t2 group by c").is_err());
+            assert!(database.run("select max(d) from t2 group by c").is_err());
 
-    //         println!("distinct t1:");
-    //         let tuples_distinct_t1 = database.run("select distinct b, k from t1")?;
-    //         println!("{}", create_table(&tuples_distinct_t1));
+            println!("distinct t1:");
+            let tuples_distinct_t1 = database.run("select distinct b, k from t1")?;
+            println!("{}", create_table(&tuples_distinct_t1));
 
-    //         println!("update t1 with filter:");
-    //         let _ = database.run("update t1 set b = 0 where b = 1")?;
-    //         println!("after t1:");
-    //         let update_after_full_t1 = database.run("select * from t1")?;
-    //         println!("{}", create_table(&update_after_full_t1));
+            println!("update t1 with filter:");
+            let _ = database.run("update t1 set b = 0 where b = 1")?;
+            println!("after t1:");
+            let update_after_full_t1 = database.run("select * from t1")?;
+            println!("{}", create_table(&update_after_full_t1));
 
-    //         println!("insert overwrite t1:");
-    //         let _ = database.run("insert overwrite t1 (a, b, k) values (-99, 1, 0)")?;
-    //         println!("after t1:");
-    //         let insert_overwrite_after_full_t1 = database.run("select * from t1")?;
-    //         println!("{}", create_table(&insert_overwrite_after_full_t1));
+            println!("insert overwrite t1:");
+            let _ = database.run("insert overwrite t1 (a, b, k) values (-99, 1, 0)")?;
+            println!("after t1:");
+            let insert_overwrite_after_full_t1 = database.run("select * from t1")?;
+            println!("{}", create_table(&insert_overwrite_after_full_t1));
 
-    //         assert!(database
-    //             .run("insert overwrite t1 (a, b, k) values (-1, 1, 0)")
-    //             .is_err());
+            assert!(database
+                .run("insert overwrite t1 (a, b, k) values (-1, 1, 0)")
+                .is_err());
 
-    //         println!("delete t1 with filter:");
-    //         let _ = database.run("delete from t1 where b = 0")?;
-    //         println!("after t1:");
-    //         let delete_after_full_t1 = database.run("select * from t1")?;
-    //         println!("{}", create_table(&delete_after_full_t1));
+            println!("delete t1 with filter:");
+            let _ = database.run("delete from t1 where b = 0")?;
+            println!("after t1:");
+            let delete_after_full_t1 = database.run("select * from t1")?;
+            println!("{}", create_table(&delete_after_full_t1));
 
-    //         println!("drop t1:");
-    //         let _ = database.run("drop table t1")?;
+            println!("drop t1:");
+            let _ = database.run("drop table t1")?;
 
-    //         println!("decimal:");
-    //         let tuples_decimal = database.run("select * from t3")?;
-    //         println!("{}", create_table(&tuples_decimal));
+            println!("decimal:");
+            let tuples_decimal = database.run("select * from t3")?;
+            println!("{}", create_table(&tuples_decimal));
 
-    //         Ok(())
-    //     }
+            Ok(())
+        }
 }
