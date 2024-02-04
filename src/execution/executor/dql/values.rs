@@ -20,6 +20,8 @@ impl From<ValuesOperator> for Values {
 impl<T: Transaction> Executor<T> for Values {
     fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
         let ValuesOperator { columns, rows } = self.op;
+        // eprintln!("values executor result :{:#?}",columns);
+        
         Ok(rows
             .iter()
             .map(|val| Tuple {

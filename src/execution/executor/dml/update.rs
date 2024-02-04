@@ -1,4 +1,4 @@
-use crate::catalog::TableName;
+use crate::catalog::{ColumnCatalog, TableName};
 use crate::execution::executor::{BoxedExecutor, Executor};
 use crate::execution::ExecutorError;
 use crate::expression::ScalarExpression;
@@ -8,29 +8,30 @@ use crate::types::index::Index;
 use crate::types::tuple::Tuple;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 pub struct Update {
     table_name: TableName,
-    input: BoxedExecutor,  //select source for update
-    values: BoxedExecutor, //select source for update
+    input: BoxedExecutor, //select source for update
+    columns: Vec<Arc<ColumnCatalog>>,
     set_expr: Vec<ScalarExpression>,
 }
 
-impl From<(UpdateOperator, BoxedExecutor, BoxedExecutor)> for Update {
+impl From<(UpdateOperator, BoxedExecutor)> for Update {
     fn from(
         (
             UpdateOperator {
+                columns,
                 set_expr,
                 table_name,
             },
             input,
-            values,
-        ): (UpdateOperator, BoxedExecutor, BoxedExecutor),
+        ): (UpdateOperator, BoxedExecutor),
     ) -> Self {
         Update {
             table_name,
             input,
-            values,
+            columns,
             set_expr,
         }
     }
@@ -42,29 +43,33 @@ impl<T: Transaction> Executor<T> for Update {
         let Update {
             table_name,
             input,
-            values,
+            columns,
             set_expr,
         } = self;
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             //避免halloween问题
             let mut unique_set = HashSet::new();
-            let mut value_map = HashMap::new();
+            let mut value_set = HashSet::new();
 
-            for tuple in values?.iter() {
-                let Tuple {
-                    columns, values, ..
-                } = tuple;
-                for i in 0..columns.len() {
-                    value_map.insert(columns[i].id(), values[i].clone());
-                }
+            for col in columns.iter() {
+                value_set.insert(col.id());
             }
+            eprintln!("value_set:{:#?}", value_set);
             //Seqscan遍历元组
             for tuple in input?.iter_mut() {
                 let mut is_overwrite = true;
 
-                for (i, column) in tuple.columns.iter().enumerate() {
-                    if !unique_set.contains(&column.id()) && value_map.contains_key(&column.id()) {
+                for (i, column) in tuple
+                    .columns
+                    .iter()
+                    .filter(|col| value_set.contains(&col.id()))
+                    .enumerate()
+                {
+                    if !unique_set.contains(&column.id()) {
+                        eprintln!("update column:{:#?}", column);
                         let value = set_expr[i].eval(tuple)?;
+                        eprintln!("update value:{:#?}", value);
+
                         unique_set.insert(column.id());
                         if column.desc.is_primary {
                             //refuse to update primary key

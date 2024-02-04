@@ -95,9 +95,9 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &RefCell<T>) -> Box
         }
         Operator::Update(op) => {
             let input = build(childrens.remove(0), transaction);
-            let values = build(childrens.remove(0), transaction);
+            // let values = build(childrens.remove(0), transaction);
 
-            Update::from((op, input,values)).execute(transaction)
+            Update::from((op, input)).execute(transaction)
         }
         Operator::Delete(op) => {
             let input = build(childrens.remove(0), transaction);

@@ -30,6 +30,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             let bind_table_name = Some(table_name.to_string());
 
             let mut columns = Vec::with_capacity(assignments.len());
+
             let mut set_expr = Vec::with_capacity(assignments.len());
 
             for assignment in assignments {
@@ -49,12 +50,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     }
                 }
             }
-
-            let values_plan = self.bind_values(vec![], columns);
+            // let values_plan = self.bind_values(vec![], columns);
 
             Ok(LogicalPlan {
-                operator: Operator::Update(UpdateOperator { set_expr, table_name }),
-                childrens: vec![plan,values_plan],
+                operator: Operator::Update(UpdateOperator { columns,set_expr, table_name }),
+                childrens: vec![plan],
             })
         } else {
             unreachable!("only table")
