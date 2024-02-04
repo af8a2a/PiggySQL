@@ -12,7 +12,10 @@ lazy_static! {
 }
 
 impl ScalarExpression {
+    ///表达式求值  
+    ///给定元组，返回表达式的值
     pub fn eval(&self, tuple: &Tuple) -> Result<ValueRef, TypeError> {
+        //具名元组的表达式求值
         if let Some(value) = Self::eval_with_name(tuple, self.output_columns().name()) {
             return Ok(value.clone());
         }

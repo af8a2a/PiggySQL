@@ -11,6 +11,7 @@ mod show;
 mod update;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use crate::catalog::{CatalogError, TableCatalog, TableName, DEFAULT_SCHEMA_NAME};
@@ -27,7 +28,7 @@ pub enum InputRefType {
 
 #[derive(Clone)]
 pub struct BinderContext<'a, T: Transaction> {
-    transaction: &'a T,
+    transaction: &'a RefCell<T>,
     pub(crate) bind_table: BTreeMap<TableName, (TableCatalog, Option<JoinType>)>,
     aliases: BTreeMap<String, ScalarExpression>,
     table_aliases: BTreeMap<String, TableName>,
@@ -36,7 +37,7 @@ pub struct BinderContext<'a, T: Transaction> {
 }
 
 impl<'a, T: Transaction> BinderContext<'a, T> {
-    pub fn new(transaction: &'a T) -> Self {
+    pub fn new(transaction: &'a RefCell<T>) -> Self {
         BinderContext {
             transaction,
             bind_table: Default::default(),
@@ -48,10 +49,11 @@ impl<'a, T: Transaction> BinderContext<'a, T> {
     }
 
     pub fn table(&self, table_name: TableName) -> Option<TableCatalog> {
+        let txn= self.transaction.borrow();
         if let Some(real_name) = self.table_aliases.get(table_name.as_ref()) {
-            self.transaction.table(real_name.clone())
+            txn.table(real_name.clone())
         } else {
-            self.transaction.table(table_name)
+            txn.table(table_name)
         }
     }
 
