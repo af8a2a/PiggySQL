@@ -68,26 +68,36 @@ impl<S: Storage> Database<S> {
 
     fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
         HepOptimizer::new(source_plan)
-            .batch(
-                "Column Pruning".to_string(),
-                HepBatchStrategy::once_topdown(),
-                vec![RuleImpl::ColumnPruning],
-            )
-            .batch(
-                "Simplify Filter".to_string(),
-                HepBatchStrategy::fix_point_topdown(10),
-                vec![RuleImpl::ConstantFolder],
-            )
-            // .batch(
-            //     "Predicate Pushdown".to_string(),
-            //     HepBatchStrategy::fix_point_topdown(10),
-            //     vec![RuleImpl::PushPredicateIntoScan],
-            // )
-            .batch(
-                "Limit Pushdown".to_string(),
-                HepBatchStrategy::fix_point_topdown(10),
-                vec![RuleImpl::PushLimitIntoTableScan],
-            )
+        .batch(
+            "Column Pruning".to_string(),
+            HepBatchStrategy::once_topdown(),
+            vec![RuleImpl::ColumnPruning],
+        )
+        .batch(
+            "Simplify Filter".to_string(),
+            HepBatchStrategy::fix_point_topdown(10),
+            vec![RuleImpl::SimplifyFilter, RuleImpl::ConstantFolder],
+        )
+        .batch(
+            "Predicate Pushdown".to_string(),
+            HepBatchStrategy::fix_point_topdown(10),
+            vec![
+                RuleImpl::PushPredicateThroughJoin,
+                //  RuleImpl::PushPredicateIntoScan,
+            ],
+        )
+        .batch(
+            "Combine Operators".to_string(),
+            HepBatchStrategy::fix_point_topdown(10),
+            vec![RuleImpl::CollapseProject, RuleImpl::CombineFilter],
+        )
+        .batch(
+            "Limit Pushdown".to_string(),
+            HepBatchStrategy::fix_point_topdown(10),
+            vec![
+                RuleImpl::PushLimitIntoTableScan,
+            ],
+        )
     }
 }
 
@@ -229,9 +239,9 @@ mod test {
 
         Ok(())
     }
-    #[tokio::test]
+    #[test]
 
-    async fn test_crud_sql() -> Result<(), DatabaseError> {
+    fn test_crud_sql() -> Result<(), DatabaseError> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
         let _ = database.run(
@@ -253,6 +263,7 @@ mod test {
         let tuples_full_fields_t2 = database.run("select * from t2")?;
         println!("{}", create_table(&tuples_full_fields_t2));
 
+        //todo
         println!("projection_and_filter:");
         let tuples_projection_and_filter = database.run("select a from t1 where b > 1")?;
         println!("{}", create_table(&tuples_projection_and_filter));
