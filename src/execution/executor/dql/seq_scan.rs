@@ -29,7 +29,7 @@ impl<T: Transaction> Executor<T> for SeqScan {
         let transaction=transaction.borrow();
         let mut iter = transaction.read(table_name, limit, columns)?;
         // let mut tuples = Vec::new();
-        let tuples = iter.fetch_tuple()?.expect("unwrap tuple error");
+        let tuples = iter.fetch_tuple()?.unwrap_or(vec![]);
         // while let Some(tuple) = iter.next_tuple()? {
         //     tuples.push(tuple);
         // }

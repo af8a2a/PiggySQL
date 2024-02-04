@@ -120,7 +120,6 @@ pub trait Iter: Sync + Send {
 }
 
 pub(crate) fn tuple_projection(
-    limit: &mut Option<usize>,
     projections: &Projections,
     tuple: Tuple,
 ) -> Result<Tuple, StorageError> {
@@ -133,9 +132,9 @@ pub(crate) fn tuple_projection(
         columns.push(expr.output_columns());
     }
 
-    if let Some(num) = limit {
-        num.sub_assign(1);
-    }
+    // if let Some(num) = limit {
+    //     num.sub_assign(1);
+    // }
 
     Ok(Tuple {
         id: tuple.id,
@@ -189,31 +188,34 @@ pub struct MVCCIter<'a, E: StorageEngine> {
 
 impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>, StorageError> {
-        let mut iter = self.scan.iter();
-        while self.offset > 0 {
-            let _ = iter.next();
-            self.offset -= 1;
-        }
-        if let Some(num) = self.limit {
-            if num == 0 {
-                return Ok(None);
-            }
-        }
+        let iter = self.scan.iter();
+        // while self.offset > 0 {
+        //     let _ = iter.next();
+        //     self.offset -= 1;
+        // }
+
+        // if let Some(num) = self.limit {
+        //     if num == 0 {
+        //         return Ok(None);
+        //     }
+        // };
         let tuples = iter
             .filter(|item| item.is_ok())
+            .skip(self.offset)
+            .take(self.limit.unwrap_or(usize::MAX) as usize)
             .map(|item| {
                 item.map_err(|e| StorageError::from(e))
                     .expect("unwarp item error")
             })
             .map(|(_, value)| {
                 tuple_projection(
-                    &mut self.limit,
                     &self.projection,
                     TableCodec::decode_tuple(self.all_columns.clone(), &value),
                 )
                 .expect("projection tuple error")
             })
             .collect_vec();
+
         Ok(Some(tuples))
     }
 }
@@ -259,7 +261,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
             .map(|bytes| {
                 let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
 
-                tuple_projection(&mut self.limit, &self.projection, tuple)
+                tuple_projection(&self.projection, tuple)
             })
             .transpose()
     }
@@ -288,7 +290,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                     }
                     match value {
                         IndexValue::PrimaryKey(tuple) => {
-                            let tuple = tuple_projection(&mut self.limit, &self.projection, tuple)?;
+                            let tuple = tuple_projection( &self.projection, tuple)?;
                             tuples.push(tuple);
                         }
                         IndexValue::Normal(tuple_id) => {
@@ -638,11 +640,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
         let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
         let indexes = Self::index_meta_collect(&table_name, &self.tx)?;
-
-        Some(
-            TableCatalog::new_with_indexes(table_name.clone(), columns, indexes)
-                .expect("fetch table error"),
-        )
+        match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
+            Ok(table) => Some(table),
+            Err(_) => None,
+        }
     }
 
     fn show_tables(&self) -> Result<Vec<String>, StorageError> {
@@ -837,7 +838,7 @@ mod test {
         )?;
 
         let tuples = iter.fetch_tuple()?;
-        println!("{:#?}",tuples);
+        println!("{:#?}", tuples);
 
         if let Some(tuples) = tuples {
             assert_eq!(tuples[0].id, Some(Arc::new(DataValue::Int32(Some(1)))));
