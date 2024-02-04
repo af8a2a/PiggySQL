@@ -1,4 +1,4 @@
-use crate::{expression::ScalarExpression, planner::LogicalPlan};
+use crate::{expression::ScalarExpression};
 mod column_pruning;
 mod combine_operators;
 mod constant_folder;

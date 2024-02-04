@@ -5,9 +5,9 @@ use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
-use crate::types::tuple::Tuple;
+
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::sync::Arc;
 
 pub struct Update {
@@ -57,7 +57,7 @@ impl<T: Transaction> Executor<T> for Update {
             eprintln!("value_set:{:#?}", value_set);
             //Seqscan遍历元组
             for tuple in input?.iter_mut() {
-                let mut is_overwrite = true;
+                let is_overwrite = true;
 
                 for (i, column) in tuple
                     .columns

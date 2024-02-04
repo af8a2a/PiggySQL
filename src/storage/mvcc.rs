@@ -1,9 +1,4 @@
-use std::{
-    collections::HashSet,
-    ops::{Bound, RangeBounds},
-    sync::Arc,
-    vec,
-};
+use std::{collections::HashSet, ops::Bound, sync::Arc, vec};
 
 use serde::{Deserialize, Serialize};
 
@@ -302,7 +297,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         // exact given key. We want all keys maching the prefix, so we chop off
         // the KeyCode byte slice terminator 0x0000 at the end.
         let mut prefix = KeyPrefix::Version(prefix.into()).encode()?;
-        prefix.truncate(prefix.len()-2);
+        prefix.truncate(prefix.len() - 2);
         Ok(Scan::from_prefix(self.engine.clone(), &self.state, prefix))
     }
 
@@ -1110,5 +1105,4 @@ pub mod tests {
 
         Ok(())
     }
-
 }

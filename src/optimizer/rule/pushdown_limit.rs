@@ -3,11 +3,11 @@ use crate::optimizer::core::pattern::PatternChildrenPredicate;
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
 use crate::optimizer::OptimizerError;
-use crate::planner::operator::join::JoinType;
-use crate::planner::operator::limit::LimitOperator;
+
+
 use crate::planner::operator::Operator;
 use lazy_static::lazy_static;
-use std::cmp;
+
 lazy_static! {
     static ref PUSH_LIMIT_INTO_TABLE_SCAN_RULE: Pattern = {
         Pattern {

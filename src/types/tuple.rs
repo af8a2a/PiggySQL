@@ -50,14 +50,14 @@ impl Tuple {
             if is_none(bytes[i / BITS_MAX_INDEX], i % BITS_MAX_INDEX) {
                 values.push(Arc::new(DataValue::none(logic_type)));
             } else if let Some(len) = logic_type.raw_len() {
-                /// fixed length (e.g.: int)
+                // fixed length (e.g.: int)
                 values.push(Arc::new(DataValue::from_raw(
                     &bytes[pos..pos + len],
                     logic_type,
                 )));
                 pos += len;
             } else {
-                /// variable length (e.g.: varchar)
+                // variable length (e.g.: varchar)
                 let len = u32::decode_fixed(&bytes[pos..pos + 4]) as usize;
                 pos += 4;
                 values.push(Arc::new(DataValue::from_raw(

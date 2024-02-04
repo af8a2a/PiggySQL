@@ -3,7 +3,7 @@ use crate::optimizer::core::pattern::{Pattern, PatternChildrenPredicate};
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
 use crate::optimizer::OptimizerError;
-use crate::planner::operator::join::JoinCondition;
+
 use crate::planner::operator::Operator;
 use lazy_static::lazy_static;
 lazy_static! {

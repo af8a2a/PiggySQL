@@ -4,7 +4,7 @@ use crate::planner::operator::update::UpdateOperator;
 use crate::planner::operator::Operator;
 use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
-use crate::types::value::ValueRef;
+
 use sqlparser::ast::{Assignment, Expr, TableFactor, TableWithJoins};
 use std::slice;
 use std::sync::Arc;

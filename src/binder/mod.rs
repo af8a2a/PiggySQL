@@ -173,7 +173,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     self.bind_delete(table, selection)?
                 }
             }
-            Statement::Explain { statement, .. } => {
+            Statement::Explain {  .. } => {
                 todo!()
             }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,

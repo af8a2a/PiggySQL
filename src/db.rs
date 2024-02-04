@@ -1,8 +1,8 @@
-use std::borrow::Borrow;
+
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use lazy_static::lazy_static;
+
 use sqlparser::ast::Statement;
 use sqlparser::parser::ParserError;
 
@@ -17,7 +17,7 @@ use crate::optimizer::rule::RuleImpl;
 use crate::optimizer::OptimizerError;
 use crate::parser;
 use crate::planner::LogicalPlan;
-use crate::storage::{MVCCLayer, Storage, StorageError, Transaction};
+use crate::storage::{Storage, StorageError, Transaction};
 use crate::types::tuple::Tuple;
 
 pub struct Database<S: Storage> {

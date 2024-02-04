@@ -3,7 +3,6 @@ use crate::execution::executor::{BoxedExecutor, Executor};
 use crate::planner::operator::limit::LimitOperator;
 use crate::storage::{Transaction};
 
-use futures::StreamExt;
 
 use std::cell::RefCell;
 

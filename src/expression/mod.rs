@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Display};
+use std::fmt::{self};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
