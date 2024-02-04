@@ -19,6 +19,7 @@ use std::mem;
 use std::ops::SubAssign;
 use std::sync::Arc;
 
+use self::engine::memory::Memory;
 use self::engine::StorageEngine;
 use self::mvcc::{MVCCError, Scan, MVCC};
 

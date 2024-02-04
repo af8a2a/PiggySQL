@@ -1,5 +1,5 @@
 [package]
-name = "sql-layer"
+name = "piggysql"
 version = "0.1.0"
 edition = "2021"
 
@@ -41,3 +41,8 @@ env_logger = "0.10"
 paste = "^1.0"
 rstest = "0.17"
 tempfile = "3.0.7"
+
+[workspace]
+members = [
+  "tests/sqllogictest",
+]

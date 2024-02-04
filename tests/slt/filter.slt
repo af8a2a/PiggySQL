@@ -1,0 +1,119 @@
+statement ok
+create table t (v1 int not null primary key, v2 int not null);
+
+statement ok
+insert into t values (1, 1), (4, 6), (3, 2), (2, 1)
+
+query I rowsort
+select v1 from t where v1 > 2
+----
+3
+4
+
+query I
+select v2 from t where 3 > v1
+----
+1
+1
+
+statement ok
+drop table t
+
+statement ok
+create table t(v1 int not null primary key, v2 int not null)
+
+statement ok
+insert into t values(-3, -3), (-2, -2), (-1, -1), (0, 0), (1,1), (2, 2)
+
+statement ok
+insert into t values(-8, -8), (-7, -7), (-6, -6), (3, 3), (7, 7), (8, 8), (9, 9)
+
+query I
+select v1 from t where v1 > 2 and v1 < 4
+----
+3
+
+query I
+select v2 from t where (-7 < v1 or 9 <= v1) and (v1 = 3)
+----
+3
+
+query I rowsort
+select v2 from t where (-8 < v1 and v1 <= -7) or (v1 >= 1 and 2 > v1)
+----
+-7
+1
+
+query I rowsort
+select v2 from t where ((v1 >= -8 and -4 >= v1) or (v1 >= 0 and 5 > v1)) and ((v1 > 0 and v1 <= 1) or (v1 > -8 and v1 < -6))
+----
+-7
+1
+
+query I rowsort
+select v2 from t where (-7 < v1 or 9 <= v1) and (v2 = 3)
+----
+3
+
+query I rowsort
+select v2 from t where (-8 < v1 and v2 <= -7) or (v1 >= 1 and 2 > v2)
+----
+-7
+1
+
+query I rowsort
+select v2 from t where ((v2 >= -8 and -4 >= v1) or (v1 >= 0 and 5 > v2)) and ((v2 > 0 and v1 <= 1) or (v1 > -8 and v2 < -6))
+----
+-7
+1
+
+statement ok
+create table t1(id int primary key, v1 varchar)
+
+statement ok
+insert into t1 values (0, 'KipSQL'), (1, 'KipDB'), (2, 'KipBlog'), (3, 'Cool!');
+
+query II
+select * from t1 where v1 like 'Kip%'
+----
+0 KipSQL
+1 KipDB
+2 KipBlog
+
+query II
+select * from t1 where v1 not like 'Kip%'
+----
+3 Cool!
+
+query II
+select * from t1 where v1 like 'KipD_'
+----
+1 KipDB
+
+query II
+select * from t1 where v1 like 'KipS_L'
+----
+0 KipSQL
+
+query II
+select * from t1 where v1 like 'K%L'
+----
+0 KipSQL
+
+query II
+select * from t1 where id in (1, 2)
+----
+1 KipDB
+2 KipBlog
+
+query II
+select * from t1 where id not in (1, 2)
+----
+0 KipSQL
+3 Cool!
+
+statement ok
+drop table t
+
+statement ok
+drop table t1

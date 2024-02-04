@@ -1,0 +1,17 @@
+# PiggySQL - a relational database for educational purpose (CMU 15-445)
+- DDL
+  - [x] Create
+    - [x] Create Table
+  - [x] Drop
+  - [x] Alter
+- DQL
+  - [x] Select
+  - [x] Where
+  - [ ] Distinct
+  - [x] Aggregation: Count / Sum / Avg / Min / Max
+  - [x] Subquery
+  - [x] Join: Left Outer / Right Outer / Full Outer / Inner / Cross
+  - [x] Group By
+  - [x] Having
+  - [x] Order By
+  - [x] Limit
