@@ -25,7 +25,7 @@ impl From<(AggregateOperator, BoxedExecutor)> for SimpleAggExecutor {
 }
 
 impl<T: Transaction> Executor<T> for SimpleAggExecutor {
-    fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
         let mut accs = create_accumulators(&self.agg_calls);
         let mut columns_option = None;
         let mut tuples = Vec::new();

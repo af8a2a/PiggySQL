@@ -18,14 +18,13 @@ impl From<CreateIndexOperator> for CreateIndex {
 }
 
 impl<T: Transaction> Executor<T> for CreateIndex {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let CreateIndexOperator {
             table_name,
             index_name,
             col_name,
         } = self.op;
         let _ = transaction
-            .borrow_mut()
             .create_index(table_name.clone(), index_name, &col_name)?;
         let tuple_builder = TupleBuilder::new_result();
         let tuple = tuple_builder

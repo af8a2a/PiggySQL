@@ -1,7 +1,5 @@
-
 use std::cell::RefCell;
 use std::sync::Arc;
-
 
 use sqlparser::ast::Statement;
 use sqlparser::parser::ParserError;
@@ -75,12 +73,12 @@ impl<S: Storage> Session<S> {
             }
             //DQL
             statement @ Statement::Query(..) => {
-                let txn = self.db.new_transaction()?;
+                let mut txn = self.db.new_transaction()?;
                 tuple = txn.run_with_stmt(statement)?;
                 txn.rollback()?;
             }
             statement => {
-                let txn = self.db.new_transaction()?;
+                let mut txn = self.db.new_transaction()?;
                 tuple = txn.run_with_stmt(statement)?;
                 txn.commit()?;
             }
@@ -97,11 +95,10 @@ impl<S: Storage> Database<S> {
 
     // /// Run SQL queries.
     pub fn run(&self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
-        let transaction = self.storage.transaction()?;
-        let transaction = RefCell::new(transaction);
-        let tuples = Self::_run(sql, &transaction)?;
+        let mut transaction = self.storage.transaction()?;
+        let tuples = Self::_run(sql, &mut transaction)?;
 
-        transaction.into_inner().commit()?;
+        transaction.commit()?;
 
         Ok(tuples?)
     }
@@ -110,13 +107,13 @@ impl<S: Storage> Database<S> {
         let transaction = self.storage.transaction()?;
 
         Ok(DBTransaction {
-            inner: RefCell::new(transaction),
+            inner: transaction,
         })
     }
 
     fn _run(
         sql: &str,
-        transaction: &RefCell<<S as Storage>::TransactionType>,
+        transaction: &mut <S as Storage>::TransactionType,
     ) -> Result<BoxedExecutor, DatabaseError> {
         // parse
         let stmts = parser::parse(sql)?;
@@ -129,7 +126,7 @@ impl<S: Storage> Database<S> {
         let best_plan = Self::default_optimizer(source_plan).find_best()?;
         // println!("best_plan plan: {:#?}", best_plan);
 
-        Ok(build(best_plan, &transaction))
+        Ok(build(best_plan, transaction))
     }
 
     fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
@@ -166,33 +163,33 @@ impl<S: Storage> Database<S> {
 }
 
 pub struct DBTransaction<S: Storage> {
-    inner: RefCell<S::TransactionType>,
+    inner: S::TransactionType,
 }
 
 impl<S: Storage> DBTransaction<S> {
     pub fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
-        let stream = Database::<S>::_run(sql, &self.inner)?;
+        let stream = Database::<S>::_run(sql, &mut self.inner)?;
         Ok(stream?)
     }
-    pub fn run_with_stmt(&self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
+    pub fn run_with_stmt(&mut self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
         let binder = Binder::new(BinderContext::new(&self.inner));
         let source_plan = binder.bind(&stmt)?;
         // println!("source_plan plan: {:#?}", source_plan);
         // let best_plan = Self::default_optimizer(source_plan).find_best()?;
         // println!("best_plan plan: {:#?}", best_plan);
 
-        let result = build(source_plan, &self.inner);
+        let result = build(source_plan, &mut self.inner);
 
         // let stream = Database::<S>::_run(sql, &self.inner)?;
         Ok(result?)
     }
     pub fn commit(self) -> Result<(), DatabaseError> {
-        self.inner.into_inner().commit()?;
+        self.inner.commit()?;
 
         Ok(())
     }
     pub fn rollback(self) -> Result<(), DatabaseError> {
-        self.inner.into_inner().rollback()?;
+        self.inner.rollback()?;
 
         Ok(())
     }
@@ -306,7 +303,7 @@ mod test {
         let mut tx_1 = database.new_transaction()?;
 
         let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
-        // tx_1.run("create index test_index on t1 (b)")?;
+        tx_1.run("create index test_index on t1 (b)")?;
         tx_1.run("select * from t1 where a=1")?;
 
         // assert_eq!(

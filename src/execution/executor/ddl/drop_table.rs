@@ -3,7 +3,6 @@ use crate::execution::executor::{BoxedExecutor, Executor};
 use crate::planner::operator::drop_table::DropTableOperator;
 use crate::storage::Transaction;
 
-
 use std::cell::RefCell;
 
 pub struct DropTable {
@@ -17,15 +16,13 @@ impl From<DropTableOperator> for DropTable {
 }
 
 impl<T: Transaction> Executor<T> for DropTable {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let DropTableOperator {
             table_name,
             if_exists,
         } = self.op;
 
-        transaction
-            .borrow_mut()
-            .drop_table(&table_name, if_exists)?;
+        transaction.drop_table(&table_name, if_exists)?;
         Ok(vec![])
     }
 }

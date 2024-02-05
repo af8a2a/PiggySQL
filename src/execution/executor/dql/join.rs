@@ -12,7 +12,6 @@ use crate::types::value::DataValue;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt, RandomState};
 
 use itertools::Itertools;
-use std::cell::RefCell;
 use std::sync::Arc;
 
 pub struct HashJoin {
@@ -40,7 +39,7 @@ impl From<(JoinOperator, BoxedExecutor, BoxedExecutor)> for HashJoin {
 }
 
 impl<T: Transaction> Executor<T> for HashJoin {
-    fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
         self._execute()
     }
 }

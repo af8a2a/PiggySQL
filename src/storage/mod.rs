@@ -684,22 +684,29 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let column_id = table
                 .get_column_id_by_name(column_name)
                 .expect("column not found");
+
             table.add_index_meta(index_name.to_string(), vec![column_id], true, false);
+
             //update index meta
             Self::create_index_meta_for_table(&mut self.tx, &mut table)?;
         }
         Ok(())
     }
 
-    fn drop_index(&mut self, table_name: TableName, index_name:IndexName) -> Result<(), StorageError> {
+    fn drop_index(
+        &mut self,
+        table_name: TableName,
+        index_name: IndexName,
+    ) -> Result<(), StorageError> {
         let table = self.table(table_name);
         if let Some(mut table) = table {
-            table.indexes.retain(|idx|idx.name!=index_name.to_string());
+            table
+                .indexes
+                .retain(|idx| idx.name != index_name.to_string());
             //update index meta
             Self::create_index_meta_for_table(&mut self.tx, &mut table)?;
         }
         Ok(())
-
     }
 }
 

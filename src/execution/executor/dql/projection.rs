@@ -19,7 +19,7 @@ impl From<(ProjectOperator, BoxedExecutor)> for Projection {
 }
 
 impl<T: Transaction> Executor<T> for Projection {
-    fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
         let Projection { exprs, input } = self;
         let mut tuples = Vec::new();
         for tuple in input?.iter() {

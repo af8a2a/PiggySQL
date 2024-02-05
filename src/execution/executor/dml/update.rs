@@ -38,8 +38,7 @@ impl From<(UpdateOperator, BoxedExecutor)> for Update {
 }
 
 impl<T: Transaction> Executor<T> for Update {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        let mut transaction = transaction.borrow_mut();
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let Update {
             table_name,
             input,

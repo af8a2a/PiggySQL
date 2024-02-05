@@ -25,7 +25,7 @@ impl From<(LimitOperator, BoxedExecutor)> for Limit {
 }
 
 impl<T: Transaction> Executor<T> for Limit {
-    fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
         let mut tuples = Vec::new();
         let Limit {
             offset,

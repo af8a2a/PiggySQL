@@ -34,9 +34,9 @@ use super::ExecutorError;
 pub type BoxedExecutor = Result<Vec<Tuple>, ExecutorError>;
 
 pub trait Executor<T: Transaction> {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor;
+    fn execute(self, transaction: &mut T) -> BoxedExecutor;
 }
-pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &RefCell<T>) -> BoxedExecutor {
+pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExecutor {
     let LogicalPlan {
         operator,
         mut childrens,

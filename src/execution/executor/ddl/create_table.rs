@@ -19,7 +19,7 @@ impl From<CreateTableOperator> for CreateTable {
 }
 
 impl<T: Transaction> Executor<T> for CreateTable {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let CreateTableOperator {
             table_name,
             columns,
@@ -27,7 +27,6 @@ impl<T: Transaction> Executor<T> for CreateTable {
         } = self.op;
         let _ =
             transaction
-                .borrow_mut()
                 .create_table(table_name.clone(), columns, if_not_exists)?;
         let tuple_builder = TupleBuilder::new_result();
         let tuple = tuple_builder

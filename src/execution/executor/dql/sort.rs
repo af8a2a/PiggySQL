@@ -24,7 +24,7 @@ impl From<(SortOperator, BoxedExecutor)> for Sort {
 }
 
 impl<T: Transaction> Executor<T> for Sort {
-    fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
         let Sort {
             sort_fields,
             limit,

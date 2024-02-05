@@ -20,7 +20,7 @@ impl From<(FilterOperator, BoxedExecutor)> for Filter {
 }
 
 impl<T: Transaction> Executor<T> for Filter {
-    fn execute(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
         let Filter { predicate, input } = self;
         let mut tuples= Vec::new();
 

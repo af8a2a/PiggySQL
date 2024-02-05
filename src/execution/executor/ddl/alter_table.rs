@@ -2,8 +2,8 @@ use crate::binder::BindError;
 use crate::execution::executor::BoxedExecutor;
 use crate::planner::operator::alter_table::{AddColumnOperator, DropColumnOperator};
 
+use crate::types::tuple_builder::TupleBuilder;
 use crate::types::value::DataValue;
-use crate::{types::tuple_builder::TupleBuilder};
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -22,7 +22,7 @@ impl From<(AddColumnOperator, BoxedExecutor)> for AddColumn {
 }
 
 impl<T: Transaction> Executor<T> for AddColumn {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let AddColumnOperator {
             table_name,
             column,
@@ -40,17 +40,12 @@ impl<T: Transaction> Executor<T> for AddColumn {
             } else {
                 tuple.values.push(Arc::new(DataValue::Null));
             }
-            transaction
-                .borrow_mut()
-                .append(table_name, tuple.clone(), true)?;
+            transaction.append(table_name, tuple.clone(), true)?;
         }
-        let col_id = transaction
-            .borrow_mut()
-            .add_column(table_name, column, *if_not_exists)?;
+        let col_id = transaction.add_column(table_name, column, *if_not_exists)?;
 
         // Unique Index
         let table = transaction
-            .borrow_mut()
             .table(table_name.clone())
             .expect("table fetch error");
         let unique_meta = table.get_unique_index(&col_id).cloned();
@@ -60,9 +55,7 @@ impl<T: Transaction> Executor<T> for AddColumn {
                     id: unique_meta.id,
                     column_values: vec![value],
                 };
-                transaction
-                    .borrow_mut()
-                    .add_index(&table_name, index, vec![tuple_id], true)?;
+                transaction.add_index(&table_name, index, vec![tuple_id], true)?;
             }
         }
 
@@ -84,8 +77,7 @@ impl From<(DropColumnOperator, BoxedExecutor)> for DropColumn {
 }
 
 impl<T: Transaction> Executor<T> for DropColumn {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        let mut transaction = transaction.borrow_mut();
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let DropColumnOperator {
             table_name,
             column_name,

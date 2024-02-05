@@ -8,7 +8,7 @@ use std::cell::RefCell;
 pub struct Dummy {}
 
 impl<T: Transaction> Executor<T> for Dummy {
-    fn execute<'a>(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute<'a>(self, _transaction: &mut T) -> BoxedExecutor {
         // self._execute()
         Ok(vec![])
     }

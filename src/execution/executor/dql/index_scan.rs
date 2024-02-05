@@ -18,7 +18,7 @@ impl From<ScanOperator> for IndexScan {
 }
 
 impl<T: Transaction> Executor<T> for IndexScan {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let ScanOperator {
             table_name,
             columns,
@@ -26,7 +26,6 @@ impl<T: Transaction> Executor<T> for IndexScan {
             index_by,
             ..
         } = self.op;
-        let transaction = transaction.borrow();
 
         let (index_meta, binaries) = index_by.ok_or(TypeError::InvalidType)?;
         let mut iter =

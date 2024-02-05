@@ -37,7 +37,7 @@ impl From<(AggregateOperator, BoxedExecutor)> for HashAggExecutor {
 }
 
 impl<T: Transaction> Executor<T> for HashAggExecutor {
-    fn execute<'a>(self, _transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute<'a>(self, _transaction: &mut T) -> BoxedExecutor {
         let mut group_and_agg_columns_option = None;
         let mut group_hash_accs = HashMap::new();
         let mut tuples = Vec::new();

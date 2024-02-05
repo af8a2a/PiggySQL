@@ -21,8 +21,7 @@ impl From<(DeleteOperator, BoxedExecutor)> for Delete {
 }
 
 impl<T: Transaction> Executor<T> for Delete {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        let mut transaction= transaction.borrow_mut();
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let Delete { table_name, input } = self;
         let option_index_metas = transaction.table(table_name.clone()).map(|table_catalog| {
             table_catalog

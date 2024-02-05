@@ -19,14 +19,13 @@ impl From<ScanOperator> for SeqScan {
 }
 
 impl<T: Transaction> Executor<T> for SeqScan {
-    fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> BoxedExecutor {
         let ScanOperator {
             table_name,
             columns,
             limit,
             ..
         } = self.op;
-        let transaction=transaction.borrow();
         let mut iter = transaction.read(table_name, limit, columns)?;
         // let mut tuples = Vec::new();
         let tuples = iter.fetch_tuple()?.unwrap_or(vec![]);
