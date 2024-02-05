@@ -7,6 +7,7 @@ use itertools::Itertools;
 use sqlparser::ast::OrderByExpr;
 
 use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
+use crate::db::DatabaseError;
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::storage::table_codec::TableCodec;
@@ -238,10 +239,7 @@ pub struct MVCCIndexIter<'a, E: StorageEngine> {
     table: TableCatalog,
     tx: &'a mvcc::MVCCTransaction<E>,
 
-    // for buffering data
-    index_values: VecDeque<IndexValue>,
     binaries: VecDeque<ConstantBinary>,
-    scope_iter: Option<Scan<'a, E>>,
 }
 
 impl<E: StorageEngine> MVCCIndexIter<'_, E> {
@@ -263,7 +261,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
             TableCodec::encode_tuple_key(&self.table.name, &val)
         }
     }
-    fn get_tuple_by_id(&mut self, tuple_id: &TupleId) -> Result<Option<Tuple>, StorageError> {
+    fn get_tuple_by_id(&self, tuple_id: &TupleId) -> Result<Option<Tuple>, StorageError> {
         let key = TableCodec::encode_tuple_key(&self.table.name, &tuple_id)?;
 
         self.tx
@@ -277,7 +275,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
     }
 
     fn is_empty(&self) -> bool {
-        self.scope_iter.is_none() && self.index_values.is_empty() && self.binaries.is_empty()
+        self.binaries.is_empty()
     }
 }
 
@@ -285,114 +283,87 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>, StorageError> {
         let mut tuples = Vec::new();
 
-        // 2. try get tuple on index_values and until it empty
-        loop {
-            if matches!(self.limit, Some(0)) || self.is_empty() {
-                self.scope_iter = None;
-                self.binaries.clear();
+        for binary in self.binaries.iter().cloned() {
+            match binary {
+                ConstantBinary::Scope { min, max } => {
+                    let table_name = &self.table.name;
+                    let index_meta = &self.index_meta;
 
-                break;
-            }
-            loop {
-                if let Some(value) = self.index_values.pop_front() {
-                    if Self::offset_move(&mut self.offset) {
-                        continue;
-                    }
-                    match value {
-                        IndexValue::PrimaryKey(tuple) => {
-                            let tuple = tuple_projection(&self.projection, tuple)?;
-                            tuples.push(tuple);
+                    let bound_encode = |bound: Bound<ValueRef>| -> Result<_, StorageError> {
+                        match bound {
+                            Bound::Included(val) => Ok(Bound::Included(self.val_to_key(val)?)),
+                            Bound::Excluded(val) => Ok(Bound::Excluded(self.val_to_key(val)?)),
+                            Bound::Unbounded => Ok(Bound::Unbounded),
                         }
-                        IndexValue::Normal(tuple_id) => {
-                            if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
-                                tuples.push(tuple);
-                            }
+                    };
+                    let check_bound = |value: &mut Bound<Vec<u8>>, bound: Vec<u8>| {
+                        if matches!(value, Bound::Unbounded) {
+                            let _ = mem::replace(value, Bound::Included(bound));
                         }
-                    }
-                } else {
-                    break;
-                }
-            }
-            assert!(self.index_values.is_empty());
-            if let Some(iter) = &mut self.scope_iter {
-                let mut iter = iter.iter();
-                let mut has_next = false;
-
-                while let Ok(Some((_, value))) = iter.next().transpose() {
-                    if self.index_meta.is_primary {
-                        let tuple = TableCodec::decode_tuple(self.table.all_columns(), &value);
-
-                        self.index_values.push_back(IndexValue::PrimaryKey(tuple));
+                    };
+                    let (bound_min, bound_max) = if index_meta.is_unique {
+                        TableCodec::index_bound(table_name, &index_meta.id)
                     } else {
-                        for tuple_id in TableCodec::decode_index(&value)? {
-                            self.index_values.push_back(IndexValue::Normal(tuple_id));
-                        }
-                    }
-                    has_next = true;
-                    break;
-                }
-                drop(iter);
-                if !has_next {
-                    self.scope_iter = None;
-                }
-                continue;
-                // return self.next_tuple();
-            }
-            // 4. When `scope_iter` and `index_values` do not have a value, use the next expression to iterate
-            if let Some(binary) = self.binaries.pop_front() {
-                match binary {
-                    ConstantBinary::Scope { min, max } => {
-                        let table_name = &self.table.name;
-                        let index_meta = &self.index_meta;
+                        TableCodec::tuple_bound(table_name)
+                    };
 
-                        let bound_encode = |bound: Bound<ValueRef>| -> Result<_, StorageError> {
-                            match bound {
-                                Bound::Included(val) => Ok(Bound::Included(self.val_to_key(val)?)),
-                                Bound::Excluded(val) => Ok(Bound::Excluded(self.val_to_key(val)?)),
-                                Bound::Unbounded => Ok(Bound::Unbounded),
-                            }
-                        };
-                        let check_bound = |value: &mut Bound<Vec<u8>>, bound: Vec<u8>| {
-                            if matches!(value, Bound::Unbounded) {
-                                let _ = mem::replace(value, Bound::Included(bound));
-                            }
-                        };
-                        let (bound_min, bound_max) = if index_meta.is_unique {
-                            TableCodec::index_bound(table_name, &index_meta.id)
-                        } else {
-                            TableCodec::tuple_bound(table_name)
-                        };
+                    let mut encode_min = bound_encode(min)?;
+                    check_bound(&mut encode_min, bound_min);
 
-                        let mut encode_min = bound_encode(min)?;
-                        check_bound(&mut encode_min, bound_min);
-
-                        let mut encode_max = bound_encode(max)?;
-                        check_bound(&mut encode_max, bound_max);
-                        let iter = self.tx.scan(encode_min, encode_max)?;
-                        self.scope_iter = Some(iter);
-                    }
-                    ConstantBinary::Eq(val) => {
-                        let key = self.val_to_key(val)?;
-                        if let Some(bytes) = self.tx.get(&key)? {
-                            if self.index_meta.is_unique {
-                                for tuple_id in TableCodec::decode_index(&bytes)? {
-                                    self.index_values.push_back(IndexValue::Normal(tuple_id));
+                    let mut encode_max = bound_encode(max)?;
+                    check_bound(&mut encode_max, bound_max);
+                    let mut collect_iter = self.tx.scan(encode_min, encode_max)?;
+                    if self.index_meta.is_primary {
+                        //主键索引可以直接获得元组
+                        let collect = collect_iter
+                            .iter()
+                            .filter_map(|res| res.ok())
+                            .map(|(_, v)| -> Tuple {
+                                TableCodec::decode_tuple(self.table.all_columns(), &v)
+                            })
+                            .collect_vec();
+                        tuples.extend(collect);
+                    } else {
+                        let index_values = collect_iter
+                            .iter()
+                            .filter_map(|res| res.ok())
+                            .map(|(_, v)| TableCodec::decode_index(&v).expect("decode index error"))
+                            .collect_vec();
+                        for tuple_ids in index_values {
+                            for tuple_id in tuple_ids {
+                                if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
+                                    tuples.push(tuple);
                                 }
-                            } else if self.index_meta.is_primary {
-                                let tuple =
-                                    TableCodec::decode_tuple(self.table.all_columns(), &bytes);
-
-                                self.index_values.push_back(IndexValue::PrimaryKey(tuple));
-                            } else {
-                                todo!()
                             }
                         }
-                        self.scope_iter = None;
                     }
-                    _ => (),
                 }
+                ConstantBinary::Eq(val) => {
+                    let key = self.val_to_key(val)?;
+                    if let Some(bytes) = self.tx.get(&key)? {
+                        let mut index_values = Vec::new();
+
+                        if self.index_meta.is_unique {
+                            for tuple_id in TableCodec::decode_index(&bytes)? {
+                                index_values.push(tuple_id);
+                            }
+                            for tuple_id in index_values {
+                                if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
+                                    tuples.push(tuple);
+                                }
+                            }
+                        } else if self.index_meta.is_primary {
+                            let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
+                            tuples.push(tuple);
+                        } else {
+                            todo!()
+                        }
+                    }
+                }
+                _ => (),
             }
         }
+
         Ok(Some(tuples))
     }
 }
@@ -443,10 +414,8 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             projection,
             index_meta,
             table,
-            index_values: VecDeque::new(),
             binaries: VecDeque::from(binaries),
             tx: &self.tx,
-            scope_iter: None,
         })
     }
 

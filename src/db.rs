@@ -12,7 +12,7 @@ use crate::execution::ExecutorError;
 use crate::optimizer::heuristic::batch::HepBatchStrategy;
 use crate::optimizer::heuristic::optimizer::HepOptimizer;
 use crate::optimizer::rule::RuleImpl;
-use crate::optimizer::OptimizerError;
+use crate::optimizer::{apply_optimization, OptimizerError};
 use crate::parser;
 use crate::planner::LogicalPlan;
 use crate::storage::{Storage, StorageError, Transaction};
@@ -123,43 +123,43 @@ impl<S: Storage> Database<S> {
         let binder = Binder::new(BinderContext::new(transaction));
         let source_plan = binder.bind(&stmts[0])?;
         // println!("source_plan plan: {:#?}", source_plan);
-        let best_plan = Self::default_optimizer(source_plan).find_best()?;
+        let best_plan = apply_optimization(source_plan)?;
         // println!("best_plan plan: {:#?}", best_plan);
 
         Ok(build(best_plan, transaction))
     }
 
-    fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
-        HepOptimizer::new(source_plan)
-            .batch(
-                "Column Pruning".to_string(),
-                HepBatchStrategy::once_topdown(),
-                vec![RuleImpl::ColumnPruning],
-            )
-            .batch(
-                "Simplify Filter".to_string(),
-                HepBatchStrategy::fix_point_topdown(10),
-                vec![RuleImpl::SimplifyFilter, RuleImpl::ConstantFolder],
-            )
-            .batch(
-                "Predicate Pushdown".to_string(),
-                HepBatchStrategy::fix_point_topdown(10),
-                vec![
-                    RuleImpl::PushPredicateThroughJoin,
-                    //  RuleImpl::PushPredicateIntoScan,
-                ],
-            )
-            .batch(
-                "Combine Operators".to_string(),
-                HepBatchStrategy::fix_point_topdown(10),
-                vec![RuleImpl::CollapseProject, RuleImpl::CombineFilter],
-            )
-            .batch(
-                "Limit Pushdown".to_string(),
-                HepBatchStrategy::fix_point_topdown(10),
-                vec![RuleImpl::PushLimitIntoTableScan],
-            )
-    }
+    // pub fn default_optimizer(source_plan: LogicalPlan) -> HepOptimizer {
+    //     HepOptimizer::new(source_plan)
+    //         .batch(
+    //             "Column Pruning".to_string(),
+    //             HepBatchStrategy::once_topdown(),
+    //             vec![RuleImpl::ColumnPruning],
+    //         )
+    //         .batch(
+    //             "Simplify Filter".to_string(),
+    //             HepBatchStrategy::fix_point_topdown(10),
+    //             vec![RuleImpl::SimplifyFilter, RuleImpl::ConstantFolder],
+    //         )
+    //         .batch(
+    //             "Predicate Pushdown".to_string(),
+    //             HepBatchStrategy::fix_point_topdown(10),
+    //             vec![
+    //                 RuleImpl::PushPredicateThroughJoin,
+    //                   RuleImpl::PushPredicateIntoScan,
+    //             ],
+    //         )
+    //         .batch(
+    //             "Combine Operators".to_string(),
+    //             HepBatchStrategy::fix_point_topdown(10),
+    //             vec![RuleImpl::CollapseProject, RuleImpl::CombineFilter],
+    //         )
+    //         .batch(
+    //             "Limit Pushdown".to_string(),
+    //             HepBatchStrategy::fix_point_topdown(10),
+    //             vec![RuleImpl::PushLimitIntoTableScan],
+    //         )
+    // }
 }
 
 pub struct DBTransaction<S: Storage> {
@@ -175,10 +175,10 @@ impl<S: Storage> DBTransaction<S> {
         let binder = Binder::new(BinderContext::new(&self.inner));
         let source_plan = binder.bind(&stmt)?;
         // println!("source_plan plan: {:#?}", source_plan);
-        // let best_plan = Self::default_optimizer(source_plan).find_best()?;
+        let best_plan = apply_optimization(source_plan)?;
         // println!("best_plan plan: {:#?}", best_plan);
 
-        let result = build(source_plan, &mut self.inner);
+        let result = build(best_plan, &mut self.inner);
 
         // let stream = Database::<S>::_run(sql, &self.inner)?;
         Ok(result?)
@@ -304,7 +304,7 @@ mod test {
 
         let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
         tx_1.run("create index test_index on t1 (b)")?;
-        tx_1.run("select * from t1 where a=1")?;
+        tx_1.run("select * from t1 where a>1")?;
 
         // assert_eq!(
         //     tuples_1[0].values,
@@ -340,13 +340,13 @@ mod test {
         let _ = database.run("insert into t3 (a, b) values (1, 1111), (2, 2.01), (3, 3.00)")?;
         let _ = database.run("insert into t3 (a, b) values (4, 4444), (5, 5222), (6, 1.00)")?;
 
-        println!("full t1:");
-        let tuples_full_fields_t1 = database.run("select * from t1")?;
-        println!("{}", create_table(&tuples_full_fields_t1));
+        // println!("full t1:");
+        // let tuples_full_fields_t1 = database.run("select * from t1")?;
+        // println!("{}", create_table(&tuples_full_fields_t1));
 
-        println!("full t2:");
-        let tuples_full_fields_t2 = database.run("select * from t2")?;
-        println!("{}", create_table(&tuples_full_fields_t2));
+        // println!("full t2:");
+        // let tuples_full_fields_t2 = database.run("select * from t2")?;
+        // println!("{}", create_table(&tuples_full_fields_t2));
 
         //todo
         println!("projection_and_filter:");

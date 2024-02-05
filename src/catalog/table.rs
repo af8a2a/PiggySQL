@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use itertools::Itertools;
+
 use crate::catalog::CatalogError;
 use crate::types::index::{IndexMeta, IndexMetaRef};
-use crate::types::ColumnId;
+use crate::types::{ColumnId, LogicalType};
 
 use super::column::{ColumnCatalog, ColumnRef};
 
@@ -40,6 +42,14 @@ impl TableCatalog {
         let id = self.column_idxs.get(name)?;
         self.columns.get(id)
     }
+    
+    pub(crate) fn types(&self) -> Vec<LogicalType> {
+        self.columns
+            .iter()
+            .map(|(_, column)| *column.datatype())
+            .collect_vec()
+    }
+
 
     pub(crate) fn contains_column(&self, name: &str) -> bool {
         self.column_idxs.contains_key(name)

@@ -10,7 +10,7 @@ mod insert;
 mod select;
 mod show;
 mod update;
-use sqlparser::ast::{Expr, Ident, ObjectName, ObjectType, SetExpr, Statement};
+use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
 use std::collections::BTreeMap;
 
 use crate::catalog::{CatalogError, TableCatalog, TableName, DEFAULT_SCHEMA_NAME};
