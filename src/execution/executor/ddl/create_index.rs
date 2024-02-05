@@ -5,7 +5,6 @@ use crate::storage::Transaction;
 
 use crate::types::tuple_builder::TupleBuilder;
 
-
 use std::cell::RefCell;
 
 pub struct CreateIndex {
@@ -20,17 +19,17 @@ impl From<CreateIndexOperator> for CreateIndex {
 
 impl<T: Transaction> Executor<T> for CreateIndex {
     fn execute(self, transaction: &RefCell<T>) -> BoxedExecutor {
-        // let CreateIndexOperator {
-        //     table_name,
-        //     if_not_exists,
-        // } = self.op;
-        // let _ =
-        //     transaction
-        //         .borrow_mut()
-        //         .create_table(table_name.clone(), columns, if_not_exists)?;
-        // let tuple_builder = TupleBuilder::new_result();
-        // let tuple = tuple_builder
-        //     .push_result("CREATE TABLE SUCCESS", format!("{}", table_name).as_str())?;
-        Ok(vec![])
+        let CreateIndexOperator {
+            table_name,
+            index_name,
+            col_name,
+        } = self.op;
+        let _ = transaction
+            .borrow_mut()
+            .create_index(table_name.clone(), index_name, &col_name)?;
+        let tuple_builder = TupleBuilder::new_result();
+        let tuple = tuple_builder
+            .push_result("CREATE INDEX SUCCESS", format!("{}", table_name).as_str())?;
+        Ok(vec![tuple])
     }
 }

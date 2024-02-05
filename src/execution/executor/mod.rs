@@ -13,9 +13,7 @@ use crate::{
 
 use self::{
     ddl::{
-        alter_table::{AddColumn, DropColumn},
-        create_table::CreateTable,
-        drop_table::DropTable,
+        alter_table::{AddColumn, DropColumn}, create_index::CreateIndex, create_table::CreateTable, drop_table::DropTable
     },
     dml::{delete::Delete, insert::Insert, update::Update},
     dql::{
@@ -72,9 +70,13 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &RefCell<T>) -> Box
             Projection::from((op, input)).execute(transaction)
         }
         Operator::Scan(op) => {
+            println!("{:#?}",op);
             if op.index_by.is_some() {
+                println!("build index scan");
                 IndexScan::from(op).execute(transaction)
             } else {
+                println!("build seq scan");
+
                 SeqScan::from(op).execute(transaction)
             }
         }
@@ -115,6 +117,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &RefCell<T>) -> Box
         }
         Operator::CreateTable(op) => CreateTable::from(op).execute(transaction),
         Operator::DropTable(op) => DropTable::from(op).execute(transaction),
-        Operator::CreateIndex(_) => todo!(),
+        Operator::CreateIndex(op) => CreateIndex::from(op).execute(transaction),
     }
 }

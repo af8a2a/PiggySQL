@@ -1,5 +1,6 @@
 pub mod aggregate;
 mod alter_table;
+mod create_index;
 mod create_table;
 mod delete;
 mod distinct;
@@ -9,8 +10,7 @@ mod insert;
 mod select;
 mod show;
 mod update;
-mod create_index;
-use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
+use sqlparser::ast::{Expr, Ident, ObjectName, ObjectType, SetExpr, Statement};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -49,7 +49,7 @@ impl<'a, T: Transaction> BinderContext<'a, T> {
     }
 
     pub fn table(&self, table_name: TableName) -> Option<TableCatalog> {
-        let txn= self.transaction.borrow();
+        let txn = self.transaction.borrow();
         if let Some(real_name) = self.table_aliases.get(table_name.as_ref()) {
             txn.table(real_name.clone())
         } else {
@@ -173,11 +173,17 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     self.bind_delete(table, selection)?
                 }
             }
-            Statement::Explain {  .. } => {
+            Statement::Explain { .. } => {
                 todo!()
             }
-            Statement::CreateIndex { name, table_name, columns, .. }=>{
-                todo!()
+            Statement::CreateIndex {
+                name,
+                table_name,
+                columns,
+                ..
+            } => {
+                //we only support single column index yet
+                self.bind_create_index(name, table_name, columns)?
             }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,
             // Statement::ShowTables { .. } => self.bind_show_tables()?,

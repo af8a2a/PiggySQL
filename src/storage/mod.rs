@@ -225,7 +225,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
                 .expect("projection tuple error")
             })
             .collect_vec();
-        println!("scan collect tuple {}", tuples.len());
+        // println!("scan collect tuple {}", tuples.len());
         Ok(Some(tuples))
     }
 }

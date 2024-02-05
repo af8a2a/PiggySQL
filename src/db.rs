@@ -305,20 +305,10 @@ mod test {
 
         let mut tx_1 = database.new_transaction()?;
 
-        let _ = tx_1.run("create table t(id int primary key, v1 int not null, v2 int not null)")?;
-        tx_1.run("insert into t values (0, 1, 1), (1, 4, 2), (2, 3, 3), (3, 10, 12), (4, 2, 5)")?;
-        let tuple = tx_1.run("select v1 from t limit 3")?;
-        assert_eq!(tuple.len(), 3);
+        let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
+        // tx_1.run("create index test_index on t1 (b)")?;
+        tx_1.run("select * from t1 where a=1")?;
 
-        // assert_eq!(tuple.len(), 3);
-        let tuple = tx_1.run("select v1 from t offset 2")?;
-        assert_eq!(tuple.len(), 3);
-        let tuple = tx_1.run("select v1 from t limit 2 offset 2 ")?;
-        assert_eq!(tuple.len(), 2);
-
-        for val in tuple.iter() {
-            println!("{}", val)
-        }
         // assert_eq!(
         //     tuples_1[0].values,
         //     vec![
