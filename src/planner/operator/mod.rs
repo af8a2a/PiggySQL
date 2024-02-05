@@ -1,7 +1,8 @@
 use itertools::Itertools;
 
 use crate::catalog::ColumnRef;
-
+use std::fmt;
+use std::fmt::Formatter;
 use self::{
     aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
 };
@@ -33,6 +34,8 @@ pub enum Operator {
     Sort(SortOperator),
     Limit(LimitOperator),
     Values(ValuesOperator),
+    Explain,
+
     // DML
     Insert(InsertOperator),
     Update(UpdateOperator),
@@ -87,6 +90,32 @@ impl Operator {
                 .collect_vec(),
             Operator::Values(op) => op.columns.clone(),
             _ => vec![],
+        }
+    }
+}
+
+
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Operator::Dummy => write!(f, "Dummy"),
+            Operator::Aggregate(op) => write!(f, "{}", op),
+            Operator::Filter(op) => write!(f, "{}", op),
+            Operator::Join(op) => write!(f, "{}", op),
+            Operator::Project(op) => write!(f, "{}", op),
+            Operator::Scan(op) => write!(f, "{}", op),
+            Operator::Sort(op) => write!(f, "{}", op),
+            Operator::Limit(op) => write!(f, "{}", op),
+            Operator::Values(op) => write!(f, "{}", op),
+            Operator::Explain => unreachable!(),
+            Operator::Insert(op) => write!(f, "{}", op),
+            Operator::Update(op) => write!(f, "{}", op),
+            Operator::AddColumn(op) => write!(f, "{}", op),
+            Operator::DropColumn(op) => write!(f, "{}", op),
+            Operator::CreateTable(op) => write!(f, "{}", op),
+            Operator::DropTable(op) => write!(f, "{}", op),
+            Operator::Delete(op) => write!(f, "{}", op),
+            Operator::CreateIndex(_) => todo!(),
         }
     }
 }

@@ -1,5 +1,6 @@
 pub(crate) mod agg;
 pub(crate) mod dummy;
+pub(crate) mod explain;
 pub(crate) mod filter;
 pub(crate) mod index_scan;
 pub(crate) mod join;

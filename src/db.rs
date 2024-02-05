@@ -120,7 +120,7 @@ impl<S: Storage> Database<S> {
         if stmts.is_empty() {
             return Err(DatabaseError::EmptyStatement);
         }
-        let binder = Binder::new(BinderContext::new(transaction));
+        let mut binder = Binder::new(BinderContext::new(transaction));
         let source_plan = binder.bind(&stmts[0])?;
         // println!("source_plan plan: {:#?}", source_plan);
         let best_plan = apply_optimization(source_plan)?;
@@ -172,7 +172,7 @@ impl<S: Storage> DBTransaction<S> {
         Ok(stream?)
     }
     pub fn run_with_stmt(&mut self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
-        let binder = Binder::new(BinderContext::new(&self.inner));
+        let mut binder = Binder::new(BinderContext::new(&self.inner));
         let source_plan = binder.bind(&stmt)?;
         // println!("source_plan plan: {:#?}", source_plan);
         let best_plan = apply_optimization(source_plan)?;
@@ -304,8 +304,11 @@ mod test {
 
         let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
         tx_1.run("create index test_index on t1 (b)")?;
-        tx_1.run("select * from t1 where a>1")?;
-
+        let tuples=tx_1.run("explain select * from t1 where a>1")?;
+        for tuple in tuples{
+            println!("{}",tuple);
+        }
+        
         // assert_eq!(
         //     tuples_1[0].values,
         //     vec![
@@ -340,13 +343,13 @@ mod test {
         let _ = database.run("insert into t3 (a, b) values (1, 1111), (2, 2.01), (3, 3.00)")?;
         let _ = database.run("insert into t3 (a, b) values (4, 4444), (5, 5222), (6, 1.00)")?;
 
-        // println!("full t1:");
-        // let tuples_full_fields_t1 = database.run("select * from t1")?;
-        // println!("{}", create_table(&tuples_full_fields_t1));
+        println!("full t1:");
+        let tuples_full_fields_t1 = database.run("select * from t1")?;
+        println!("{}", create_table(&tuples_full_fields_t1));
 
-        // println!("full t2:");
-        // let tuples_full_fields_t2 = database.run("select * from t2")?;
-        // println!("{}", create_table(&tuples_full_fields_t2));
+        println!("full t2:");
+        let tuples_full_fields_t2 = database.run("select * from t2")?;
+        println!("{}", create_table(&tuples_full_fields_t2));
 
         //todo
         println!("projection_and_filter:");

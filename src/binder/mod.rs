@@ -10,6 +10,8 @@ mod insert;
 mod select;
 mod show;
 mod update;
+mod explain;
+
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
 use std::collections::BTreeMap;
 
@@ -115,7 +117,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         Binder { context }
     }
 
-    pub fn bind(mut self, stmt: &Statement) -> Result<LogicalPlan, BindError> {
+    pub fn bind(&mut self, stmt: &Statement) -> Result<LogicalPlan, BindError> {
         let plan = match stmt {
             Statement::Query(query) => self.bind_query(query)?,
             Statement::AlterTable { name, operation } => self.bind_alter_table(name, operation)?,
@@ -171,8 +173,10 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     self.bind_delete(table, selection)?
                 }
             }
-            Statement::Explain { .. } => {
-                todo!()
+            Statement::Explain { statement,.. } => {
+                let plan = self.bind(statement)?;
+                self.bind_explain(plan)?
+
             }
             Statement::CreateIndex {
                 name,

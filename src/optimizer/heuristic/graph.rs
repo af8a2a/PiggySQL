@@ -52,6 +52,13 @@ impl HepGraph {
             .neighbors_directed(node_id, petgraph::Direction::Incoming)
             .next()
     }
+    
+    pub fn eldest_child_at(&self, id: HepNodeId) -> Option<HepNodeId> {
+        self.graph
+            .edges(id)
+            .min_by_key(|edge| edge.weight())
+            .map(|edge| edge.target())
+    }
 
     #[allow(dead_code)]
     pub fn add_root(&mut self, new_node: Operator) {

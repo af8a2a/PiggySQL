@@ -1,7 +1,11 @@
-use crate::types::value::ValueRef;
 use crate::types::ColumnId;
+use crate::{expression::simplify::ConstantBinary, types::value::ValueRef};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{
+    fmt::{self, Formatter},
+    sync::Arc,
+};
 
 pub type IndexId = u32;
 pub type IndexMetaRef = Arc<IndexMeta>;
@@ -23,5 +27,12 @@ pub struct Index {
 impl Index {
     pub fn new(id: IndexId, column_values: Vec<ValueRef>) -> Self {
         Index { id, column_values }
+    }
+}
+
+
+impl fmt::Display for IndexMeta {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
     }
 }

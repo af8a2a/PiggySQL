@@ -110,6 +110,14 @@ impl ColumnPruning {
                 Self::recollect_apply(op_ref_columns, true, graph.children_at(node_id)[0], graph);
             }
             // DDL Single Plan
+            Operator::Explain => {
+                if let Some(child_id) = graph.eldest_child_at(node_id) {
+                    Self::_apply(column_references, true, child_id, graph);
+                } else {
+                    unreachable!()
+                }
+            }
+
             _ => (),
         }
     }

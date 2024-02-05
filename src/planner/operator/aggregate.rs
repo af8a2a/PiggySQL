@@ -1,6 +1,6 @@
+use std::fmt::{self, Formatter};
 
-
-
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::planner::LogicalPlan;
@@ -25,5 +25,27 @@ impl AggregateOperator {
             }),
             childrens: vec![children],
         }
+    }
+}
+
+impl fmt::Display for AggregateOperator {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let calls = self
+            .agg_calls
+            .iter()
+            .map(|call| format!("{}", call))
+            .join(", ");
+        write!(f, "Aggregate [{}]", calls)?;
+
+        if !self.groupby_exprs.is_empty() {
+            let groupbys = self
+                .groupby_exprs
+                .iter()
+                .map(|groupby| format!("{}", groupby))
+                .join(", ");
+            write!(f, " -> Group By [{}]", groupbys)?;
+        }
+
+        Ok(())
     }
 }

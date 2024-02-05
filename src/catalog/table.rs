@@ -63,6 +63,7 @@ impl TableCatalog {
         self.columns.values().map(Arc::clone).collect()
     }
 
+
     /// Add a column to the table catalog.
     pub(crate) fn add_column(&mut self, mut col: ColumnCatalog) -> Result<ColumnId, CatalogError> {
         if self.column_idxs.contains_key(col.name()) {

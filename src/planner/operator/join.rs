@@ -1,8 +1,12 @@
 use crate::{expression::ScalarExpression, planner::LogicalPlan};
+use itertools::Itertools;
+use std::fmt;
+use std::fmt::Formatter;
+use strum_macros::Display;
 
 use super::Operator;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq,Display,  Clone, Copy)]
 pub enum JoinType {
     Inner,
     Left,
@@ -38,5 +42,37 @@ impl JoinOperator {
             operator: Operator::Join(JoinOperator { on, join_type }),
             childrens: vec![left, right],
         }
+    }
+}
+
+
+impl fmt::Display for JoinOperator {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} Join On {}", self.join_type, self.on)?;
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for JoinCondition {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            JoinCondition::On { on, filter } => {
+                let on = on
+                    .iter()
+                    .map(|(v1, v2)| format!("{} = {}", v1, v2))
+                    .join(" AND ");
+
+                write!(f, "{}", on)?;
+                if let Some(filter) = filter {
+                    write!(f, "Where {}", filter)?;
+                }
+            }
+            JoinCondition::None => {
+                write!(f, "Nothing")?;
+            }
+        }
+
+        Ok(())
     }
 }

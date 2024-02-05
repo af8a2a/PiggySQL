@@ -17,16 +17,7 @@ use self::{
     },
     dml::{delete::Delete, insert::Insert, update::Update},
     dql::{
-        agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor},
-        dummy::Dummy,
-        filter::Filter,
-        index_scan::IndexScan,
-        join::HashJoin,
-        limit::Limit,
-        projection::Projection,
-        seq_scan::SeqScan,
-        sort::Sort,
-        values::Values,
+        agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor}, dummy::Dummy, explain::Explain, filter::Filter, index_scan::IndexScan, join::HashJoin, limit::Limit, projection::Projection, seq_scan::SeqScan, sort::Sort, values::Values
     },
 };
 
@@ -70,7 +61,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExe
             Projection::from((op, input)).execute(transaction)
         }
         Operator::Scan(op) => {
-            println!("{:#?}",op);
             if op.index_by.is_some() {
                 println!("build index scan");
                 IndexScan::from(op).execute(transaction)
@@ -118,5 +108,11 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExe
         Operator::CreateTable(op) => CreateTable::from(op).execute(transaction),
         Operator::DropTable(op) => DropTable::from(op).execute(transaction),
         Operator::CreateIndex(op) => CreateIndex::from(op).execute(transaction),
+        Operator::Explain => {
+            let input = childrens.remove(0);
+
+            Explain::from(input).execute(transaction)
+
+        },
     }
 }
