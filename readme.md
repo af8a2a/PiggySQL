@@ -51,6 +51,7 @@
   - [x] Volcano
 
 ## References
+We have referred to the following excellent open-source database projects and express our gratitude for their work
 - [systemxlabs/bustubx](https://github.com/systemxlabs/bustubx)
 - [duckdb/duckdb](https://github.com/duckdb/duckdb)
 - [Fedomn/sqlrs](https://github.com/Fedomn/sqlrs): Main reference materials, Optimizer and Executor all refer to the design of sqlrs
