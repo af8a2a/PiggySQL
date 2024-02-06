@@ -4,7 +4,7 @@ use crate::planner::operator::alter_table::{AddColumnOperator, DropColumnOperato
 
 use crate::types::tuple_builder::TupleBuilder;
 use crate::types::value::DataValue;
-use std::cell::RefCell;
+
 use std::sync::Arc;
 
 use crate::types::index::Index;

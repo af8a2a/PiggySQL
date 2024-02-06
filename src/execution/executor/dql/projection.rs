@@ -5,7 +5,7 @@ use crate::planner::operator::project::ProjectOperator;
 use crate::storage::Transaction;
 use crate::types::tuple::{Tuple};
 
-use std::cell::RefCell;
+
 
 pub struct Projection {
     exprs: Vec<ScalarExpression>,

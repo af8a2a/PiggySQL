@@ -4,7 +4,7 @@ use itertools::Itertools;
 use sqlparser::ast::{ObjectName, OrderByExpr};
 
 use crate::{
-    binder::{lower_case_name, split_name},
+    binder::{lower_case_name},
     planner::{
         operator::{create_index::CreateIndexOperator, Operator},
         LogicalPlan,

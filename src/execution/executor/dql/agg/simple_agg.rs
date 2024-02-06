@@ -7,7 +7,7 @@ use crate::types::tuple::Tuple;
 use crate::types::value::ValueRef;
 
 use itertools::Itertools;
-use std::cell::RefCell;
+
 
 use super::create_accumulators;
 

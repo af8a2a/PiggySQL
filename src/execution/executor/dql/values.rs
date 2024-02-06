@@ -5,7 +5,7 @@ use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 
 use itertools::Itertools;
-use std::cell::RefCell;
+
 
 pub struct Values {
     op: ValuesOperator,

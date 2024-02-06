@@ -8,7 +8,7 @@ use crate::types::value::ValueRef;
 use ahash::{HashMap, HashMapExt};
 
 use itertools::Itertools;
-use std::cell::RefCell;
+
 
 use super::create_accumulators;
 

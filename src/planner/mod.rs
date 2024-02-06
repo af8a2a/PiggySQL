@@ -1,10 +1,5 @@
 use crate::{
     catalog::TableName,
-    optimizer::{
-        heuristic::{batch::HepBatchStrategy, optimizer::HepOptimizer},
-        rule::RuleImpl,
-        OptimizerError,
-    },
 };
 
 use self::operator::Operator;

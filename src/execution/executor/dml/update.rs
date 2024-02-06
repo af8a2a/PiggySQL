@@ -6,7 +6,7 @@ use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 
-use std::cell::RefCell;
+
 use std::collections::{HashSet};
 use std::sync::Arc;
 

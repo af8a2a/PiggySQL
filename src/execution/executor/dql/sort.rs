@@ -4,7 +4,7 @@ use crate::planner::operator::sort::{SortField, SortOperator};
 use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 
-use std::cell::RefCell;
+
 use std::cmp::Ordering;
 
 pub struct Sort {

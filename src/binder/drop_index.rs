@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
-use itertools::Itertools;
-use sqlparser::ast::{ObjectName, OrderByExpr};
+
+use sqlparser::ast::{ObjectName};
 
 use crate::{
-    binder::{lower_case_name, split_name},
-    execution::executor::ddl::drop_index::DropIndex,
     planner::{
-        operator::{create_index::CreateIndexOperator, drop_index::DropIndexOperator, Operator},
+        operator::{drop_index::DropIndexOperator, Operator},
         LogicalPlan,
     },
     storage::Transaction,

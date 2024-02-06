@@ -4,10 +4,10 @@ pub mod mvcc;
 mod table_codec;
 
 use itertools::Itertools;
-use sqlparser::ast::OrderByExpr;
+
 
 use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
-use crate::db::DatabaseError;
+
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::storage::table_codec::TableCodec;
@@ -675,7 +675,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         &mut self,
         table_name: TableName,
         index_name: IndexName,
-        if_exists: bool,
+        _if_exists: bool,
     ) -> Result<(), StorageError> {
         //check index exists
         //operator in copy temp data
@@ -690,6 +690,9 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         cols.get_mut(item.column_ids[0] as usize)
             .and_then(|col| Some(col.desc.is_unique = false));
         //更新索引元数据
+        //todo
+        //这是一个相当愚蠢的更新方法，受限于tablecodec的设计,我们必须先获取表的全部索引元信息,全部删除后再添加
+        //这会造成相当大无意义的IO写入
         let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(&table_name);
         Self::_drop_data(&mut self.tx, &index_meta_min, &index_meta_max)?;
         for meta in indexs.iter() {

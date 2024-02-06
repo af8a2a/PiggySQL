@@ -7,7 +7,7 @@ use crate::types::index::Index;
 
 
 use itertools::Itertools;
-use std::cell::RefCell;
+
 
 pub struct Delete {
     table_name: TableName,

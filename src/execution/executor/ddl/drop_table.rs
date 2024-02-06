@@ -4,7 +4,7 @@ use crate::planner::operator::drop_table::DropTableOperator;
 use crate::storage::Transaction;
 use crate::types::tuple_builder::TupleBuilder;
 
-use std::cell::RefCell;
+
 
 pub struct DropTable {
     op: DropTableOperator,

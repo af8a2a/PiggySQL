@@ -3,7 +3,7 @@ pub(crate) mod dml;
 pub(crate) mod dql;
 pub(crate) mod show;
 
-use std::cell::RefCell;
+
 
 use crate::{
     planner::{operator::Operator, LogicalPlan},

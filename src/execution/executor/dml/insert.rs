@@ -6,7 +6,7 @@ use crate::storage::Transaction;
 use crate::types::index::Index;
 use crate::types::tuple::Tuple;
 use crate::types::value::DataValue;
-use std::cell::RefCell;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

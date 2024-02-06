@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+
 use std::sync::Arc;
 
 use sqlparser::ast::Statement;
@@ -9,12 +9,12 @@ use crate::binder::{BindError, Binder, BinderContext};
 use crate::execution::executor::{build, BoxedExecutor};
 use crate::execution::ExecutorError;
 
-use crate::optimizer::heuristic::batch::HepBatchStrategy;
-use crate::optimizer::heuristic::optimizer::HepOptimizer;
-use crate::optimizer::rule::RuleImpl;
+
+
+
 use crate::optimizer::{apply_optimization, OptimizerError};
 use crate::parser;
-use crate::planner::LogicalPlan;
+
 use crate::storage::{Storage, StorageError, Transaction};
 use crate::types::tuple::Tuple;
 

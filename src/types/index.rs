@@ -1,6 +1,6 @@
 use crate::types::ColumnId;
-use crate::{expression::simplify::ConstantBinary, types::value::ValueRef};
-use itertools::Itertools;
+use crate::{types::value::ValueRef};
+
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{self, Formatter},

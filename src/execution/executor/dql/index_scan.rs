@@ -5,7 +5,7 @@ use crate::storage::{Iter, Transaction};
 use crate::types::errors::TypeError;
 
 
-use std::cell::RefCell;
+
 
 pub(crate) struct IndexScan {
     op: ScanOperator,

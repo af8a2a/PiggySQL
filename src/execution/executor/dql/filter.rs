@@ -6,7 +6,7 @@ use crate::storage::Transaction;
 
 use crate::types::value::DataValue;
 
-use std::cell::RefCell;
+
 
 pub struct Filter {
     predicate: ScalarExpression,
