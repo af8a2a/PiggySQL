@@ -231,6 +231,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
         Ok(Some(tuples))
     }
 }
+///由于设计问题,limit,offset等在executor层起作用,而不直接影响scan,我们可能再也不需要这些参数了
 pub struct MVCCIndexIter<'a, E: StorageEngine> {
     offset: usize,
     limit: Option<usize>,

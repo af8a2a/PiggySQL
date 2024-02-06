@@ -1,13 +1,18 @@
-# PiggySQL - a relational database for l purpose
+# PiggySQL - a relational database 
 - DDL
   - [x] Create
     - [x] Create Table
+    - [x] Create Index
   - [x] Drop
+    - [x] Drop Table
+    - [x] Drop Index
   - [x] Alter
+    - [x] Add Column
+    - [x] Drop Column
 - DQL
   - [x] Select
   - [x] Where
-  - [ ] Distinct
+  - [x] Distinct
   - [x] Aggregation: Count / Sum / Avg / Min / Max
   - [x] Subquery
   - [x] Join: Left Outer / Right Outer / Full Outer / Inner / Cross
@@ -15,10 +20,17 @@
   - [x] Having
   - [x] Order By
   - [x] Limit
+  - [x] Explain
+  - [x] Join: Inner/Left/Right
+  - [x] Alias
+  - [x] SubQuery(from)
 - DML
   - [x] Insert
   - [x] Update
   - [x] Delete
+- IndexType
+  - [x] Primary Key
+  - [x] Unique Key
 - Concurrency Control
   - [x] Transaction
     - [x] Begin
@@ -28,11 +40,13 @@
     - [x] Snapshot Isolation
     - [ ] Serializable Snapshot Isolation
   - [x] Multi-Version Concurrency Control  
+    - [x] MVOCC
 - Optimization
-  - [x] Predicate Pushdown
-  - [x] ConstFolder
-  - [x] Combine Filter
-  - [x] Coloumn Pruning
+  - [x] RBO
+    - [x] Predicate Pushdown
+    - [x] ConstFolder
+    - [x] Combine Filter
+    - [x] Coloumn Pruning
 - Execution
   - [x] Volcano
 
