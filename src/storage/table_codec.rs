@@ -65,7 +65,7 @@ impl TableCodec {
 
         (op(BOUND_MIN_TAG), op(BOUND_MAX_TAG))
     }
-
+    ///索引元信息
     pub fn index_meta_bound(table_name: &str) -> (Vec<u8>, Vec<u8>) {
         let op = |bound_id| {
             let mut key_prefix = Self::key_prefix(CodecType::IndexMeta, table_name);
@@ -76,7 +76,7 @@ impl TableCodec {
 
         (op(BOUND_MIN_TAG), op(BOUND_MAX_TAG))
     }
-
+    ///索引
     pub fn index_bound(table_name: &str, index_id: &IndexId) -> (Vec<u8>, Vec<u8>) {
         let op = |bound_id| {
             let mut key_prefix = Self::key_prefix(CodecType::Index, table_name);

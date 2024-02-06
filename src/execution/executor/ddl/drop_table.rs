@@ -2,6 +2,7 @@ use crate::execution::executor::{BoxedExecutor, Executor};
 
 use crate::planner::operator::drop_table::DropTableOperator;
 use crate::storage::Transaction;
+use crate::types::tuple_builder::TupleBuilder;
 
 use std::cell::RefCell;
 
@@ -22,7 +23,11 @@ impl<T: Transaction> Executor<T> for DropTable {
             if_exists,
         } = self.op;
 
-        transaction.drop_table(&table_name, if_exists)?;
-        Ok(vec![])
+        transaction.drop_table(&table_name.clone(), if_exists)?;
+        let tuple_builder = TupleBuilder::new_result();
+        let tuple =
+            tuple_builder.push_result("DROP TABLE SUCCESS", format!("{}", table_name).as_str())?;
+
+        Ok(vec![tuple])
     }
 }

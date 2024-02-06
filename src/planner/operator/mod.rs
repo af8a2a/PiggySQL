@@ -1,17 +1,18 @@
 use itertools::Itertools;
 
+use self::{
+    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_index::DropIndexOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
+};
 use crate::catalog::ColumnRef;
 use std::fmt;
 use std::fmt::Formatter;
-use self::{
-    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
-};
 
 pub mod aggregate;
 pub mod alter_table;
 pub mod create_index;
 pub mod create_table;
 pub mod delete;
+pub mod drop_index;
 pub mod drop_table;
 pub mod filter;
 pub mod insert;
@@ -45,7 +46,8 @@ pub enum Operator {
     DropColumn(DropColumnOperator),
     CreateTable(CreateTableOperator),
     DropTable(DropTableOperator),
-    CreateIndex(CreateIndexOperator)
+    CreateIndex(CreateIndexOperator),
+    DropIndex(DropIndexOperator),
 }
 impl Operator {
     pub fn referenced_columns(&self, only_column_ref: bool) -> Vec<ColumnRef> {
@@ -94,7 +96,6 @@ impl Operator {
     }
 }
 
-
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
@@ -115,7 +116,8 @@ impl fmt::Display for Operator {
             Operator::CreateTable(op) => write!(f, "{}", op),
             Operator::DropTable(op) => write!(f, "{}", op),
             Operator::Delete(op) => write!(f, "{}", op),
-            Operator::CreateIndex(_) => todo!(),
+            Operator::CreateIndex(op) => write!(f, "{}", op),
+            Operator::DropIndex(op) => write!(f, "{}", op),
         }
     }
 }

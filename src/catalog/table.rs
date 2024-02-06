@@ -4,7 +4,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 
 use crate::catalog::CatalogError;
-use crate::types::index::{IndexMeta, IndexMetaRef};
+use crate::types::index::{IndexId, IndexMeta, IndexMetaRef};
 use crate::types::{ColumnId, LogicalType};
 
 use super::column::{ColumnCatalog, ColumnRef};
@@ -42,14 +42,13 @@ impl TableCatalog {
         let id = self.column_idxs.get(name)?;
         self.columns.get(id)
     }
-    
+
     pub(crate) fn types(&self) -> Vec<LogicalType> {
         self.columns
             .iter()
             .map(|(_, column)| *column.datatype())
             .collect_vec()
     }
-
 
     pub(crate) fn contains_column(&self, name: &str) -> bool {
         self.column_idxs.contains_key(name)
@@ -62,7 +61,6 @@ impl TableCatalog {
     pub(crate) fn all_columns(&self) -> Vec<ColumnRef> {
         self.columns.values().map(Arc::clone).collect()
     }
-
 
     /// Add a column to the table catalog.
     pub(crate) fn add_column(&mut self, mut col: ColumnCatalog) -> Result<ColumnId, CatalogError> {
@@ -99,7 +97,20 @@ impl TableCatalog {
 
         &self.indexes[index_id]
     }
-
+    pub(crate) fn get_index_by_name(
+        &mut self,
+        name: IndexName,
+    ) -> Result<IndexId, CatalogError> {
+        // let index_id = self.indexes.len();
+        let pos = self
+            .indexes
+            .iter()
+            .find_position(|idx| idx.name ==format!("{}_{}","uk",name.to_string()));
+        match pos {
+            Some(pos) => Ok(self.indexes[pos.0].id),
+            None => return Err(CatalogError::NotFound("index", name.to_string())),
+        }
+    }
     pub(crate) fn new(
         name: TableName,
         columns: Vec<ColumnCatalog>,

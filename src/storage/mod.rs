@@ -12,7 +12,7 @@ use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::storage::table_codec::TableCodec;
 use crate::types::errors::TypeError;
-use crate::types::index::{Index, IndexMetaRef};
+use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
@@ -120,6 +120,7 @@ pub trait Transaction: Sync + Send + 'static {
         &mut self,
         table_name: TableName,
         index_name: IndexName,
+        if_not_exists: bool,
     ) -> Result<(), StorageError>;
 }
 
@@ -573,12 +574,14 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
         let mut table_catalog = TableCatalog::new(table_name.clone(), columns)?;
 
-        Self::create_index_meta_for_table(&mut self.tx, &mut table_catalog)?;
-
+        Self::create_primary_key(&mut self.tx, &mut table_catalog)?;
+        Self::create_index(&mut self.tx, &mut table_catalog, None)?;
         for column in table_catalog.columns.values() {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
         }
+        // let indexs=Self::index_meta_collect(&table_name, &self.tx);
+        // println!("{:#?}", indexs);
 
         Ok(table_name)
     }
@@ -604,11 +607,12 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
         Ok(())
     }
-
+    ///删除一个表内所有数据
     fn drop_data(&mut self, table_name: &str) -> Result<(), StorageError> {
+        //删除元组数据
         let (tuple_min, tuple_max) = TableCodec::tuple_bound(table_name);
         Self::_drop_data(&mut self.tx, &tuple_min, &tuple_max)?;
-
+        //删除关联索引数据
         let (index_min, index_max) = TableCodec::all_index_bound(table_name);
         Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
 
@@ -618,7 +622,11 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     fn table(&self, table_name: TableName) -> Option<TableCatalog> {
         // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
         let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
-        let indexes = Self::index_meta_collect(&table_name, &self.tx)?;
+        let indexes = Self::index_meta_collect(&table_name, &self.tx)?
+            .into_iter()
+            .map(Arc::new)
+            .collect_vec();
+        // println!("{:#?}", indexes);
         match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
             Ok(table) => Some(table),
             Err(_) => None,
@@ -647,18 +655,19 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         index_name: IndexName,
         column_name: &str,
     ) -> Result<(), StorageError> {
-        let table = self.table(table_name);
-        if let Some(mut table) = table {
-            //todo error handling
-            let column_id = table
-                .get_column_id_by_name(column_name)
-                .expect("column not found");
-
-            table.add_index_meta(index_name.to_string(), vec![column_id], true, false);
-
-            //update index meta
-            Self::create_index_meta_for_table(&mut self.tx, &mut table)?;
+        //todo error handling
+        let indexs = Self::index_meta_collect(&table_name, &self.tx).unwrap_or_default();
+        let indexs = indexs.into_iter().map(Arc::new).collect_vec();
+        let mut cols = Self::column_collect(table_name.clone(), &self.tx)?;
+        let col = cols.iter_mut().find(|col| col.name() == column_name);
+        if let Some(col) = col {
+            col.desc.is_unique = true;
+            let mut table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
+            Self::create_index(&mut self.tx, &mut table, Some(index_name.to_string()))?;
         }
+        // let indexs=Self::index_meta_collect(&table_name, &self.tx);
+        // println!("{:#?}", indexs);
+
         Ok(())
     }
 
@@ -666,42 +675,110 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         &mut self,
         table_name: TableName,
         index_name: IndexName,
+        if_exists: bool,
     ) -> Result<(), StorageError> {
-        let table = self.table(table_name);
-        if let Some(mut table) = table {
-            table
-                .indexes
-                .retain(|idx| idx.name != index_name.to_string());
-            //update index meta
-            Self::create_index_meta_for_table(&mut self.tx, &mut table)?;
+        //check index exists
+        //operator in copy temp data
+        let mut indexs = Self::index_meta_collect(&table_name, &self.tx).unwrap();
+        let (i, _) = indexs
+            .iter()
+            .find_position(|meta| meta.name == format!("{}_{}", "uk", index_name.to_string()))
+            .unwrap();
+        let item = indexs.remove(i);
+        let mut cols = Self::column_collect(table_name.clone(), &self.tx).unwrap();
+        let indexs = indexs.into_iter().map(Arc::new).collect_vec();
+        cols.get_mut(item.column_ids[0] as usize)
+            .and_then(|col| Some(col.desc.is_unique = false));
+        //更新索引元数据
+        let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(&table_name);
+        Self::_drop_data(&mut self.tx, &index_meta_min, &index_meta_max)?;
+        for meta in indexs.iter() {
+            let (key, value) = TableCodec::encode_index_meta(&table_name, &meta)?;
+            self.tx.set(&key, value.to_vec())?;
         }
+        //删除索引数据
+        let (index_min, index_max) = TableCodec::index_bound(&table_name, &item.id);
+        Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
+
+
+        let table = TableCatalog::new_with_indexes(table_name, cols, indexs)?;
+        Self::update_table_meta(&mut self.tx, table)?;
+
         Ok(())
     }
 }
 
 impl<E: StorageEngine> MVCCTransaction<E> {
-    fn create_index_meta_for_table(
+    fn update_table_meta(
+        tx: &mvcc::MVCCTransaction<E>,
+        table: TableCatalog,
+    ) -> Result<(), StorageError> {
+        for column in table.columns.values() {
+            let (key, value) = TableCodec::encode_column(&table.name, column)?;
+            tx.set(&key, value.to_vec())?;
+        }
+        Ok(())
+    }
+
+    fn create_primary_key(
         tx: &mut mvcc::MVCCTransaction<E>,
         table: &mut TableCatalog,
+    ) -> Result<(), StorageError> {
+        let table_name = table.name.clone();
+
+        let index_column = table
+            .all_columns()
+            .into_iter()
+            .filter(|col| col.desc.is_primary)
+            .collect_vec();
+
+        for col in index_column {
+            // FIXME: composite indexes may exist on future
+            let prefix = "pk";
+            if let Some(col_id) = col.id() {
+                let meta_ref = table.add_index_meta(
+                    format!("{}_{}", prefix, col.name()),
+                    vec![col_id],
+                    col.desc.is_unique,
+                    col.desc.is_primary,
+                );
+                // println!("{:#?}", meta_ref);
+
+                let (key, value) = TableCodec::encode_index_meta(&table_name, meta_ref)?;
+
+                tx.set(&key, value.to_vec())?;
+            }
+        }
+        Ok(())
+    }
+
+    fn create_index(
+        tx: &mut mvcc::MVCCTransaction<E>,
+        table: &mut TableCatalog,
+        index_name: Option<String>,
     ) -> Result<(), StorageError> {
         let table_name = table.name.clone();
 
         for col in table
             .all_columns()
             .into_iter()
-            .filter(|col| col.desc.is_index())
+            .filter(|col| col.desc.is_unique)
         {
-            let is_primary = col.desc.is_primary;
+            let mut name = col.name().to_string();
+            if let Some(index_name) = &index_name {
+                name = index_name.clone();
+            }
             // FIXME: composite indexes may exist on future
-            let prefix = if is_primary { "pk" } else { "uk" };
-
+            let prefix = "uk";
             if let Some(col_id) = col.id() {
                 let meta_ref = table.add_index_meta(
-                    format!("{}_{}", prefix, col.name()),
+                    format!("{}_{}", prefix, name),
                     vec![col_id],
                     col.desc.is_unique,
-                    is_primary,
+                    col.desc.is_primary,
                 );
+                // println!("meta_ref:{:#?}", meta_ref);
+
                 let (key, value) = TableCodec::encode_index_meta(&table_name, meta_ref)?;
 
                 tx.set(&key, value.to_vec())?;
@@ -728,7 +805,8 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
         Ok(())
     }
-    fn index_meta_collect(name: &str, tx: &mvcc::MVCCTransaction<E>) -> Option<Vec<IndexMetaRef>> {
+    ///获取一个表关联的所有索引
+    fn index_meta_collect(name: &str, tx: &mvcc::MVCCTransaction<E>) -> Option<Vec<IndexMeta>> {
         let (index_min, index_max) = TableCodec::index_meta_bound(name);
         let mut index_metas = vec![];
         let mut index_scan = tx
@@ -738,13 +816,13 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
         while let Ok(Some((_, value_option))) = index_iter.next().transpose() {
             if let Ok(index_meta) = TableCodec::decode_index_meta(&value_option) {
-                index_metas.push(Arc::new(index_meta));
+                index_metas.push(index_meta);
             }
         }
-
+        //  println!("{:#?}", index_metas);
         Some(index_metas)
     }
-
+    ///获取一个表关联的列信息
     fn column_collect(
         table_name: TableName,
         tx: &mvcc::MVCCTransaction<E>,

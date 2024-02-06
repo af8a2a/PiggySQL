@@ -13,7 +13,7 @@ use crate::{
 
 use self::{
     ddl::{
-        alter_table::{AddColumn, DropColumn}, create_index::CreateIndex, create_table::CreateTable, drop_table::DropTable
+        alter_table::{AddColumn, DropColumn}, create_index::CreateIndex, create_table::CreateTable, drop_index::DropIndex, drop_table::DropTable
     },
     dml::{delete::Delete, insert::Insert, update::Update},
     dql::{
@@ -114,5 +114,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExe
             Explain::from(input).execute(transaction)
 
         },
+        Operator::DropIndex(op) => DropIndex::from(op).execute(transaction),
     }
 }

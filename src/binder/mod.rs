@@ -5,12 +5,13 @@ mod create_table;
 mod delete;
 mod distinct;
 mod drop_table;
+mod drop_index;
+mod explain;
 pub mod expr;
 mod insert;
 mod select;
 mod show;
 mod update;
-mod explain;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
 use std::collections::BTreeMap;
@@ -135,6 +136,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 ..
             } => match object_type {
                 ObjectType::Table => self.bind_drop_table(&names[0], if_exists)?,
+                ObjectType::Index=>self.bind_drop_index(&names[0], if_exists)?,
                 _ => todo!(),
             },
             Statement::Insert {
@@ -173,10 +175,9 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     self.bind_delete(table, selection)?
                 }
             }
-            Statement::Explain { statement,.. } => {
+            Statement::Explain { statement, .. } => {
                 let plan = self.bind(statement)?;
                 self.bind_explain(plan)?
-
             }
             Statement::CreateIndex {
                 name,
@@ -242,4 +243,6 @@ pub enum BindError {
     TypeError(#[from] TypeError),
     #[error("copy error: {0}")]
     UnsupportedCopySource(String),
+    #[error("argument error: {0}")]
+    ArgumentError(String),
 }

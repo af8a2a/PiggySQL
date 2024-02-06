@@ -19,7 +19,7 @@
   - [x] Insert
   - [x] Update
   - [x] Delete
--Concurrency Control
+- Concurrency Control
   - [x] Transaction
     - [x] Begin
     - [x] Commit

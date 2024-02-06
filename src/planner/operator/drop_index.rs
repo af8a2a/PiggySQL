@@ -1,20 +1,21 @@
-use std::fmt::{self, Formatter};
+use core::fmt;
+use std::fmt::Formatter;
 
 use crate::catalog::{IndexName, TableName};
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct CreateIndexOperator {
+pub struct DropIndexOperator {
     pub table_name: TableName,
     pub index_name: IndexName,
-    pub col_name: String,
+    pub if_exists: bool,
 }
 
-impl fmt::Display for CreateIndexOperator {
+impl fmt::Display for DropIndexOperator {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "Create Index {} on {}.{}",
-            self.index_name, self.table_name, self.col_name
+            "Drop Index {} of {} If Not Exists: {}",
+            self.index_name, self.table_name, self.if_exists
         )?;
         Ok(())
     }

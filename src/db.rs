@@ -304,11 +304,16 @@ mod test {
 
         let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
         tx_1.run("create index test_index on t1 (b)")?;
-        let tuples=tx_1.run("explain select * from t1 where a>1")?;
+        let tuples=tx_1.run("explain select * from t1 where b>1")?;
         for tuple in tuples{
             println!("{}",tuple);
         }
-        
+        tx_1.run("drop index t1.test_index")?;
+        let tuples=tx_1.run("explain select * from t1 where b>1")?;
+        for tuple in tuples{
+            println!("{}",tuple);
+        }
+
         // assert_eq!(
         //     tuples_1[0].values,
         //     vec![
