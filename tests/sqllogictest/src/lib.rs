@@ -4,11 +4,10 @@ use piggysql::{
     db::{Database, DatabaseError},
     storage::{
         engine::{memory::Memory, StorageEngine},
-        mvcc::MVCC,
         MVCCLayer,
     },
 };
-use sqllogictest::{DBOutput, DefaultColumnType};
+use sqllogictest::{AsyncDB, DBOutput, DefaultColumnType};
 
 pub struct Mock<S: StorageEngine> {
     pub db: Database<MVCCLayer<S>>,
@@ -21,15 +20,15 @@ impl Mock<Memory> {
         }
     }
 }
-
-impl sqllogictest::DB for Mock<Memory> {
+#[async_trait::async_trait]
+impl AsyncDB for Mock<Memory> {
     type Error = DatabaseError;
 
     type ColumnType = DefaultColumnType;
 
-    fn run(&mut self, sql: &str) -> Result<sqllogictest::DBOutput<Self::ColumnType>, Self::Error> {
+    async fn run(&mut self, sql: &str) -> Result<sqllogictest::DBOutput<Self::ColumnType>, Self::Error> {
         let start = Instant::now();
-        let tuples = self.db.run(sql)?;
+        let tuples = self.db.run(sql).await?;
         println!("|— Input SQL:");
         println!(" |— {}", sql);
         println!(" |— Time consuming: {:?}", start.elapsed());

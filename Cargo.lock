@@ -2618,9 +2618,12 @@ dependencies = [
 name = "sqllogictest-test"
 version = "0.4.0"
 dependencies = [
+ "async-trait",
  "glob",
  "piggysql",
  "sqllogictest",
+ "tokio",
+ "tokio-test",
 ]
 
 [[package]]

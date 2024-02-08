@@ -2,8 +2,9 @@ use std::path::Path;
 
 use sqllogictest::Runner;
 use sqllogictest_test::Mock;
+#[tokio::main]
 
-fn main() {
+async fn main() {
     const SLT_PATTERN: &str = "tests/slt/**/*.slt";
 
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
@@ -22,7 +23,7 @@ fn main() {
         let db = Mock::new();
         let mut tester = Runner::new(db);
 
-        if let Err(err) = tester.run_file(filepath) {
+        if let Err(err) = tester.run_file_async(filepath).await {
             
             panic!("test error: {}", err);
         }
