@@ -33,6 +33,8 @@ crossbeam = "0.8"
 crossbeam-skiplist = "0.1"
 rand = "~0.8.3"
 sled="0.34.7"
+anyhow = "1.0.71"
+
 [dev-dependencies]
 cargo-tarpaulin = "0.27.1"
 tokio-test = "0.4.2"
@@ -42,8 +44,13 @@ paste = "^1.0"
 rstest = "0.17"
 tempfile = "3.0.7"
 tempdir = "~0.3.7"
+criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [workspace]
 members = [
   "tests/sqllogictest",
 ]
+
+[[bench]]
+name = "my_benchmark"
+harness = false

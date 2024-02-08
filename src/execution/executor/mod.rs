@@ -62,10 +62,10 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExe
         }
         Operator::Scan(op) => {
             if op.index_by.is_some() {
-                println!("build index scan");
+                // println!("build index scan");
                 IndexScan::from(op).execute(transaction)
             } else {
-                println!("build seq scan");
+                // println!("build seq scan");
 
                 SeqScan::from(op).execute(transaction)
             }
