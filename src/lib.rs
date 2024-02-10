@@ -10,3 +10,4 @@ pub mod planner;
 pub mod catalog;
 pub mod execution;
 pub mod db;
+pub mod server;

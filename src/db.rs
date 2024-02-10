@@ -33,7 +33,7 @@ impl<S: Storage> Database<S> {
         Ok(tuples?)
     }
 
-    pub fn new_transaction(&self) -> Result<DBTransaction<S>, DatabaseError> {
+    pub async fn new_transaction(&self) -> Result<DBTransaction<S>, DatabaseError> {
         let transaction = self.storage.transaction()?;
 
         Ok(DBTransaction { inner: transaction })
@@ -65,28 +65,28 @@ pub struct DBTransaction<S: Storage> {
 }
 
 impl<S: Storage> DBTransaction<S> {
-    pub fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+    pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
         let stream = Database::<S>::_run(sql, &mut self.inner)?;
         Ok(stream?)
     }
-    pub fn run_with_stmt(&mut self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
-        let mut binder = Binder::new(BinderContext::new(&self.inner));
-        let source_plan = binder.bind(&stmt)?;
-        // println!("source_plan plan: {:#?}", source_plan);
-        let best_plan = apply_optimization(source_plan)?;
-        // println!("best_plan plan: {:#?}", best_plan);
+    // pub fn run_with_stmt(&mut self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
+    //     let mut binder = Binder::new(BinderContext::new(&self.inner));
+    //     let source_plan = binder.bind(&stmt)?;
+    //     // println!("source_plan plan: {:#?}", source_plan);
+    //     let best_plan = apply_optimization(source_plan)?;
+    //     // println!("best_plan plan: {:#?}", best_plan);
 
-        let result = build(best_plan, &mut self.inner);
+    //     let result = build(best_plan, &mut self.inner);
 
-        // let stream = Database::<S>::_run(sql, &self.inner)?;
-        Ok(result?)
-    }
-    pub fn commit(self) -> Result<(), DatabaseError> {
+    //     // let stream = Database::<S>::_run(sql, &self.inner)?;
+    //     Ok(result?)
+    // }
+    pub async fn commit(self) -> Result<(), DatabaseError> {
         self.inner.commit()?;
 
         Ok(())
     }
-    pub fn rollback(self) -> Result<(), DatabaseError> {
+    pub async fn rollback(self) -> Result<(), DatabaseError> {
         self.inner.rollback()?;
 
         Ok(())
@@ -129,6 +129,11 @@ pub enum DatabaseError {
         #[from]
         OptimizerError,
     ),
+    #[error("transaction already exists")]
+    TransactionAlreadyExists,
+    #[error("no transaction begin")]
+    NoTransactionBegin,
+
 }
 
 #[cfg(test)]
@@ -170,16 +175,16 @@ mod test {
     async fn test_transaction_sql() -> Result<(), DatabaseError> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
-        let mut tx_1 = database.new_transaction()?;
+        let mut tx_1 = database.new_transaction().await?;
 
-        let _ = tx_1.run("create table t1 (a int primary key, b int)")?;
-        tx_1.run("create index test_index on t1 (b)")?;
-        let tuples = tx_1.run("explain select * from t1 where b>1")?;
+        let _ = tx_1.run("create table t1 (a int primary key, b int)").await?;
+        tx_1.run("create index test_index on t1 (b)").await?;
+        let tuples = tx_1.run("explain select * from t1 where b>1").await?;
         for tuple in tuples {
             println!("{}", tuple);
         }
-        tx_1.run("drop index t1.test_index")?;
-        let tuples = tx_1.run("explain select * from t1 where b>1")?;
+        tx_1.run("drop index t1.test_index").await?;
+        let tuples = tx_1.run("explain select * from t1 where b>1").await?;
         for tuple in tuples {
             println!("{}", tuple);
         }
