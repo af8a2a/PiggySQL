@@ -175,35 +175,34 @@ mod test {
     async fn test_transaction_sql() -> Result<(), DatabaseError> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
+
+        database.run("create table t1 (a int primary key, b int)").await?;
         let mut tx_1 = database.new_transaction().await?;
+        let _ = tx_1.run("insert into t1 values (0,0),(1,1)").await?;
 
-        let _ = tx_1.run("create table t1 (a int primary key, b int)").await?;
-        tx_1.run("create index test_index on t1 (b)").await?;
-        let tuples = tx_1.run("explain select * from t1 where b>1").await?;
-        for tuple in tuples {
-            println!("{}", tuple);
-        }
-        tx_1.run("drop index t1.test_index").await?;
-        let tuples = tx_1.run("explain select * from t1 where b>1").await?;
-        for tuple in tuples {
-            println!("{}", tuple);
-        }
+        let mut tx_2 = database.new_transaction().await?;
 
-        // assert_eq!(
-        //     tuples_1[0].values,
-        //     vec![
-        //         Arc::new(DataValue::Int32(Some(0))),
-        //         Arc::new(DataValue::Int32(Some(0)))
-        //     ]
-        // );
-        // assert_eq!(
-        //     tuples_1[1].values,
-        //     vec![
-        //         Arc::new(DataValue::Int32(Some(1))),
-        //         Arc::new(DataValue::Int32(Some(1)))
-        //     ]
-        // );
-        // tx_1.commit()?;
+        let tuples_1 = tx_1.run("select * from t1").await?;
+        assert_eq!(
+            tuples_1[0].values,
+            vec![
+                Arc::new(DataValue::Int32(Some(0))),
+                Arc::new(DataValue::Int32(Some(0)))
+            ]
+        );
+        assert_eq!(
+            tuples_1[1].values,
+            vec![
+                Arc::new(DataValue::Int32(Some(1))),
+                Arc::new(DataValue::Int32(Some(1)))
+            ]
+        );
+        let tuples_2 = tx_2.run("select * from t1").await?;
+        assert_eq!(tuples_2,vec![]);
+        tx_1.rollback().await?;
+        let tuples_2 = tx_2.run("select * from t1").await?;
+
+        assert_eq!(tuples_2,vec![]);
 
         Ok(())
     }

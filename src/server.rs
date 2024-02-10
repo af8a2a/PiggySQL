@@ -1,15 +1,25 @@
 use std::{io, sync::Arc};
 
 use async_trait::async_trait;
+use clap::Parser;
 use futures::stream;
-use pgwire::{api::{auth::{noop::NoopStartupHandler, StartupHandler}, query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler}, results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response, Tag}, ClientInfo, MakeHandler, StatelessMakeHandler, Type}, error::{ErrorInfo, PgWireError, PgWireResult}, tokio::process_socket};
+use pgwire::{
+    api::{
+        auth::{noop::NoopStartupHandler, StartupHandler},
+        query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler},
+        results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response, Tag},
+        ClientInfo, MakeHandler, StatelessMakeHandler, Type,
+    },
+    error::{ErrorInfo, PgWireError, PgWireResult},
+    tokio::process_socket,
+};
 use tokio::{net::TcpListener, sync::Mutex};
 
 use crate::{
     db::{DBTransaction, Database, DatabaseError},
-    storage::{engine::memory::Memory, MVCCLayer}, types::{tuple::Tuple, LogicalType},
+    storage::{engine::memory::Memory, MVCCLayer},
+    types::{tuple::Tuple, LogicalType},
 };
-
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -18,9 +28,7 @@ pub struct Args {
     pub ip: String,
     #[clap(long, default_value = "5432")]
     pub port: u16,
-
 }
-
 
 pub struct Session {
     inner: Arc<Database<MVCCLayer<Memory>>>,
@@ -31,9 +39,6 @@ pub struct Server {
     inner: Arc<Database<MVCCLayer<Memory>>>,
 }
 
-
-
-
 impl MakeHandler for Server {
     type Handler = Arc<Session>;
 
@@ -43,7 +48,6 @@ impl MakeHandler for Server {
             tx: Mutex::new(None),
         })
     }
-
 }
 #[async_trait]
 impl SimpleQueryHandler for Session {
@@ -117,15 +121,88 @@ impl SimpleQueryHandler for Session {
     }
 }
 
-
-
 impl Server {
-    pub async fn new() -> Result<Server, DatabaseError> {
+    async fn new() -> Result<Server, DatabaseError> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
         Ok(Server {
             inner: Arc::new(database),
         })
+    }
+    pub async fn run() {
+        let args = Args::parse();
+
+        let backend = Server::new().await.unwrap();
+        let processor = Arc::new(backend);
+        // We have not implemented extended query in this server, use placeholder instead
+        let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
+            PlaceholderExtendedQueryHandler,
+        )));
+        let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
+        let server_addr = format!("{}:{}", args.ip, args.port);
+        let listener = TcpListener::bind(server_addr).await.unwrap();
+
+        tokio::select! {
+            res = server_run(processor, placeholder, authenticator, listener) => {
+                if let Err(err) = res {
+                }
+            }
+            _ = quit() => {}
+        }
+    }
+}
+
+async fn server_run<
+    A: MakeHandler<Handler = Arc<impl StartupHandler + 'static>>,
+    Q: MakeHandler<Handler = Arc<impl SimpleQueryHandler + 'static>>,
+    EQ: MakeHandler<Handler = Arc<impl ExtendedQueryHandler + 'static>>,
+>(
+    processor: Arc<Q>,
+    placeholder: Arc<EQ>,
+    authenticator: Arc<A>,
+    listener: TcpListener,
+) -> io::Result<()> {
+    loop {
+        let incoming_socket = listener.accept().await?;
+        let authenticator_ref = authenticator.make();
+        let processor_ref = processor.make();
+        let placeholder_ref = placeholder.make();
+
+        tokio::spawn(async move {
+            if let Err(err) = process_socket(
+                incoming_socket.0,
+                None,
+                authenticator_ref,
+                processor_ref,
+                placeholder_ref,
+            )
+            .await
+            {
+                {}
+            }
+        });
+    }
+}
+
+async fn quit() -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let mut interrupt =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+        let mut terminate =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        tokio::select! {
+            _ = interrupt.recv() => (),
+            _ = terminate.recv() => (),
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
+    {
+        let mut signal = tokio::signal::windows::ctrl_c()?;
+        let _ = signal.recv().await;
+
+        Ok(())
     }
 }
 
@@ -207,5 +284,3 @@ fn into_pg_type(data_type: &LogicalType) -> PgWireResult<Type> {
         }
     })
 }
-
-
