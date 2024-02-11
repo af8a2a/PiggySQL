@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::expression::ScalarExpression;
 use crate::planner::operator::aggregate::AggregateOperator;
@@ -13,19 +13,19 @@ use super::create_accumulators;
 
 pub struct SimpleAggExecutor {
     pub agg_calls: Vec<ScalarExpression>,
-    pub input: BoxedExecutor,
+    pub input: Source,
 }
 
-impl From<(AggregateOperator, BoxedExecutor)> for SimpleAggExecutor {
+impl From<(AggregateOperator, Source)> for SimpleAggExecutor {
     fn from(
-        (AggregateOperator { agg_calls, .. }, input): (AggregateOperator, BoxedExecutor),
+        (AggregateOperator { agg_calls, .. }, input): (AggregateOperator, Source),
     ) -> Self {
         SimpleAggExecutor { agg_calls, input }
     }
 }
 
 impl<T: Transaction> Executor<T> for SimpleAggExecutor {
-    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> Source {
         let mut accs = create_accumulators(&self.agg_calls);
         let mut columns_option = None;
         let mut tuples = Vec::new();

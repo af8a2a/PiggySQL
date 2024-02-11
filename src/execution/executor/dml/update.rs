@@ -1,5 +1,5 @@
 use crate::catalog::{ColumnCatalog, TableName};
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 use crate::errors::*;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
@@ -11,12 +11,12 @@ use std::sync::Arc;
 
 pub struct Update {
     table_name: TableName,
-    input: BoxedExecutor, //select source for update
+    input: Source, //select source for update
     columns: Vec<Arc<ColumnCatalog>>,
     set_expr: Vec<ScalarExpression>,
 }
 
-impl From<(UpdateOperator, BoxedExecutor)> for Update {
+impl From<(UpdateOperator, Source)> for Update {
     fn from(
         (
             UpdateOperator {
@@ -25,7 +25,7 @@ impl From<(UpdateOperator, BoxedExecutor)> for Update {
                 table_name,
             },
             input,
-        ): (UpdateOperator, BoxedExecutor),
+        ): (UpdateOperator, Source),
     ) -> Self {
         Update {
             table_name,
@@ -37,7 +37,7 @@ impl From<(UpdateOperator, BoxedExecutor)> for Update {
 }
 
 impl<T: Transaction> Executor<T> for Update {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let Update {
             table_name,
             input,

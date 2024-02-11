@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::expression::ScalarExpression;
 use crate::planner::operator::aggregate::AggregateOperator;
@@ -15,10 +15,10 @@ use super::create_accumulators;
 pub struct HashAggExecutor {
     pub agg_calls: Vec<ScalarExpression>,
     pub groupby_exprs: Vec<ScalarExpression>,
-    pub input: BoxedExecutor,
+    pub input: Source,
 }
 
-impl From<(AggregateOperator, BoxedExecutor)> for HashAggExecutor {
+impl From<(AggregateOperator, Source)> for HashAggExecutor {
     fn from(
         (
             AggregateOperator {
@@ -26,7 +26,7 @@ impl From<(AggregateOperator, BoxedExecutor)> for HashAggExecutor {
                 groupby_exprs,
             },
             input,
-        ): (AggregateOperator, BoxedExecutor),
+        ): (AggregateOperator, Source),
     ) -> Self {
         HashAggExecutor {
             agg_calls,
@@ -37,7 +37,7 @@ impl From<(AggregateOperator, BoxedExecutor)> for HashAggExecutor {
 }
 
 impl<T: Transaction> Executor<T> for HashAggExecutor {
-    fn execute<'a>(self, _transaction: &mut T) -> BoxedExecutor {
+    fn execute<'a>(self, _transaction: &mut T) -> Source {
         let mut group_and_agg_columns_option = None;
         let mut group_hash_accs = HashMap::new();
         let mut tuples = Vec::new();

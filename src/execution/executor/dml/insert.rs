@@ -1,5 +1,5 @@
 use crate::catalog::TableName;
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 use crate::errors::*;
 use crate::planner::operator::insert::InsertOperator;
 use crate::storage::Transaction;
@@ -12,11 +12,11 @@ use std::sync::Arc;
 
 pub struct Insert {
     table_name: TableName,
-    input: BoxedExecutor,
+    input: Source,
     is_overwrite: bool,
 }
 
-impl From<(InsertOperator, BoxedExecutor)> for Insert {
+impl From<(InsertOperator, Source)> for Insert {
     fn from(
         (
             InsertOperator {
@@ -24,7 +24,7 @@ impl From<(InsertOperator, BoxedExecutor)> for Insert {
                 is_overwrite,
             },
             input,
-        ): (InsertOperator, BoxedExecutor),
+        ): (InsertOperator, Source),
     ) -> Self {
         Insert {
             table_name,
@@ -35,7 +35,7 @@ impl From<(InsertOperator, BoxedExecutor)> for Insert {
 }
 
 impl<T: Transaction> Executor<T> for Insert {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let Insert {
             table_name,
             input,

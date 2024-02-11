@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::drop_table::DropTableOperator;
 use crate::storage::Transaction;
@@ -17,7 +17,7 @@ impl From<DropTableOperator> for DropTable {
 }
 
 impl<T: Transaction> Executor<T> for DropTable {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let DropTableOperator {
             table_name,
             if_exists,

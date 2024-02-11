@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::create_table::CreateTableOperator;
 use crate::storage::Transaction;
@@ -19,7 +19,7 @@ impl From<CreateTableOperator> for CreateTable {
 }
 
 impl<T: Transaction> Executor<T> for CreateTable {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let CreateTableOperator {
             table_name,
             columns,

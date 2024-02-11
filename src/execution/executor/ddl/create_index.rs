@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::create_index::CreateIndexOperator;
 use crate::storage::Transaction;
@@ -18,7 +18,7 @@ impl From<CreateIndexOperator> for CreateIndex {
 }
 
 impl<T: Transaction> Executor<T> for CreateIndex {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let CreateIndexOperator {
             table_name,
             index_name,

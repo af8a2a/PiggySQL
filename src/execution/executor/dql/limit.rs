@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::limit::LimitOperator;
 use crate::storage::{Transaction};
@@ -11,11 +11,11 @@ use crate::storage::{Transaction};
 pub struct Limit {
     offset: Option<usize>,
     limit: Option<usize>,
-    input: BoxedExecutor,
+    input: Source,
 }
 
-impl From<(LimitOperator, BoxedExecutor)> for Limit {
-    fn from((LimitOperator { offset, limit }, input): (LimitOperator, BoxedExecutor)) -> Self {
+impl From<(LimitOperator, Source)> for Limit {
+    fn from((LimitOperator { offset, limit }, input): (LimitOperator, Source)) -> Self {
         Limit {
             offset,
             limit,
@@ -25,7 +25,7 @@ impl From<(LimitOperator, BoxedExecutor)> for Limit {
 }
 
 impl<T: Transaction> Executor<T> for Limit {
-    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> Source {
         let mut tuples = Vec::new();
         let Limit {
             offset,

@@ -88,7 +88,7 @@ impl LogicalType {
             LogicalType::UBigint => Some(8),
             LogicalType::Float => Some(4),
             LogicalType::Double => Some(8),
-            /// Note: The non-fixed length type's raw_len is None e.g. Varchar
+            // Note: The non-fixed length type's raw_len is None e.g. Varchar
             LogicalType::Varchar(_) => None,
             LogicalType::Date => Some(4),
             LogicalType::DateTime => Some(8),

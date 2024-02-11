@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::expression::ScalarExpression;
 use crate::planner::operator::filter::FilterOperator;
@@ -10,17 +10,17 @@ use crate::types::value::DataValue;
 
 pub struct Filter {
     predicate: ScalarExpression,
-    input: BoxedExecutor,
+    input: Source,
 }
 
-impl From<(FilterOperator, BoxedExecutor)> for Filter {
-    fn from((FilterOperator { predicate, .. }, input): (FilterOperator, BoxedExecutor)) -> Self {
+impl From<(FilterOperator, Source)> for Filter {
+    fn from((FilterOperator { predicate, .. }, input): (FilterOperator, Source)) -> Self {
         Filter { predicate, input }
     }
 }
 
 impl<T: Transaction> Executor<T> for Filter {
-    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> Source {
         let Filter { predicate, input } = self;
         let mut tuples= Vec::new();
 

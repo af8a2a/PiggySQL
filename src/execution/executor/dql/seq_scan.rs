@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
@@ -19,7 +19,7 @@ impl From<ScanOperator> for SeqScan {
 }
 
 impl<T: Transaction> Executor<T> for SeqScan {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let ScanOperator {
             table_name,
             columns,

@@ -2,7 +2,7 @@
 
 use crate::binder::{Binder, BinderContext};
 
-use crate::execution::executor::{build, BoxedExecutor};
+use crate::execution::executor::{build, Source};
 
 use crate::optimizer::apply_optimization;
 use crate::parser;
@@ -45,7 +45,7 @@ impl<S: Storage> Database<S> {
         Ok(DBTransaction { inner: transaction })
     }
 
-    fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<BoxedExecutor> {
+    fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<Source> {
         // parse
         let stmts = parser::parse(sql)?;
         if stmts.is_empty() {

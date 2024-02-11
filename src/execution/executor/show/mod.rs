@@ -6,12 +6,12 @@ use crate::{
     types::{tuple::Tuple,  value::DataValue},
 };
 
-use super::{BoxedExecutor, Executor};
+use super::{Source, Executor};
 
 pub struct ShowTables;
 
 impl<T: Transaction> Executor<T> for ShowTables {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let metas = transaction.show_tables()?;
         let mut tuples = Vec::new();
         for meta in metas {

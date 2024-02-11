@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
@@ -18,7 +18,7 @@ impl From<ScanOperator> for IndexScan {
 }
 
 impl<T: Transaction> Executor<T> for IndexScan {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let ScanOperator {
             table_name,
             columns,
@@ -30,7 +30,10 @@ impl<T: Transaction> Executor<T> for IndexScan {
         let (index_meta, binaries) = index_by.ok_or(DatabaseError::InvalidType)?;
         let mut iter =
             transaction.read_by_index(table_name, columns, index_meta, binaries)?;
-        let tuples = iter.fetch_tuple()?.expect("unwrap tuple error");
-        Ok(tuples)
+        let tuples = iter.fetch_tuple()?;
+        match tuples {
+            Some(tuple) => Ok(tuple),
+            None => Ok(vec![]),
+        }
     }
 }

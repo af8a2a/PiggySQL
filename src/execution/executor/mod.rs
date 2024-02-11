@@ -35,12 +35,12 @@ use self::{
 };
 use crate::errors::*;
 
-pub type BoxedExecutor = Result<Vec<Tuple>>;
+pub type Source = Result<Vec<Tuple>>;
 
 pub trait Executor<T: Transaction> {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor;
+    fn execute(self, transaction: &mut T) -> Source;
 }
-pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExecutor {
+pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
     let LogicalPlan {
         operator,
         mut childrens,

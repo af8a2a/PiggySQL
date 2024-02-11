@@ -47,8 +47,6 @@ impl Rule for RuleImpl {
             RuleImpl::CollapseProject => CollapseProject.pattern(),
             RuleImpl::CombineFilter => CombineFilter.pattern(),
             RuleImpl::SimplifyFilter => SimplifyFilter.pattern(),
-
-            _ => unimplemented!(),
         }
     }
 
@@ -62,8 +60,6 @@ impl Rule for RuleImpl {
             RuleImpl::CollapseProject => CollapseProject.apply(node_id, graph),
             RuleImpl::CombineFilter => CombineFilter.apply(node_id, graph),
             RuleImpl::SimplifyFilter => SimplifyFilter.apply(node_id, graph),
-
-            _ => unimplemented!(),
         }
     }
 }

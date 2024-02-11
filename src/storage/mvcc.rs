@@ -147,20 +147,6 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             },
         })
     }
-    pub fn begin_as_of(engine: Arc<E>, version: Version) -> Result<MVCCTransaction<E>> {
-        let snapshot = engine
-            .get(&Key::TxnActiveSnapshot(version).encode()?)?
-            .expect("fetch snapshot error");
-        let active = deserialize(&snapshot)?;
-        Ok(Self {
-            engine,
-            state: TransactionState {
-                version,
-                read_only: true,
-                active,
-            },
-        })
-    }
     pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
         self.write_version(key, Some(value))
     }
@@ -420,9 +406,6 @@ impl<E: StorageEngine> MVCC<E> {
     }
     pub fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>> {
         MVCCTransaction::begin(self.engine.clone(), read_only)
-    }
-    pub fn begin_as_of(&self, version: Version) -> Result<MVCCTransaction<E>> {
-        MVCCTransaction::begin_as_of(self.engine.clone(), version)
     }
     pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.engine

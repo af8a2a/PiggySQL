@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, DatabaseError};
+use crate::execution::executor::{Source, DatabaseError};
 use crate::planner::operator::alter_table::{AddColumnOperator, DropColumnOperator};
 
 use crate::types::tuple_builder::TupleBuilder;
@@ -11,17 +11,17 @@ use crate::{execution::executor::Executor, storage::Transaction};
 
 pub struct AddColumn {
     op: AddColumnOperator,
-    input: BoxedExecutor,
+    input: Source,
 }
 
-impl From<(AddColumnOperator, BoxedExecutor)> for AddColumn {
-    fn from((op, input): (AddColumnOperator, BoxedExecutor)) -> Self {
+impl From<(AddColumnOperator, Source)> for AddColumn {
+    fn from((op, input): (AddColumnOperator, Source)) -> Self {
         Self { op, input }
     }
 }
 
 impl<T: Transaction> Executor<T> for AddColumn {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let AddColumnOperator {
             table_name,
             column,
@@ -66,17 +66,17 @@ impl<T: Transaction> Executor<T> for AddColumn {
 
 pub struct DropColumn {
     op: DropColumnOperator,
-    input: BoxedExecutor,
+    input: Source,
 }
 
-impl From<(DropColumnOperator, BoxedExecutor)> for DropColumn {
-    fn from((op, input): (DropColumnOperator, BoxedExecutor)) -> Self {
+impl From<(DropColumnOperator, Source)> for DropColumn {
+    fn from((op, input): (DropColumnOperator, Source)) -> Self {
         Self { op, input }
     }
 }
 
 impl<T: Transaction> Executor<T> for DropColumn {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let DropColumnOperator {
             table_name,
             column_name,

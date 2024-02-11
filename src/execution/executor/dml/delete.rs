@@ -1,5 +1,5 @@
 use crate::catalog::TableName;
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::delete::DeleteOperator;
 use crate::storage::Transaction;
@@ -11,17 +11,17 @@ use itertools::Itertools;
 
 pub struct Delete {
     table_name: TableName,
-    input: BoxedExecutor,
+    input: Source,
 }
 
-impl From<(DeleteOperator, BoxedExecutor)> for Delete {
-    fn from((DeleteOperator { table_name }, input): (DeleteOperator, BoxedExecutor)) -> Self {
+impl From<(DeleteOperator, Source)> for Delete {
+    fn from((DeleteOperator { table_name }, input): (DeleteOperator, Source)) -> Self {
         Delete { table_name, input }
     }
 }
 
 impl<T: Transaction> Executor<T> for Delete {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let Delete { table_name, input } = self;
         let option_index_metas = transaction.table(table_name.clone()).map(|table_catalog| {
             table_catalog

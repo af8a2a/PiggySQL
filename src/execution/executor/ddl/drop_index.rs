@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::drop_index::DropIndexOperator;
 use crate::storage::Transaction;
@@ -16,7 +16,7 @@ impl From<DropIndexOperator> for DropIndex {
 }
 
 impl<T: Transaction> Executor<T> for DropIndex {
-    fn execute(self, transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, transaction: &mut T) -> Source {
         let DropIndexOperator {
             index_name,
             table_name,

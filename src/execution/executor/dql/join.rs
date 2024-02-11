@@ -1,7 +1,7 @@
 use crate::planner::operator::join::JoinType;
 
 use crate::catalog::{ColumnCatalog, ColumnRef};
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::expression::ScalarExpression;
 use crate::planner::operator::join::{JoinCondition, JoinOperator};
@@ -17,16 +17,16 @@ use std::sync::Arc;
 pub struct HashJoin {
     on: JoinCondition,
     ty: JoinType,
-    left_input: BoxedExecutor,
-    right_input: BoxedExecutor,
+    left_input: Source,
+    right_input: Source,
 }
 
-impl From<(JoinOperator, BoxedExecutor, BoxedExecutor)> for HashJoin {
+impl From<(JoinOperator, Source, Source)> for HashJoin {
     fn from(
         (JoinOperator { on, join_type }, left_input, right_input): (
             JoinOperator,
-            BoxedExecutor,
-            BoxedExecutor,
+            Source,
+            Source,
         ),
     ) -> Self {
         HashJoin {
@@ -39,13 +39,13 @@ impl From<(JoinOperator, BoxedExecutor, BoxedExecutor)> for HashJoin {
 }
 
 impl<T: Transaction> Executor<T> for HashJoin {
-    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> Source {
         self._execute()
     }
 }
 
 impl HashJoin {
-    pub fn _execute(self) -> BoxedExecutor {
+    pub fn _execute(self) -> Source {
         let mut tuples = Vec::new();
         let HashJoin {
             on,

@@ -1,4 +1,4 @@
-use crate::execution::executor::{BoxedExecutor, Executor};
+use crate::execution::executor::{Source, Executor};
 
 use crate::planner::operator::sort::{SortField, SortOperator};
 use crate::storage::Transaction;
@@ -10,11 +10,11 @@ use std::cmp::Ordering;
 pub struct Sort {
     sort_fields: Vec<SortField>,
     limit: Option<usize>,
-    input: BoxedExecutor,
+    input: Source,
 }
 
-impl From<(SortOperator, BoxedExecutor)> for Sort {
-    fn from((SortOperator { sort_fields, limit }, input): (SortOperator, BoxedExecutor)) -> Self {
+impl From<(SortOperator, Source)> for Sort {
+    fn from((SortOperator { sort_fields, limit }, input): (SortOperator, Source)) -> Self {
         Sort {
             sort_fields,
             limit,
@@ -24,7 +24,7 @@ impl From<(SortOperator, BoxedExecutor)> for Sort {
 }
 
 impl<T: Transaction> Executor<T> for Sort {
-    fn execute(self, _transaction: &mut T) -> BoxedExecutor {
+    fn execute(self, _transaction: &mut T) -> Source {
         let Sort {
             sort_fields,
             limit,

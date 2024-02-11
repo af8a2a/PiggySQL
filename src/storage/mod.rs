@@ -17,7 +17,6 @@ use crate::types::value::ValueRef;
 use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
 use std::mem;
-use std::ops::SubAssign;
 use std::sync::Arc;
 
 use self::engine::memory::Memory;
@@ -149,9 +148,8 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
                     &self.projection,
                     TableCodec::decode_tuple(self.all_columns.clone(), &val),
                 )
-                .expect("projection tuple error")
             })
-            .collect_vec();
+            .collect::<Result<Vec<_>>>()?;
         // println!("scan collect tuple {}", tuples.len());
         Ok(Some(tuples))
     }
@@ -189,7 +187,6 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
             })
             .transpose()
     }
-
 }
 
 impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
@@ -419,7 +416,12 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         }
     }
 
-    fn drop_column(&mut self, table_name: &TableName, column: &str, _if_exists: bool) -> Result<()> {
+    fn drop_column(
+        &mut self,
+        table_name: &TableName,
+        column: &str,
+        _if_exists: bool,
+    ) -> Result<()> {
         if let Some(catalog) = self.table(table_name.clone()) {
             let column = catalog.get_column_by_name(column).unwrap();
 
