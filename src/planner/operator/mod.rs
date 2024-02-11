@@ -36,6 +36,7 @@ pub enum Operator {
     Limit(LimitOperator),
     Values(ValuesOperator),
     Explain,
+    Show,
 
     // DML
     Insert(InsertOperator),
@@ -118,6 +119,7 @@ impl fmt::Display for Operator {
             Operator::Delete(op) => write!(f, "{}", op),
             Operator::CreateIndex(op) => write!(f, "{}", op),
             Operator::DropIndex(op) => write!(f, "{}", op),
+            Operator::Show => write!(f, "Show Tables"),
         }
     }
 }

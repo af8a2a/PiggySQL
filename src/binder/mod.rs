@@ -4,8 +4,8 @@ mod create_index;
 mod create_table;
 mod delete;
 mod distinct;
-mod drop_table;
 mod drop_index;
+mod drop_table;
 mod explain;
 pub mod expr;
 mod insert;
@@ -136,7 +136,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 ..
             } => match object_type {
                 ObjectType::Table => self.bind_drop_table(&names[0], if_exists)?,
-                ObjectType::Index=>self.bind_drop_index(&names[0], if_exists)?,
+                ObjectType::Index => self.bind_drop_index(&names[0], if_exists)?,
                 _ => todo!(),
             },
             Statement::Insert {
@@ -189,7 +189,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 self.bind_create_index(name, table_name, columns)?
             }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,
-            // Statement::ShowTables { .. } => self.bind_show_tables()?,
+            Statement::ShowTables { .. } => self.bind_show_tables()?,
             _ => return Err(BindError::UnsupportedStmt(stmt.to_string())),
         };
         Ok(plan)

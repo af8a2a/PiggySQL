@@ -31,10 +31,6 @@ impl<T: Transaction> Executor<T> for IndexScan {
         let mut iter =
             transaction.read_by_index(table_name, limit, columns, index_meta, binaries)?;
         let tuples = iter.fetch_tuple()?.expect("unwrap tuple error");
-        // while let Some(tuple) = iter.fetch_tuple()? {
-        //     tuples.push(tuple);
-        //     // yield tuple;
-        // }
         Ok(tuples)
     }
 }

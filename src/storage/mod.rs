@@ -5,7 +5,6 @@ mod table_codec;
 
 use itertools::Itertools;
 
-
 use crate::catalog::{CatalogError, ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
 use crate::expression::simplify::ConstantBinary;
@@ -145,11 +144,6 @@ pub(crate) fn tuple_projection(
         values.push(expr.eval(&tuple)?);
         columns.push(expr.output_columns());
     }
-
-    // if let Some(num) = limit {
-    //     num.sub_assign(1);
-    // }
-
     Ok(Tuple {
         id: tuple.id,
         columns,
@@ -203,16 +197,6 @@ pub struct MVCCIter<'a, E: StorageEngine> {
 impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>, StorageError> {
         let iter = self.scan.iter();
-        // while self.offset > 0 {
-        //     let _ = iter.next();
-        //     self.offset -= 1;
-        // }
-
-        // if let Some(num) = self.limit {
-        //     if num == 0 {
-        //         return Ok(None);
-        //     }
-        // };
         let tuples = iter
             .filter(|item| item.is_ok())
             .map(|item| {
@@ -635,7 +619,17 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     }
 
     fn show_tables(&self) -> Result<Vec<String>, StorageError> {
-        todo!()
+        let mut metas = vec![];
+        let (min, max) = TableCodec::root_table_bound();
+        let mut scan = self.tx.scan(Bound::Included(min), Bound::Included(max))?;
+        let mut iter = scan.iter();
+        while let Some((_, value)) = iter.next().transpose()? {
+            let meta = TableCodec::decode_root_table(&value)?;
+
+            metas.push(meta);
+        }
+
+        Ok(metas)
     }
 
     fn commit(self) -> Result<(), StorageError> {
@@ -703,7 +697,6 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         //删除索引数据
         let (index_min, index_max) = TableCodec::index_bound(&table_name, &item.id);
         Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
-
 
         let table = TableCatalog::new_with_indexes(table_name, cols, indexs)?;
         Self::update_table_meta(&mut self.tx, table)?;
