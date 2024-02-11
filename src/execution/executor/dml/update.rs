@@ -6,8 +6,7 @@ use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 
-
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 pub struct Update {
@@ -45,63 +44,55 @@ impl<T: Transaction> Executor<T> for Update {
             columns,
             set_expr,
         } = self;
+
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             //避免halloween问题
-            let mut unique_set = HashSet::new();
-            let mut value_set = HashSet::new();
+            let mut update_col = HashSet::new();
 
             for col in columns.iter() {
-                value_set.insert(col.id());
+                update_col.insert(col.id());
             }
-            eprintln!("value_set:{:#?}", value_set);
             //Seqscan遍历元组
             for tuple in input?.iter_mut() {
+                // eprintln!("tuple:{}", tuple);
                 let is_overwrite = true;
 
-                for (i, column) in tuple
+                for (i,column) in tuple
                     .columns
                     .iter()
-                    .filter(|col| value_set.contains(&col.id()))
+                    .filter(|col| update_col.contains(&col.id()))
                     .enumerate()
                 {
-                    if !unique_set.contains(&column.id()) {
-                        eprintln!("update column:{:#?}", column);
-                        let value = set_expr[i].eval(tuple)?;
-                        eprintln!("update value:{:#?}", value);
+                    let value = set_expr[i].eval(tuple)?;
 
-                        unique_set.insert(column.id());
-                        if column.desc.is_primary {
-                            //refuse to update primary key
-                            // let old_key = tuple.id.replace(value.clone()).unwrap();
-                            // transaction.delete(&table_name, old_key)?;
-                            // is_overwrite = false;
-                            return Err(ExecutorError::InternalError("Update Primary key".into()));
-                        }
-                        //更新索引
-                        if column.desc.is_unique && value != tuple.values[i] {
-                            if let Some(index_meta) =
-                                table_catalog.get_unique_index(&column.id().unwrap())
-                            {
-                                let mut index = Index {
-                                    id: index_meta.id,
-                                    column_values: vec![tuple.values[i].clone()],
-                                };
-                                transaction.del_index(&table_name, &index)?;
+                    if column.desc.is_primary {
+                        //refuse to update primary key
+                        return Err(ExecutorError::InternalError("Update Primary key".into()));
+                    }
+                    //更新索引
+                    if column.desc.is_unique && value != tuple.values[column.id().unwrap() as usize] {
+                        if let Some(index_meta) =
+                            table_catalog.get_unique_index(&column.id().unwrap())
+                        {
+                            let mut index = Index {
+                                id: index_meta.id,
+                                column_values: vec![tuple.values[i].clone()],
+                            };
+                            transaction.del_index(&table_name, &index)?;
 
-                                if !value.is_null() {
-                                    index.column_values[0] = value.clone();
-                                    transaction.add_index(
-                                        &table_name,
-                                        index,
-                                        vec![tuple.id.clone().unwrap()],
-                                        true,
-                                    )?;
-                                }
+                            if !value.is_null() {
+                                index.column_values[0] = value.clone();
+                                transaction.add_index(
+                                    &table_name,
+                                    index,
+                                    vec![tuple.id.clone().unwrap()],
+                                    true,
+                                )?;
                             }
                         }
-
-                        tuple.values[i] = value.clone();
                     }
+                    transaction.delete(&table_name, tuple.id.clone().unwrap())?;
+                    tuple.values[column.id().unwrap() as usize] = value.clone();
                 }
                 transaction.append(&table_name, tuple.clone(), is_overwrite)?;
             }

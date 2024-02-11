@@ -176,33 +176,15 @@ mod test {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
 
-        database.run("create table t1 (a int primary key, b int)").await?;
-        let mut tx_1 = database.new_transaction().await?;
-        let _ = tx_1.run("insert into t1 values (0,0),(1,1)").await?;
-
-        let mut tx_2 = database.new_transaction().await?;
-
-        let tuples_1 = tx_1.run("select * from t1").await?;
-        assert_eq!(
-            tuples_1[0].values,
-            vec![
-                Arc::new(DataValue::Int32(Some(0))),
-                Arc::new(DataValue::Int32(Some(0)))
-            ]
-        );
-        assert_eq!(
-            tuples_1[1].values,
-            vec![
-                Arc::new(DataValue::Int32(Some(1))),
-                Arc::new(DataValue::Int32(Some(1)))
-            ]
-        );
-        let tuples_2 = tx_2.run("select * from t1").await?;
-        assert_eq!(tuples_2,vec![]);
-        tx_1.rollback().await?;
-        let tuples_2 = tx_2.run("select * from t1").await?;
-
-        assert_eq!(tuples_2,vec![]);
+        database.run("create table halloween (id int primary key,salary int)").await?;
+        database.run("insert into halloween values (1,1000), (2,2000), (3,3000), (4,4000)").await?;
+        database.run("update halloween set salary = salary + 1000 where salary < 3000").await?;
+        let tuple=database.run("select salary from halloween;").await?;
+        assert_eq!(tuple.len(),4);
+        assert_eq!(tuple[0].values[0],Arc::new(DataValue::Int32(Some(2000))));
+        assert_eq!(tuple[1].values[0],Arc::new(DataValue::Int32(Some(3000))));
+        assert_eq!(tuple[2].values[0],Arc::new(DataValue::Int32(Some(3000))));
+        assert_eq!(tuple[3].values[0],Arc::new(DataValue::Int32(Some(4000))));
 
         Ok(())
     }

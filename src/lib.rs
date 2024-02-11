@@ -1,6 +1,5 @@
 pub mod optimizer;
 pub mod parser;
-pub mod common;
 pub mod storage;
 pub mod binder;
 pub mod result;

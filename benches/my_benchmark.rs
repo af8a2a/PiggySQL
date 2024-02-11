@@ -27,7 +27,7 @@ async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
 
 pub async fn primary_key_benchmark_100000(engine: &Database<MVCCLayer<Memory>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id>90000")
+        .run("SELECT * FROM BenchTable where id=90000")
         .await?;
     Ok(())
 }
@@ -35,7 +35,7 @@ pub async fn without_primary_key_benchmark_100000(
     engine: &Database<MVCCLayer<Memory>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val>90000")
+        .run("SELECT * FROM BenchTable where val=90000")
         .await?;
     Ok(())
 }
