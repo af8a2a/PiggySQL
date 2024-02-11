@@ -559,7 +559,7 @@ impl<'a, E: StorageEngine> DoubleEndedIterator for ScanIterator<'a, E> {
 pub mod tests {
     use std::collections::HashMap;
 
-    use itertools::Itertools;
+    
 
     use crate::storage::engine::memory::Memory;
 
@@ -894,7 +894,7 @@ pub mod tests {
         t3.set(b"c", vec![3])?;
         t4.set(b"d", vec![4])?;
         t4.commit()?;
-        let x = t2.set(b"a", vec![2]);
+        let _x = t2.set(b"a", vec![2]);
 
         assert_eq!(
             matches!(t2.set(b"a", vec![2]), Err(DatabaseError::Serialization)),

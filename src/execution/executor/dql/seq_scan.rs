@@ -23,7 +23,7 @@ impl<T: Transaction> Executor<T> for SeqScan {
         let ScanOperator {
             table_name,
             columns,
-            limit,
+            
             ..
         } = self.op;
         let mut iter = transaction.read(table_name,  columns)?;

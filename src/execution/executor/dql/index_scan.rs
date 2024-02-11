@@ -22,7 +22,7 @@ impl<T: Transaction> Executor<T> for IndexScan {
         let ScanOperator {
             table_name,
             columns,
-            limit,
+            
             index_by,
             ..
         } = self.op;

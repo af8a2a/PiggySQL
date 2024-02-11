@@ -168,15 +168,6 @@ pub struct MVCCIndexIter<'a, E: StorageEngine> {
 }
 
 impl<E: StorageEngine> MVCCIndexIter<'_, E> {
-    fn offset_move(offset: &mut usize) -> bool {
-        if *offset > 0 {
-            offset.sub_assign(1);
-
-            true
-        } else {
-            false
-        }
-    }
     fn val_to_key(&self, val: ValueRef) -> Result<Vec<u8>> {
         if self.index_meta.is_unique {
             let index = Index::new(self.index_meta.id, vec![val]);
@@ -199,9 +190,6 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
             .transpose()
     }
 
-    fn is_empty(&self) -> bool {
-        self.binaries.is_empty()
-    }
 }
 
 impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
@@ -431,7 +419,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         }
     }
 
-    fn drop_column(&mut self, table_name: &TableName, column: &str, if_exists: bool) -> Result<()> {
+    fn drop_column(&mut self, table_name: &TableName, column: &str, _if_exists: bool) -> Result<()> {
         if let Some(catalog) = self.table(table_name.clone()) {
             let column = catalog.get_column_by_name(column).unwrap();
 

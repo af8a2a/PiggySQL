@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use strum_macros::AsRefStr;
 
-use sqlparser::ast::ExactNumberInfo;
+
 
 use crate::errors::{DatabaseError, Result};
 

@@ -46,7 +46,7 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    
     /// Generates common tests for any Engine implementation.
     macro_rules! test_engine {
         ($setup:expr) => {
@@ -66,7 +66,7 @@ mod tests {
             /// Tests Engine point operations, i.e. set, get, and delete.
             #[test]
             fn point_ops() -> Result<()> {
-                let mut s = $setup;
+                let s = $setup;
 
                 // Getting a missing key should return None.
                 assert_eq!(s.get(b"a")?, None);
@@ -105,7 +105,7 @@ mod tests {
             /// Tests Engine point operations on empty keys and values. These
             /// are as valid as any other key/value.
             fn point_ops_empty() -> Result<()> {
-                let mut s = $setup;
+                let s = $setup;
                 assert_eq!(s.get(b"")?, None);
                 s.set(b"", vec![])?;
                 assert_eq!(s.get(b"")?, Some(vec![]));
@@ -118,7 +118,7 @@ mod tests {
             /// Tests Engine point operations on keys and values of increasing
             /// sizes, up to 16 MB.
             fn point_ops_sizes() -> Result<()> {
-                let mut s = $setup;
+                let s = $setup;
 
                 // Generate keys/values for increasing powers of two.
                 for size in (1..=24).map(|i| 1 << i) {
@@ -139,7 +139,7 @@ mod tests {
             #[test]
             /// Tests various Engine scans.
             fn scan() -> Result<()> {
-                let mut s = $setup;
+                let s = $setup;
                 s.set(b"a", vec![1])?;
                 s.set(b"b", vec![2])?;
                 s.set(b"ba", vec![2, 1])?;
@@ -192,7 +192,7 @@ mod tests {
             #[test]
             /// Tests prefix scans.
             fn scan_prefix() -> Result<()> {
-                let mut s = $setup;
+                let s = $setup;
                 s.set(b"a", vec![1])?;
                 s.set(b"b", vec![2])?;
                 s.set(b"ba", vec![2, 1])?;
@@ -332,7 +332,7 @@ mod tests {
                     }
                 }
 
-                let mut s = $setup;
+                let s = $setup;
                 let mut keys: Vec<Vec<u8>> = Vec::new();
                 let mut m = std::collections::BTreeMap::new();
 

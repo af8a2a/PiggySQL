@@ -85,37 +85,14 @@ impl<S: Storage> DBTransaction<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::catalog::{ColumnCatalog, ColumnDesc};
+    
     use crate::db::Database;
     use crate::storage::engine::memory::Memory;
     use crate::storage::MVCCLayer;
     use crate::types::tuple::create_table;
     use crate::types::value::DataValue;
-    use crate::types::LogicalType;
+    
     use std::sync::Arc;
-    use tempfile::TempDir;
-
-    fn build_table(mut transaction: impl Transaction) -> Result<()> {
-        let columns = vec![
-            ColumnCatalog::new(
-                "c1".to_string(),
-                false,
-                ColumnDesc::new(LogicalType::Integer, true, false, None),
-                None,
-            ),
-            ColumnCatalog::new(
-                "c2".to_string(),
-                false,
-                ColumnDesc::new(LogicalType::Integer, false, false, None),
-                None,
-            ),
-        ];
-        let _ = transaction.create_table(Arc::new("t1".to_string()), columns, false)?;
-        transaction.commit()?;
-
-        Ok(())
-    }
-
     #[tokio::test]
     async fn test_transaction_sql() -> Result<()> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;

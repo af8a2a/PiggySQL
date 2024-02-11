@@ -1,6 +1,6 @@
 use crate::catalog::{ColumnCatalog, ColumnRef};
 use crate::errors::{DatabaseError, Result};
-use crate::errors::*;
+
 use crate::types::index::{Index, IndexId, IndexMeta};
 use crate::types::tuple::{Tuple, TupleId};
 use bytes::Bytes;

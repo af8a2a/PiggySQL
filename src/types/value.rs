@@ -7,7 +7,7 @@ use std::fmt::Formatter;
 use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{fmt, mem};
+use std::{fmt};
 
 use crate::errors::*;
 use ordered_float::OrderedFloat;

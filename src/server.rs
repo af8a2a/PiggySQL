@@ -145,7 +145,7 @@ impl Server {
 
         tokio::select! {
             res = server_run(processor, placeholder, authenticator, listener) => {
-                if let Err(err) = res {
+                if let Err(_err) = res {
                 }
             }
             _ = quit() => {}
@@ -170,7 +170,7 @@ async fn server_run<
         let placeholder_ref = placeholder.make();
 
         tokio::spawn(async move {
-            if let Err(err) = process_socket(
+            if let Err(_err) = process_socket(
                 incoming_socket.0,
                 None,
                 authenticator_ref,
