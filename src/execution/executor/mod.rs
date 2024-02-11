@@ -3,8 +3,6 @@ pub(crate) mod dml;
 pub(crate) mod dql;
 pub(crate) mod show;
 
-
-
 use crate::{
     planner::{operator::Operator, LogicalPlan},
     storage::Transaction,
@@ -13,16 +11,31 @@ use crate::{
 
 use self::{
     ddl::{
-        alter_table::{AddColumn, DropColumn}, create_index::CreateIndex, create_table::CreateTable, drop_index::DropIndex, drop_table::DropTable
+        alter_table::{AddColumn, DropColumn},
+        create_index::CreateIndex,
+        create_table::CreateTable,
+        drop_index::DropIndex,
+        drop_table::DropTable,
     },
     dml::{delete::Delete, insert::Insert, update::Update},
     dql::{
-        agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor}, dummy::Dummy, explain::Explain, filter::Filter, index_scan::IndexScan, join::HashJoin, limit::Limit, projection::Projection, seq_scan::SeqScan, sort::Sort, values::Values
-    }, show::ShowTables,
+        agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor},
+        dummy::Dummy,
+        explain::Explain,
+        filter::Filter,
+        index_scan::IndexScan,
+        join::HashJoin,
+        limit::Limit,
+        projection::Projection,
+        seq_scan::SeqScan,
+        sort::Sort,
+        values::Values,
+    },
+    show::ShowTables,
 };
+use crate::errors::*;
 
-use super::ExecutorError;
-pub type BoxedExecutor = Result<Vec<Tuple>, ExecutorError>;
+pub type BoxedExecutor = Result<Vec<Tuple>>;
 
 pub trait Executor<T: Transaction> {
     fn execute(self, transaction: &mut T) -> BoxedExecutor;
@@ -112,8 +125,7 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> BoxedExe
             let input = childrens.remove(0);
 
             Explain::from(input).execute(transaction)
-
-        },
+        }
         Operator::DropIndex(op) => DropIndex::from(op).execute(transaction),
         Operator::Show => ShowTables.execute(transaction),
     }

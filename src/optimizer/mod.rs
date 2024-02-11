@@ -1,30 +1,18 @@
-use crate::{
-    optimizer::heuristic::optimizer::HepOptimizer, planner::LogicalPlan, types::errors::TypeError,
-};
+use crate::{optimizer::heuristic::optimizer::HepOptimizer, planner::LogicalPlan};
 
 use self::{heuristic::batch::HepBatchStrategy, rule::RuleImpl};
-
+use crate::errors::*;
 mod core;
 pub mod heuristic;
 pub mod rule;
 
-#[derive(thiserror::Error, Debug)]
-pub enum OptimizerError {
-    #[error("type error")]
-    TypeError(
-        #[source]
-        #[from]
-        TypeError,
-    ),
-}
-
-pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan, OptimizerError> {
+pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
     HepOptimizer::new(plan)
-        // .batch(
-        //     "Column Pruning".to_string(),
-        //     HepBatchStrategy::once_topdown(),
-        //     vec![RuleImpl::ColumnPruning],
-        // )
+        .batch(
+            "Column Pruning".to_string(),
+            HepBatchStrategy::once_topdown(),
+            vec![RuleImpl::ColumnPruning],
+        )
         .batch(
             "Simplify Filter".to_string(),
             HepBatchStrategy::fix_point_topdown(10),

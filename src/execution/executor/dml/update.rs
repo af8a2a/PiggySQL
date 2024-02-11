@@ -1,6 +1,6 @@
 use crate::catalog::{ColumnCatalog, TableName};
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+use crate::errors::*;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
@@ -67,7 +67,7 @@ impl<T: Transaction> Executor<T> for Update {
 
                     if column.desc.is_primary {
                         //refuse to update primary key
-                        return Err(ExecutorError::InternalError("Update Primary key".into()));
+                        return Err(DatabaseError::InternalError("Update Primary key".into()));
                     }
                     //更新索引
                     if column.desc.is_unique && value != tuple.values[column.id().unwrap() as usize] {

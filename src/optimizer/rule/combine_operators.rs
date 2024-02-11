@@ -2,7 +2,7 @@ use crate::expression::{BinaryOperator, ScalarExpression};
 use crate::optimizer::core::pattern::{Pattern, PatternChildrenPredicate};
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
-use crate::optimizer::OptimizerError;
+use crate::errors::*;
 use crate::planner::operator::filter::FilterOperator;
 use crate::planner::operator::Operator;
 use crate::types::LogicalType;
@@ -39,7 +39,7 @@ impl Rule for CollapseProject {
         &COLLAPSE_PROJECT_RULE
     }
 
-    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         if let Operator::Project(op) = graph.operator(node_id) {
             let child_id = graph.children_at(node_id)[0];
             if let Operator::Project(child_op) = graph.operator(child_id) {
@@ -63,7 +63,7 @@ impl Rule for CombineFilter {
         &COMBINE_FILTERS_RULE
     }
 
-    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         if let Operator::Filter(op) = graph.operator(node_id) {
             let child_id = graph.children_at(node_id)[0];
             if let Operator::Filter(child_op) = graph.operator(child_id) {

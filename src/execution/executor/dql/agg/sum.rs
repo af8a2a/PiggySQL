@@ -1,4 +1,4 @@
-use crate::execution::ExecutorError;
+use crate::errors::*;
 use crate::expression::value_compute::binary_op;
 use crate::expression::BinaryOperator;
 use crate::types::value::{DataValue, ValueRef};
@@ -24,7 +24,7 @@ impl SumAccumulator {
 }
 
 impl Accumulator for SumAccumulator {
-    fn update_value(&mut self, value: &ValueRef) -> Result<(), ExecutorError> {
+    fn update_value(&mut self, value: &ValueRef) -> Result<()> {
         if !value.is_null() {
             self.result = binary_op(&self.result, value, &BinaryOperator::Plus)?;
         }
@@ -32,7 +32,7 @@ impl Accumulator for SumAccumulator {
         Ok(())
     }
 
-    fn evaluate(&self) -> Result<ValueRef, ExecutorError> {
+    fn evaluate(&self) -> Result<ValueRef> {
         Ok(Arc::new(self.result.clone()))
     }
 }
@@ -52,7 +52,7 @@ impl DistinctSumAccumulator {
 }
 
 impl Accumulator for DistinctSumAccumulator {
-    fn update_value(&mut self, value: &ValueRef) -> Result<(), ExecutorError> {
+    fn update_value(&mut self, value: &ValueRef) -> Result<()> {
         if !self.distinct_values.contains(value) {
             self.distinct_values.insert(value.clone());
             self.inner.update_value(value)?;
@@ -61,7 +61,7 @@ impl Accumulator for DistinctSumAccumulator {
         Ok(())
     }
 
-    fn evaluate(&self) -> Result<ValueRef, ExecutorError> {
+    fn evaluate(&self) -> Result<ValueRef> {
         self.inner.evaluate()
     }
 }

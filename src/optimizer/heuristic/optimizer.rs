@@ -4,7 +4,7 @@ use crate::optimizer::heuristic::batch::{HepBatch, HepBatchStrategy};
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
 use crate::optimizer::heuristic::matcher::HepMatcher;
 use crate::optimizer::rule::RuleImpl;
-use crate::optimizer::OptimizerError;
+use crate::errors::*;
 use crate::planner::LogicalPlan;
 
 pub struct HepOptimizer {
@@ -25,7 +25,7 @@ impl HepOptimizer {
         self
     }
 
-    pub fn find_best(&mut self) -> Result<LogicalPlan, OptimizerError> {
+    pub fn find_best(&mut self) -> Result<LogicalPlan> {
         let batches = self.batches.clone();
 
         for batch in batches {
@@ -49,7 +49,7 @@ impl HepOptimizer {
         HepBatch {
             rules, strategy, ..
         }: &HepBatch,
-    ) -> Result<bool, OptimizerError> {
+    ) -> Result<bool> {
         let start_ver = self.graph.version;
 
         for rule in rules {
@@ -63,7 +63,7 @@ impl HepOptimizer {
         Ok(start_ver != self.graph.version)
     }
 
-    fn apply_rule(&mut self, rule: &RuleImpl, node_id: HepNodeId) -> Result<bool, OptimizerError> {
+    fn apply_rule(&mut self, rule: &RuleImpl, node_id: HepNodeId) -> Result<bool> {
         let after_version = self.graph.version;
 
         if HepMatcher::new(rule.pattern(), node_id, &self.graph).match_opt_expr() {

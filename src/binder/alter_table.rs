@@ -1,9 +1,10 @@
 use sqlparser::ast::{AlterTableOperation, ObjectName};
+use crate::errors::*;
 
 use std::sync::Arc;
 
 use super::Binder;
-use crate::binder::{lower_case_name, split_name, BindError};
+use crate::binder::{lower_case_name, split_name};
 use crate::planner::operator::alter_table::AddColumnOperator;
 use crate::planner::operator::alter_table::DropColumnOperator;
 use crate::planner::operator::scan::ScanOperator;
@@ -16,7 +17,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         &mut self,
         name: &ObjectName,
         operation: &AlterTableOperation,
-    ) -> Result<LogicalPlan, BindError> {
+    ) -> Result<LogicalPlan> {
         let table_name: Arc<String> = Arc::new(split_name(&lower_case_name(name))?.1.to_string());
 
         if let Some(table) = self.context.table(table_name.clone()) {
@@ -75,7 +76,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
 
             Ok(plan)
         } else {
-            Err(BindError::InvalidTable(format!(
+            Err(DatabaseError::InvalidTable(format!(
                 "not found table {}",
                 table_name
             )))

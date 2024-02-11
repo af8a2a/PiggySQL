@@ -16,7 +16,8 @@ use pgwire::{
 use tokio::{net::TcpListener, sync::Mutex};
 
 use crate::{
-    db::{DBTransaction, Database, DatabaseError},
+    db::{DBTransaction, Database},
+    errors::*,
     storage::{engine::memory::Memory, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
@@ -122,7 +123,7 @@ impl SimpleQueryHandler for Session {
 }
 
 impl Server {
-    async fn new() -> Result<Server, DatabaseError> {
+    async fn new() -> Result<Server> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
         Ok(Server {
@@ -249,7 +250,6 @@ fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
                 LogicalType::Varchar(_) => encoder.encode_field(&value.utf8()),
                 LogicalType::Date => encoder.encode_field(&value.date()),
                 LogicalType::DateTime => encoder.encode_field(&value.datetime()),
-                LogicalType::Decimal(_, _) => todo!(),
                 _ => unreachable!(),
             }?;
         }
@@ -274,7 +274,6 @@ fn into_pg_type(data_type: &LogicalType) -> PgWireResult<Type> {
         LogicalType::Double => Type::FLOAT8,
         LogicalType::Varchar(_) => Type::VARCHAR,
         LogicalType::Date | LogicalType::DateTime => Type::DATE,
-        LogicalType::Decimal(_, _) => todo!(),
         _ => {
             return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                 "ERROR".to_owned(),

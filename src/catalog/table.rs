@@ -3,10 +3,9 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use crate::catalog::CatalogError;
 use crate::types::index::{IndexId, IndexMeta, IndexMetaRef};
 use crate::types::{ColumnId, LogicalType};
-
+use crate::errors::*;
 use super::column::{ColumnCatalog, ColumnRef};
 
 pub type TableName = Arc<String>;
@@ -63,9 +62,9 @@ impl TableCatalog {
     }
 
     /// Add a column to the table catalog.
-    pub(crate) fn add_column(&mut self, mut col: ColumnCatalog) -> Result<ColumnId, CatalogError> {
+    pub(crate) fn add_column(&mut self, mut col: ColumnCatalog) -> Result<ColumnId> {
         if self.column_idxs.contains_key(col.name()) {
-            return Err(CatalogError::Duplicated("column", col.name().to_string()));
+            return Err(DatabaseError::Duplicated("column", col.name().to_string()));
         }
 
         let col_id = self.columns.len() as u32;
@@ -100,7 +99,7 @@ impl TableCatalog {
     pub(crate) fn get_index_by_name(
         &mut self,
         name: IndexName,
-    ) -> Result<IndexId, CatalogError> {
+    ) -> Result<IndexId> {
         // let index_id = self.indexes.len();
         let pos = self
             .indexes
@@ -108,15 +107,15 @@ impl TableCatalog {
             .find_position(|idx| idx.name ==format!("{}_{}","uk",name.to_string()));
         match pos {
             Some(pos) => Ok(self.indexes[pos.0].id),
-            None => return Err(CatalogError::NotFound("index", name.to_string())),
+            None => return Err(DatabaseError::NotFound("index", name.to_string())),
         }
     }
     pub(crate) fn new(
         name: TableName,
         columns: Vec<ColumnCatalog>,
-    ) -> Result<TableCatalog, CatalogError> {
+    ) -> Result<TableCatalog> {
         if columns.is_empty() {
-            return Err(CatalogError::ColumnsEmpty);
+            return Err(DatabaseError::ColumnsEmpty);
         }
         let mut table_catalog = TableCatalog {
             name,
@@ -135,7 +134,7 @@ impl TableCatalog {
         name: TableName,
         columns: Vec<ColumnCatalog>,
         indexes: Vec<IndexMetaRef>,
-    ) -> Result<TableCatalog, CatalogError> {
+    ) -> Result<TableCatalog> {
         let mut catalog = TableCatalog::new(name, columns)?;
         catalog.indexes = indexes;
 

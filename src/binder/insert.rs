@@ -1,4 +1,4 @@
-use crate::binder::{lower_case_name, split_name, BindError, Binder};
+use crate::binder::{lower_case_name, split_name, Binder};
 use crate::catalog::ColumnRef;
 use crate::expression::value_compute::unary_op;
 use crate::expression::ScalarExpression;
@@ -11,6 +11,7 @@ use crate::types::value::{DataValue, ValueRef};
 use sqlparser::ast::{Expr, Ident, ObjectName};
 use std::slice;
 use std::sync::Arc;
+use crate::errors::*;
 
 impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_insert(
@@ -19,7 +20,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         idents: &[Ident],
         expr_rows: &Vec<Vec<Expr>>,
         is_overwrite: bool,
-    ) -> Result<LogicalPlan, BindError> {
+    ) -> Result<LogicalPlan> {
         let name = lower_case_name(&name);
         let (_, name) = split_name(&name)?;
         let table_name = Arc::new(name.to_string());
@@ -31,7 +32,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             if idents.is_empty() {
                 columns = table.all_columns();
                 if values_len > columns.len() {
-                    return Err(BindError::ValuesLenMismatch(columns.len(), values_len));
+                    return Err(DatabaseError::ValuesLenMismatch(columns.len(), values_len));
                 }
             } else {
                 let bind_table_name = Some(table_name.to_string());
@@ -45,13 +46,13 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     }
                 }
                 if values_len != columns.len() {
-                    return Err(BindError::ValuesLenMismatch(columns.len(), values_len));
+                    return Err(DatabaseError::ValuesLenMismatch(columns.len(), values_len));
                 }
             }
             let mut rows = Vec::with_capacity(expr_rows.len());
             for expr_row in expr_rows {
                 if expr_row.len() != values_len {
-                    return Err(BindError::ValuesLenNotSame());
+                    return Err(DatabaseError::ValuesLenNotSame());
                 }
                 let mut row = Vec::with_capacity(expr_row.len());
 
@@ -88,7 +89,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 childrens: vec![values_plan],
             })
         } else {
-            Err(BindError::InvalidTable(format!(
+            Err(DatabaseError::InvalidTable(format!(
                 "not found table {}",
                 table_name
             )))

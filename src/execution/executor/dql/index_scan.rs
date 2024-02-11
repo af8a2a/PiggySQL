@@ -2,7 +2,7 @@ use crate::execution::executor::{BoxedExecutor, Executor};
 
 use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
-use crate::types::errors::TypeError;
+use crate::errors::*;
 
 
 
@@ -27,9 +27,9 @@ impl<T: Transaction> Executor<T> for IndexScan {
             ..
         } = self.op;
 
-        let (index_meta, binaries) = index_by.ok_or(TypeError::InvalidType)?;
+        let (index_meta, binaries) = index_by.ok_or(DatabaseError::InvalidType)?;
         let mut iter =
-            transaction.read_by_index(table_name, limit, columns, index_meta, binaries)?;
+            transaction.read_by_index(table_name, columns, index_meta, binaries)?;
         let tuples = iter.fetch_tuple()?.expect("unwrap tuple error");
         Ok(tuples)
     }

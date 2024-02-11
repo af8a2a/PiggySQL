@@ -1,11 +1,10 @@
 use std::time::Instant;
 
 use piggysql::{
-    db::{Database, DatabaseError},
-    storage::{
+    db::Database, errors::DatabaseError, storage::{
         engine::{memory::Memory, StorageEngine},
         MVCCLayer,
-    },
+    }
 };
 use sqllogictest::{AsyncDB, DBOutput, DefaultColumnType};
 

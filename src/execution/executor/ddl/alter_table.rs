@@ -1,5 +1,4 @@
-use crate::binder::BindError;
-use crate::execution::executor::BoxedExecutor;
+use crate::execution::executor::{BoxedExecutor, DatabaseError};
 use crate::planner::operator::alter_table::{AddColumnOperator, DropColumnOperator};
 
 use crate::types::tuple_builder::TupleBuilder;
@@ -95,7 +94,7 @@ impl<T: Transaction> Executor<T> for DropColumn {
                     .map(|(i, column)| (i, column.desc.is_primary))
                 {
                     if is_primary {
-                        Err(BindError::InvalidColumn(
+                        Err(DatabaseError::InvalidColumn(
                             "drop of primary key column is not allowed.".to_owned(),
                         ))?;
                     }
@@ -106,7 +105,7 @@ impl<T: Transaction> Executor<T> for DropColumn {
                 return Ok(vec![]);
             }
             let column_index = option_column_index
-                .ok_or_else(|| BindError::InvalidColumn("not found column".to_string()))?;
+                .ok_or_else(|| DatabaseError::InvalidColumn("not found column".to_string()))?;
 
             let _ = tuple.columns.remove(column_index);
             let _ = tuple.values.remove(column_index);

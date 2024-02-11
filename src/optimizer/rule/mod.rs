@@ -1,19 +1,24 @@
-use crate::{expression::ScalarExpression};
+use crate::expression::ScalarExpression;
 mod column_pruning;
 mod combine_operators;
 mod constant_folder;
 mod pushdown_limit;
 mod pushdown_predicates;
 mod simplification;
+use crate::errors::*;
 
 use self::{
-    column_pruning::ColumnPruning, combine_operators::{CollapseProject, CombineFilter}, constant_folder::ConstantFolder, pushdown_limit::PushLimitIntoScan, pushdown_predicates::{PushPredicateIntoScan, PushPredicateThroughJoin}, simplification::SimplifyFilter
+    column_pruning::ColumnPruning,
+    combine_operators::{CollapseProject, CombineFilter},
+    constant_folder::ConstantFolder,
+    pushdown_limit::PushLimitIntoScan,
+    pushdown_predicates::{PushPredicateIntoScan, PushPredicateThroughJoin},
+    simplification::SimplifyFilter,
 };
 
 use super::{
     core::{pattern::Pattern, rule::Rule},
     heuristic::graph::{HepGraph, HepNodeId},
-    OptimizerError,
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -47,7 +52,7 @@ impl Rule for RuleImpl {
         }
     }
 
-    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         match self {
             RuleImpl::ColumnPruning => ColumnPruning.apply(node_id, graph),
             RuleImpl::PushLimitIntoTableScan => PushLimitIntoScan.apply(node_id, graph),

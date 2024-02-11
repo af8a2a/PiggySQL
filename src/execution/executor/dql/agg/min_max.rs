@@ -1,4 +1,3 @@
-use crate::execution::ExecutorError;
 use crate::expression::value_compute::binary_op;
 use crate::expression::BinaryOperator;
 use crate::types::value::{DataValue, ValueRef};
@@ -6,6 +5,7 @@ use crate::types::LogicalType;
 use std::sync::Arc;
 
 use super::Accumulator;
+use crate::errors::*;
 
 pub struct MinMaxAccumulator {
     inner: Option<ValueRef>,
@@ -30,7 +30,7 @@ impl MinMaxAccumulator {
 }
 
 impl Accumulator for MinMaxAccumulator {
-    fn update_value(&mut self, value: &ValueRef) -> Result<(), ExecutorError> {
+    fn update_value(&mut self, value: &ValueRef) -> Result<()> {
         if !value.is_null() {
             if let Some(inner_value) = &self.inner {
                 if let DataValue::Boolean(Some(result)) = binary_op(inner_value, value, &self.op)? {
@@ -47,7 +47,7 @@ impl Accumulator for MinMaxAccumulator {
         Ok(())
     }
 
-    fn evaluate(&self) -> Result<ValueRef, ExecutorError> {
+    fn evaluate(&self) -> Result<ValueRef> {
         Ok(self
             .inner
             .clone()

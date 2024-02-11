@@ -1,5 +1,5 @@
 use crate::catalog::{ColumnCatalog, ColumnRef};
-use crate::types::errors::TypeError;
+use crate::errors::*;
 use crate::types::value::{DataValue, ValueRef};
 use crate::types::LogicalType;
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ impl TupleBuilder {
         }
     }
 
-    pub fn push_result(self, header: &str, message: &str) -> Result<Tuple, TypeError> {
+    pub fn push_result(self, header: &str, message: &str) -> Result<Tuple> {
         let columns: Vec<ColumnRef> = vec![Arc::new(ColumnCatalog::new_dummy(header.to_string()))];
         let values: Vec<ValueRef> = vec![Arc::new(DataValue::Utf8(Some(String::from(message))))];
         let t = Tuple {
@@ -44,7 +44,7 @@ impl TupleBuilder {
     pub fn push_str_row<'a>(
         &mut self,
         row: impl IntoIterator<Item = &'a str>,
-    ) -> Result<Option<Tuple>, TypeError> {
+    ) -> Result<Option<Tuple>> {
         let mut primary_key_index = None;
         let columns = self.columns.clone();
         let mut tuple_map = HashMap::new();
@@ -63,11 +63,11 @@ impl TupleBuilder {
 
         let primary_col_id = primary_key_index
             .map(|i| columns[i].id().unwrap())
-            .ok_or_else(|| TypeError::PrimaryKeyNotFound)?;
+            .ok_or_else(|| DatabaseError::PrimaryKeyNotFound)?;
 
         let tuple_id = tuple_map
             .get(&primary_col_id)
-            .ok_or_else(|| TypeError::PrimaryKeyNotFound)?
+            .ok_or_else(|| DatabaseError::PrimaryKeyNotFound)?
             .clone();
 
         let tuple = if self.data_values.len() == self.data_types.len() {

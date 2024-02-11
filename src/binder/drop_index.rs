@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use sqlparser::ast::ObjectName;
 
-use sqlparser::ast::{ObjectName};
-
+use crate::errors::*;
 use crate::{
     planner::{
         operator::{drop_index::DropIndexOperator, Operator},
@@ -11,14 +11,14 @@ use crate::{
     storage::Transaction,
 };
 
-use super::{BindError, Binder};
+use super::Binder;
 
 impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_drop_index(
         &mut self,
         names: &ObjectName,
         if_exists: &bool,
-    ) -> Result<LogicalPlan, BindError> {
+    ) -> Result<LogicalPlan> {
         let object_name = &names.0;
         let table_name = object_name[0].value.to_owned().to_lowercase();
         let index_name = object_name[1].value.to_owned().to_lowercase();

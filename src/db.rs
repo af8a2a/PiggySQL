@@ -1,30 +1,36 @@
 
-use sqlparser::ast::Statement;
-use sqlparser::parser::ParserError;
 
-use crate::binder::{BindError, Binder, BinderContext};
+use crate::binder::{Binder, BinderContext};
 
 use crate::execution::executor::{build, BoxedExecutor};
-use crate::execution::ExecutorError;
 
-use crate::optimizer::{apply_optimization, OptimizerError};
+use crate::optimizer::apply_optimization;
 use crate::parser;
 
-use crate::storage::{Storage, StorageError, Transaction};
+use crate::errors::{DatabaseError, Result};
+use crate::storage::engine::memory::Memory;
+use crate::storage::{MVCCLayer, Storage, Transaction};
 use crate::types::tuple::Tuple;
-
 pub struct Database<S: Storage> {
     pub(crate) storage: S,
 }
 
+impl Database<MVCCLayer<Memory>> {
+    pub fn new_memory() -> Result<Self> {
+        Ok(Database {
+            storage: MVCCLayer::new_memory(),
+        })
+    }
+}
+
 impl<S: Storage> Database<S> {
     /// Create a new Database instance.
-    pub fn new(storage: S) -> Result<Self, DatabaseError> {
+    pub fn new(storage: S) -> Result<Self> {
         Ok(Database { storage })
     }
 
     // /// Run SQL queries.
-    pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+    pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>> {
         let mut transaction = self.storage.transaction()?;
         let tuples = Self::_run(sql, &mut transaction)?;
 
@@ -33,16 +39,13 @@ impl<S: Storage> Database<S> {
         Ok(tuples?)
     }
 
-    pub async fn new_transaction(&self) -> Result<DBTransaction<S>, DatabaseError> {
+    pub async fn new_transaction(&self) -> Result<DBTransaction<S>> {
         let transaction = self.storage.transaction()?;
 
         Ok(DBTransaction { inner: transaction })
     }
 
-    fn _run(
-        sql: &str,
-        transaction: &mut <S as Storage>::TransactionType,
-    ) -> Result<BoxedExecutor, DatabaseError> {
+    fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<BoxedExecutor> {
         // parse
         let stmts = parser::parse(sql)?;
         if stmts.is_empty() {
@@ -56,8 +59,6 @@ impl<S: Storage> Database<S> {
 
         Ok(build(best_plan, transaction))
     }
-
-
 }
 
 pub struct DBTransaction<S: Storage> {
@@ -65,91 +66,36 @@ pub struct DBTransaction<S: Storage> {
 }
 
 impl<S: Storage> DBTransaction<S> {
-    pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>, DatabaseError> {
+    pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>> {
         let stream = Database::<S>::_run(sql, &mut self.inner)?;
         Ok(stream?)
     }
-    // pub fn run_with_stmt(&mut self, stmt: &Statement) -> Result<Vec<Tuple>, DatabaseError> {
-    //     let mut binder = Binder::new(BinderContext::new(&self.inner));
-    //     let source_plan = binder.bind(&stmt)?;
-    //     // println!("source_plan plan: {:#?}", source_plan);
-    //     let best_plan = apply_optimization(source_plan)?;
-    //     // println!("best_plan plan: {:#?}", best_plan);
-
-    //     let result = build(best_plan, &mut self.inner);
-
-    //     // let stream = Database::<S>::_run(sql, &self.inner)?;
-    //     Ok(result?)
-    // }
-    pub async fn commit(self) -> Result<(), DatabaseError> {
+    pub async fn commit(self) -> Result<()> {
         self.inner.commit()?;
 
         Ok(())
     }
-    pub async fn rollback(self) -> Result<(), DatabaseError> {
+    pub async fn rollback(self) -> Result<()> {
         self.inner.rollback()?;
 
         Ok(())
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum DatabaseError {
-    #[error("sql statement is empty")]
-    EmptyStatement,
-    #[error("parse error: {0}")]
-    Parse(
-        #[source]
-        #[from]
-        ParserError,
-    ),
-    #[error("bind error: {0}")]
-    Bind(
-        #[source]
-        #[from]
-        BindError,
-    ),
-    #[error("Storage error: {0}")]
-    StorageError(
-        #[source]
-        #[from]
-        StorageError,
-    ),
-    #[error("executor error: {0}")]
-    ExecutorError(
-        #[source]
-        #[from]
-        ExecutorError,
-    ),
-    #[error("Internal error: {0}")]
-    InternalError(String),
-    #[error("optimizer error: {0}")]
-    OptimizerError(
-        #[source]
-        #[from]
-        OptimizerError,
-    ),
-    #[error("transaction already exists")]
-    TransactionAlreadyExists,
-    #[error("no transaction begin")]
-    NoTransactionBegin,
-
-}
-
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::catalog::{ColumnCatalog, ColumnDesc};
-    use crate::db::{Database, DatabaseError};
+    use crate::db::Database;
     use crate::storage::engine::memory::Memory;
-    use crate::storage::{MVCCLayer, Storage, StorageError, Transaction};
+    use crate::storage::MVCCLayer;
     use crate::types::tuple::create_table;
     use crate::types::value::DataValue;
     use crate::types::LogicalType;
     use std::sync::Arc;
     use tempfile::TempDir;
 
-
-    fn build_table(mut transaction: impl Transaction) -> Result<(), StorageError> {
+    fn build_table(mut transaction: impl Transaction) -> Result<()> {
         let columns = vec![
             ColumnCatalog::new(
                 "c1".to_string(),
@@ -170,28 +116,32 @@ mod test {
         Ok(())
     }
 
-
     #[tokio::test]
-    async fn test_transaction_sql() -> Result<(), DatabaseError> {
+    async fn test_transaction_sql() -> Result<()> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 
-
-        database.run("create table halloween (id int primary key,salary int)").await?;
-        database.run("insert into halloween values (1,1000), (2,2000), (3,3000), (4,4000)").await?;
-        database.run("update halloween set salary = salary + 1000 where salary < 3000").await?;
-        let tuple=database.run("select salary from halloween;").await?;
-        assert_eq!(tuple.len(),4);
-        assert_eq!(tuple[0].values[0],Arc::new(DataValue::Int32(Some(2000))));
-        assert_eq!(tuple[1].values[0],Arc::new(DataValue::Int32(Some(3000))));
-        assert_eq!(tuple[2].values[0],Arc::new(DataValue::Int32(Some(3000))));
-        assert_eq!(tuple[3].values[0],Arc::new(DataValue::Int32(Some(4000))));
+        database
+            .run("create table halloween (id int primary key,salary int)")
+            .await?;
+        database
+            .run("insert into halloween values (1,1000), (2,2000), (3,3000), (4,4000)")
+            .await?;
+        database
+            .run("update halloween set salary = salary + 1000 where salary < 3000")
+            .await?;
+        let tuple = database.run("select salary from halloween;").await?;
+        assert_eq!(tuple.len(), 4);
+        assert_eq!(tuple[0].values[0], Arc::new(DataValue::Int32(Some(2000))));
+        assert_eq!(tuple[1].values[0], Arc::new(DataValue::Int32(Some(3000))));
+        assert_eq!(tuple[2].values[0], Arc::new(DataValue::Int32(Some(3000))));
+        assert_eq!(tuple[3].values[0], Arc::new(DataValue::Int32(Some(4000))));
 
         Ok(())
     }
     #[tokio::test]
 
-    async fn test_crud_sql() -> Result<(), DatabaseError> {
-        let database = Database::new(MVCCLayer::new(Memory::new()))?;
+    async fn test_crud_sql() -> Result<()> {
+        let database = Database::new(MVCCLayer::new_memory())?;
 
         let _ = database.run(
             "create table t1 (a int primary key, b int unique null, k int, z varchar unique null)",
@@ -201,15 +151,7 @@ mod test {
             .await?;
         let _ = database.run("insert into t1 (a, b, k, z) values (-99, 1, 1, 'k'), (-1, 2, 2, 'i'), (5, 3, 2, 'p'), (29, 4, 2, 'db')").await?;
         let _ = database.run("insert into t2 (d, c, e) values (2, 1, '2021-05-20 21:00:00'), (3, 4, '2023-09-10 00:00:00')").await?;
-        let _ = database
-            .run("create table t3 (a int primary key, b decimal(4,2))")
-            .await?;
-        let _ = database
-            .run("insert into t3 (a, b) values (1, 1111), (2, 2.01), (3, 3.00)")
-            .await?;
-        let _ = database
-            .run("insert into t3 (a, b) values (4, 4444), (5, 5222), (6, 1.00)")
-            .await?;
+
 
         println!("full t1:");
         let tuples_full_fields_t1 = database.run("select * from t1").await?;
@@ -371,9 +313,6 @@ mod test {
         println!("drop t1:");
         let _ = database.run("drop table t1").await?;
 
-        println!("decimal:");
-        let tuples_decimal = database.run("select * from t3").await?;
-        println!("{}", create_table(&tuples_decimal));
 
         Ok(())
     }

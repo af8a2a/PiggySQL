@@ -1,15 +1,14 @@
 use std::path::PathBuf;
 
-use futures::future::ok;
 use sled::Db;
 
-use super::{StorageEngine, StorageEngineError};
-
+use super::StorageEngine;
+use crate::errors::Result;
 pub struct SledStore {
     data: Db,
 }
 impl SledStore {
-    pub fn new(path: PathBuf) -> Result<Self, StorageEngineError> {
+    pub fn new(path: PathBuf) -> Result<Self> {
         let db = sled::open(path)?;
         Ok(Self { data: db })
     }
@@ -18,17 +17,17 @@ impl SledStore {
 impl StorageEngine for SledStore {
     type ScanIterator<'a> = ScanIterator<'a>;
 
-    fn delete(&self, key: &[u8]) -> Result<(), super::StorageEngineError> {
+    fn delete(&self, key: &[u8]) -> Result<()> {
         self.data.remove(key)?;
         Ok(())
     }
 
-    fn flush(&self) -> Result<(), super::StorageEngineError> {
+    fn flush(&self) -> Result<()> {
         self.data.flush()?;
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, super::StorageEngineError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let val = self.data.get(key)?;
         match val {
             Some(val) => Ok(Some(val.to_vec())),
@@ -39,11 +38,11 @@ impl StorageEngine for SledStore {
     fn scan<R: std::ops::RangeBounds<Vec<u8>>>(&self, range: R) -> Self::ScanIterator<'_> {
         ScanIterator {
             inner: self.data.range(range),
-            PhantomData: std::marker::PhantomData,
+            phantom_data: std::marker::PhantomData,
         }
     }
 
-    fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), super::StorageEngineError> {
+    fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
         self.data.insert(&key, value)?;
         Ok(())
     }
@@ -57,11 +56,11 @@ impl std::fmt::Display for SledStore {
 
 pub struct ScanIterator<'a> {
     inner: sled::Iter,
-    PhantomData: std::marker::PhantomData<&'a ()>,
+    phantom_data: std::marker::PhantomData<&'a ()>,
 }
 
 impl<'a> Iterator for ScanIterator<'a> {
-    type Item = Result<(Vec<u8>, Vec<u8>), StorageEngineError>;
+    type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
@@ -87,8 +86,10 @@ mod tests {
 
     use super::*;
     super::super::tests::test_engine!({
-        
-        let path = tempdir::TempDir::new("piggydb").unwrap().path().join("piggydb");
+        let path = tempdir::TempDir::new("piggydb")
+            .unwrap()
+            .path()
+            .join("piggydb");
         SledStore::new(path)?
     });
 }

@@ -1,6 +1,6 @@
 use crate::expression::value_compute::{binary_op, unary_op};
 use crate::expression::ScalarExpression;
-use crate::types::errors::TypeError;
+use crate::errors::*;
 use crate::types::tuple::Tuple;
 use crate::types::value::{DataValue, ValueRef};
 use itertools::Itertools;
@@ -14,7 +14,7 @@ lazy_static! {
 impl ScalarExpression {
     ///表达式求值  
     ///给定元组，返回表达式的值
-    pub fn eval(&self, tuple: &Tuple) -> Result<ValueRef, TypeError> {
+    pub fn eval(&self, tuple: &Tuple) -> Result<ValueRef> {
         //具名元组的表达式求值
         if let Some(value) = Self::eval_with_name(tuple, self.output_columns().name()) {
             return Ok(value.clone());

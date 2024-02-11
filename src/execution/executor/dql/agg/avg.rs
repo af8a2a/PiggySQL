@@ -1,9 +1,9 @@
-use crate::execution::ExecutorError;
 use crate::expression::value_compute::binary_op;
 use crate::expression::BinaryOperator;
 use crate::types::value::{DataValue, ValueRef};
 use crate::types::LogicalType;
 use std::sync::Arc;
+use crate::errors::*;
 
 use super::sum::SumAccumulator;
 use super::Accumulator;
@@ -23,7 +23,7 @@ impl AvgAccumulator {
 }
 
 impl Accumulator for AvgAccumulator {
-    fn update_value(&mut self, value: &ValueRef) -> Result<(), ExecutorError> {
+    fn update_value(&mut self, value: &ValueRef) -> Result<()> {
         if !value.is_null() {
             self.inner.update_value(value)?;
             self.count += 1;
@@ -32,7 +32,7 @@ impl Accumulator for AvgAccumulator {
         Ok(())
     }
 
-    fn evaluate(&self) -> Result<ValueRef, ExecutorError> {
+    fn evaluate(&self) -> Result<ValueRef> {
         let value = self.inner.evaluate()?;
 
         let quantity = if value.logical_type().is_signed_numeric() {

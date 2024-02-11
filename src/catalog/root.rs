@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use super::{column::ColumnCatalog, table::{TableCatalog, TableName}, CatalogError};
+use crate::errors::*;
+
+use super::{column::ColumnCatalog, table::{TableCatalog, TableName}};
 
 #[derive(Debug, Clone)]
 pub struct RootCatalog {
@@ -29,9 +31,9 @@ impl RootCatalog {
         &mut self,
         table_name: TableName,
         columns: Vec<ColumnCatalog>,
-    ) -> Result<TableName, CatalogError> {
+    ) -> Result<TableName> {
         if self.table_idxs.contains_key(&table_name) {
-            return Err(CatalogError::Duplicated("column", table_name.to_string()));
+            return Err(DatabaseError::Duplicated("column", table_name.to_string()));
         }
         let table = TableCatalog::new(table_name.clone(), columns)?;
 
@@ -40,7 +42,7 @@ impl RootCatalog {
         Ok(table_name)
     }
 
-    pub(crate) fn drop_table(&mut self, table_name: &String) -> Result<(), CatalogError> {
+    pub(crate) fn drop_table(&mut self, table_name: &String) -> Result<()> {
         self.table_idxs
             .retain(|name, _| name.as_str() != table_name);
 

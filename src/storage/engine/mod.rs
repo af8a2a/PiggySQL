@@ -1,28 +1,28 @@
 use itertools::Itertools;
-
+use crate::errors::*;
 pub mod memory;
 pub mod sled_store;
 pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
     /// The iterator returned by scan(). Traits can't return "impl Trait", and
     /// we don't want to use trait objects, so the type must be specified.
-    type ScanIterator<'a>: DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>), StorageEngineError>>
+    type ScanIterator<'a>: DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>>
         + 'a
     where
         Self: 'a;
     /// Deletes a key, or does nothing if it does not exist.
-    fn delete(&self, key: &[u8]) -> Result<(), StorageEngineError>;
+    fn delete(&self, key: &[u8]) -> Result<()>;
 
     /// Flushes any buffered data to the underlying storage medium.
-    fn flush(&self) -> Result<(), StorageEngineError>;
+    fn flush(&self) -> Result<()>;
 
     /// Gets a value for a key, if it exists.
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageEngineError>;
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Iterates over an ordered range of key/value pairs.
     fn scan<R: std::ops::RangeBounds<Vec<u8>>>(&self, range: R) -> Self::ScanIterator<'_>;
 
     /// Sets a value for a key, replacing the existing value if any.
-    fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), StorageEngineError>;
+    fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()>;
 
     /// Iterates over all key/value pairs starting with prefix.
     fn scan_prefix(&self, prefix: &[u8]) -> Self::ScanIterator<'_> {
@@ -42,32 +42,22 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
         self.scan((start, end))
     }
 }
-#[derive(thiserror::Error,Debug)]
-pub enum StorageEngineError {
-    #[error("storage engine error: {0}")]
-    Internal(String),
-    #[error("SledError error: {0}")]
-    SledError(
-        #[source]
-        #[from]
-        sled::Error,
-    ),
-}
 
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     /// Generates common tests for any Engine implementation.
     macro_rules! test_engine {
         ($setup:expr) => {
             #[track_caller]
             /// Asserts that a scan yields the expected items.
-            fn assert_scan<I>(iter: I, expect: Vec<(&[u8], Vec<u8>)>) -> Result<(),StorageEngineError>
+            fn assert_scan<I>(iter: I, expect: Vec<(&[u8], Vec<u8>)>) -> Result<()>
             where
-                I: Iterator<Item = Result<(Vec<u8>, Vec<u8>),StorageEngineError>>,
+                I: Iterator<Item = Result<(Vec<u8>, Vec<u8>)>>,
             {
                 assert_eq!(
-                    iter.collect::<Result<Vec<_>,StorageEngineError>>()?,
+                    iter.collect::<Result<Vec<_>>>()?,
                     expect.into_iter().map(|(k, v)| (k.to_vec(), v)).collect::<Vec<_>>()
                 );
                 Ok(())
@@ -75,7 +65,7 @@ mod tests {
 
             /// Tests Engine point operations, i.e. set, get, and delete.
             #[test]
-            fn point_ops() -> Result<(),StorageEngineError> {
+            fn point_ops() -> Result<()> {
                 let mut s = $setup;
 
                 // Getting a missing key should return None.
@@ -114,7 +104,7 @@ mod tests {
             #[test]
             /// Tests Engine point operations on empty keys and values. These
             /// are as valid as any other key/value.
-            fn point_ops_empty() -> Result<(),StorageEngineError> {
+            fn point_ops_empty() -> Result<()> {
                 let mut s = $setup;
                 assert_eq!(s.get(b"")?, None);
                 s.set(b"", vec![])?;
@@ -127,7 +117,7 @@ mod tests {
             #[test]
             /// Tests Engine point operations on keys and values of increasing
             /// sizes, up to 16 MB.
-            fn point_ops_sizes() -> Result<(),StorageEngineError> {
+            fn point_ops_sizes() -> Result<()> {
                 let mut s = $setup;
 
                 // Generate keys/values for increasing powers of two.
@@ -148,7 +138,7 @@ mod tests {
 
             #[test]
             /// Tests various Engine scans.
-            fn scan() -> Result<(),StorageEngineError> {
+            fn scan() -> Result<()> {
                 let mut s = $setup;
                 s.set(b"a", vec![1])?;
                 s.set(b"b", vec![2])?;
@@ -201,7 +191,7 @@ mod tests {
 
             #[test]
             /// Tests prefix scans.
-            fn scan_prefix() -> Result<(),StorageEngineError> {
+            fn scan_prefix() -> Result<()> {
                 let mut s = $setup;
                 s.set(b"a", vec![1])?;
                 s.set(b"b", vec![2])?;
@@ -314,7 +304,7 @@ mod tests {
             /// Runs random operations both on a Engine and a known-good
             /// BTreeMap, comparing the results of each operation as well as the
             /// final state.
-            fn random_ops() -> Result<(),StorageEngineError> {
+            fn random_ops() -> Result<()> {
                 const NUM_OPS: u64 = 1000;
 
                 use rand::{seq::SliceRandom, Rng, RngCore};
@@ -396,7 +386,7 @@ mod tests {
                             }
                             println!("scan {:?} .. {:?}", from, to);
                             let result =
-                                s.scan(from.clone()..to.clone()).collect::<Result<Vec<_>,StorageEngineError>>()?;
+                                s.scan(from.clone()..to.clone()).collect::<Result<Vec<_>>>()?;
                             let expect = m
                                 .range(from..to)
                                 .map(|(k, v)| (k.clone(), v.clone()))
@@ -409,7 +399,7 @@ mod tests {
                 // Compare the final states.
                 println!("comparing final state");
 
-                let state = s.scan(..).collect::<Result<Vec<_>,StorageEngineError>>()?;
+                let state = s.scan(..).collect::<Result<Vec<_>>>()?;
                 let expect = m
                     .range::<Vec<u8>, _>(..)
                     .map(|(k, v)| (k.clone(), v.clone()))

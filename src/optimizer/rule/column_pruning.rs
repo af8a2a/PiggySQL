@@ -4,7 +4,7 @@ use crate::expression::ScalarExpression;
 use crate::optimizer::core::pattern::{Pattern, PatternChildrenPredicate};
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
-use crate::optimizer::OptimizerError;
+use crate::errors::*;
 use crate::planner::operator::Operator;
 use crate::types::value::DataValue;
 use crate::types::LogicalType;
@@ -145,7 +145,7 @@ impl Rule for ColumnPruning {
         &COLUMN_PRUNING_RULE
     }
 
-    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         Self::_apply(&mut HashSet::new(), true, node_id, graph);
         // mark changed to skip this rule batch
         graph.version += 1;

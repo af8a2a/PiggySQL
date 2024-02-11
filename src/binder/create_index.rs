@@ -1,10 +1,11 @@
+use crate::errors::*;
 use std::sync::Arc;
 
 use itertools::Itertools;
 use sqlparser::ast::{ObjectName, OrderByExpr};
 
 use crate::{
-    binder::{lower_case_name},
+    binder::lower_case_name,
     planner::{
         operator::{create_index::CreateIndexOperator, Operator},
         LogicalPlan,
@@ -12,7 +13,7 @@ use crate::{
     storage::Transaction,
 };
 
-use super::{BindError, Binder};
+use super::Binder;
 
 impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_create_index(
@@ -20,7 +21,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         index_name: &ObjectName,
         table_name: &ObjectName,
         columns: &Vec<OrderByExpr>,
-    ) -> Result<LogicalPlan, BindError> {
+    ) -> Result<LogicalPlan> {
         let table_name = lower_case_name(table_name);
         let index_name = lower_case_name(index_name);
         let table_name = Arc::new(table_name.to_string());

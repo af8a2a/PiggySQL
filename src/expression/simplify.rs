@@ -1,7 +1,7 @@
 use crate::catalog::ColumnRef;
 use crate::expression::value_compute::{binary_op, unary_op};
 use crate::expression::{BinaryOperator, ScalarExpression, UnaryOperator};
-use crate::types::errors::TypeError;
+use crate::errors::*;
 use crate::types::value::{DataValue, ValueRef};
 use crate::types::{ColumnId, LogicalType};
 use ahash::RandomState;
@@ -29,7 +29,7 @@ pub enum ConstantBinary {
 
 impl ConstantBinary {
     #[allow(dead_code)]
-    fn is_null(&self) -> Result<bool, TypeError> {
+    fn is_null(&self) -> Result<bool> {
         match self {
             ConstantBinary::Scope { min, max } => {
                 let op = |bound: &Bound<ValueRef>| {
@@ -46,11 +46,11 @@ impl ConstantBinary {
                 Ok(matches!((min, max), (Bound::Unbounded, Bound::Unbounded)))
             }
             ConstantBinary::Eq(val) | ConstantBinary::NotEq(val) => Ok(val.is_null()),
-            _ => Err(TypeError::InvalidType),
+            _ => Err(DatabaseError::InvalidType),
         }
     }
 
-    pub fn rearrange(self) -> Result<Vec<ConstantBinary>, TypeError> {
+    pub fn rearrange(self) -> Result<Vec<ConstantBinary>> {
         match self {
             ConstantBinary::Or(binaries) => {
                 if binaries.is_empty() {
@@ -61,7 +61,7 @@ impl ConstantBinary {
 
                 for binary in binaries {
                     match binary {
-                        ConstantBinary::Or(_) => return Err(TypeError::InvalidType),
+                        ConstantBinary::Or(_) => return Err(DatabaseError::InvalidType),
                         ConstantBinary::And(mut and_binaries) => {
                             condition_binaries.append(&mut and_binaries);
                         }
@@ -131,7 +131,7 @@ impl ConstantBinary {
         }
     }
 
-    pub fn scope_aggregation(&mut self) -> Result<(), TypeError> {
+    pub fn scope_aggregation(&mut self) -> Result<()> {
         match self {
             // `Or` is allowed to contain And, `Scope`, `Eq/NotEq`
             // Tips: Only single-level `And`
@@ -195,7 +195,7 @@ impl ConstantBinary {
     // Tips: It only makes sense if the condition is and aggregation
     fn and_scope_aggregation(
         binaries: &Vec<ConstantBinary>,
-    ) -> Result<Vec<ConstantBinary>, TypeError> {
+    ) -> Result<Vec<ConstantBinary>> {
         if binaries.is_empty() {
             return Ok(vec![]);
         }
@@ -239,7 +239,7 @@ impl ConstantBinary {
                     let _ = eq_set.remove(val);
                 }
                 ConstantBinary::Or(_) | ConstantBinary::And(_) => {
-                    return Err(TypeError::InvalidType)
+                    return Err(DatabaseError::InvalidType)
                 }
             }
         }
@@ -476,11 +476,11 @@ impl ScalarExpression {
         }
     }
 
-    pub fn simplify(&mut self) -> Result<(), TypeError> {
+    pub fn simplify(&mut self) -> Result<()> {
         self._simplify(&mut Vec::new())
     }
 
-    pub fn constant_calculation(&mut self) -> Result<(), TypeError> {
+    pub fn constant_calculation(&mut self) -> Result<()> {
         match self {
             ScalarExpression::Unary { expr, op, .. } => {
                 expr.constant_calculation()?;
@@ -523,7 +523,7 @@ impl ScalarExpression {
     }
 
     // Tips: Indirect expressions like `ScalarExpression:：Alias` will be lost
-    fn _simplify(&mut self, replaces: &mut Vec<Replace>) -> Result<(), TypeError> {
+    fn _simplify(&mut self, replaces: &mut Vec<Replace>) -> Result<()> {
         match self {
             ScalarExpression::Binary {
                 left_expr,
@@ -636,7 +636,7 @@ impl ScalarExpression {
         left_expr: &mut Box<ScalarExpression>,
         right_expr: &mut Box<ScalarExpression>,
         op: &mut BinaryOperator,
-    ) -> Result<(), TypeError> {
+    ) -> Result<()> {
         left_expr._simplify(replaces)?;
 
         if Self::is_arithmetic(op) {
@@ -753,7 +753,7 @@ impl ScalarExpression {
     /// The And and Or of ConstantBinary are concerned with the data range that needs to be aggregated.
     /// - `ConstantBinary::And`: Aggregate the minimum range of all conditions in and
     /// - `ConstantBinary::Or`: Rearrange and sort the range of each OR data
-    pub fn convert_binary(&self, col_id: &ColumnId) -> Result<Option<ConstantBinary>, TypeError> {
+    pub fn convert_binary(&self, col_id: &ColumnId) -> Result<Option<ConstantBinary>> {
         match self {
             ScalarExpression::Binary {
                 left_expr,
@@ -935,17 +935,17 @@ impl fmt::Display for ConstantBinary {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::catalog::{ColumnCatalog, ColumnDesc, ColumnSummary};
     use crate::expression::simplify::ConstantBinary;
     use crate::expression::{BinaryOperator, ScalarExpression};
-    use crate::types::errors::TypeError;
     use crate::types::value::DataValue;
     use crate::types::LogicalType;
     use std::collections::Bound;
     use std::sync::Arc;
 
     #[test]
-    fn test_convert_binary_simple() -> Result<(), TypeError> {
+    fn test_convert_binary_simple() -> Result<()> {
         let col_1 = Arc::new(ColumnCatalog {
             summary: ColumnSummary {
                 id: Some(0),
@@ -1056,7 +1056,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_eq_noteq() -> Result<(), TypeError> {
+    fn test_scope_aggregation_eq_noteq() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));
@@ -1077,7 +1077,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_eq_noteq_cover() -> Result<(), TypeError> {
+    fn test_scope_aggregation_eq_noteq_cover() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));
@@ -1102,7 +1102,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_scope() -> Result<(), TypeError> {
+    fn test_scope_aggregation_scope() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));
@@ -1145,7 +1145,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_mixed() -> Result<(), TypeError> {
+    fn test_scope_aggregation_mixed() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));
@@ -1188,7 +1188,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_or() -> Result<(), TypeError> {
+    fn test_scope_aggregation_or() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));
@@ -1227,7 +1227,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_or_unbounded() -> Result<(), TypeError> {
+    fn test_scope_aggregation_or_unbounded() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));
@@ -1260,7 +1260,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_or_lower_unbounded() -> Result<(), TypeError> {
+    fn test_scope_aggregation_or_lower_unbounded() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(2)));
         let val_1 = Arc::new(DataValue::Int32(Some(3)));
 
@@ -1297,7 +1297,7 @@ mod test {
     }
 
     #[test]
-    fn test_scope_aggregation_or_upper_unbounded() -> Result<(), TypeError> {
+    fn test_scope_aggregation_or_upper_unbounded() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(2)));
         let val_1 = Arc::new(DataValue::Int32(Some(3)));
 
@@ -1334,7 +1334,7 @@ mod test {
     }
 
     #[test]
-    fn test_rearrange() -> Result<(), TypeError> {
+    fn test_rearrange() -> Result<()> {
         let val_0 = Arc::new(DataValue::Int32(Some(0)));
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
         let val_2 = Arc::new(DataValue::Int32(Some(2)));

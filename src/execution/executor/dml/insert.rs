@@ -1,6 +1,6 @@
 use crate::catalog::TableName;
 use crate::execution::executor::{BoxedExecutor, Executor};
-use crate::execution::ExecutorError;
+use crate::errors::*;
 use crate::planner::operator::insert::InsertOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
@@ -84,7 +84,7 @@ impl<T: Transaction> Executor<T> for Insert {
                             .push((tuple_id.clone(), value.clone()))
                     }
                     if value.is_null() && !col.nullable {
-                        return Err(ExecutorError::InternalError(format!(
+                        return Err(DatabaseError::InternalError(format!(
                             "Non-null fields do not allow null values to be passed in: {:?}",
                             col
                         )));

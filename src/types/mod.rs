@@ -1,18 +1,16 @@
-pub mod errors;
 pub mod index;
 pub mod tuple;
 pub mod tuple_builder;
 pub mod value;
 
 use chrono::{NaiveDate, NaiveDateTime};
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use strum_macros::AsRefStr;
 
 use sqlparser::ast::ExactNumberInfo;
 
-use crate::types::errors::TypeError;
+use crate::errors::{DatabaseError, Result};
 
 pub type ColumnId = u32;
 
@@ -38,8 +36,6 @@ pub enum LogicalType {
     Varchar(Option<u32>),
     Date,
     DateTime,
-    // decimal (precision, scale)
-    Decimal(Option<u8>, Option<u8>),
 }
 
 impl LogicalType {
@@ -70,9 +66,7 @@ impl LogicalType {
             Some(LogicalType::Date)
         } else if type_id == TypeId::of::<NaiveDateTime>() {
             Some(LogicalType::DateTime)
-        } else if type_id == TypeId::of::<Decimal>() {
-            Some(LogicalType::Decimal(None, None))
-        } else if type_id == TypeId::of::<String>() {
+        }else if type_id == TypeId::of::<String>() {
             Some(LogicalType::Varchar(None))
         } else {
             None
@@ -96,7 +90,6 @@ impl LogicalType {
             LogicalType::Double => Some(8),
             /// Note: The non-fixed length type's raw_len is None e.g. Varchar
             LogicalType::Varchar(_) => None,
-            LogicalType::Decimal(_, _) => Some(16),
             LogicalType::Date => Some(4),
             LogicalType::DateTime => Some(8),
         }
@@ -157,10 +150,7 @@ impl LogicalType {
         matches!(self, LogicalType::Float | LogicalType::Double)
     }
 
-    pub fn max_logical_type(
-        left: &LogicalType,
-        right: &LogicalType,
-    ) -> Result<LogicalType, TypeError> {
+    pub fn max_logical_type(left: &LogicalType, right: &LogicalType) -> Result<LogicalType> {
         if left == right {
             return Ok(*left);
         }
@@ -193,16 +183,10 @@ impl LogicalType {
         ) {
             return Ok(LogicalType::DateTime);
         }
-        Err(TypeError::InternalError(format!(
-            "can not compare two types: {:?} and {:?}",
-            left, right
-        )))
+        Err(DatabaseError::Incomparable(*left, *right))
     }
 
-    fn combine_numeric_types(
-        left: &LogicalType,
-        right: &LogicalType,
-    ) -> Result<LogicalType, TypeError> {
+    fn combine_numeric_types(left: &LogicalType, right: &LogicalType) -> Result<LogicalType> {
         if left == right {
             return Ok(*left);
         }
@@ -228,10 +212,7 @@ impl LogicalType {
             (LogicalType::Integer, _) | (_, LogicalType::UInteger) => Ok(LogicalType::Bigint),
             (LogicalType::Smallint, _) | (_, LogicalType::USmallint) => Ok(LogicalType::Integer),
             (LogicalType::Tinyint, _) | (_, LogicalType::UTinyint) => Ok(LogicalType::Smallint),
-            _ => Err(TypeError::InternalError(format!(
-                "can not combine these numeric types {:?} and {:?}",
-                left, right
-            ))),
+            _ => Err(DatabaseError::Incomparable(*left, *right)),
         }
     }
 
@@ -296,16 +277,15 @@ impl LogicalType {
             LogicalType::Varchar(_) => false,
             LogicalType::Date => matches!(to, LogicalType::DateTime | LogicalType::Varchar(_)),
             LogicalType::DateTime => matches!(to, LogicalType::Date | LogicalType::Varchar(_)),
-            LogicalType::Decimal(_, _) => false,
         }
     }
 }
 
 /// sqlparser datatype to logical type
 impl TryFrom<sqlparser::ast::DataType> for LogicalType {
-    type Error = TypeError;
+    type Error = DatabaseError;
 
-    fn try_from(value: sqlparser::ast::DataType) -> Result<Self, Self::Error> {
+    fn try_from(value: sqlparser::ast::DataType) -> Result<Self> {
         match value {
             sqlparser::ast::DataType::Char(len) | sqlparser::ast::DataType::Varchar(len) => {
                 Ok(LogicalType::Varchar(len.map(|len| len.length as u32)))
@@ -325,14 +305,7 @@ impl TryFrom<sqlparser::ast::DataType> for LogicalType {
             sqlparser::ast::DataType::UnsignedBigInt(_) => Ok(LogicalType::UBigint),
             sqlparser::ast::DataType::Boolean => Ok(LogicalType::Boolean),
             sqlparser::ast::DataType::Datetime(_) => Ok(LogicalType::DateTime),
-            sqlparser::ast::DataType::Decimal(info) => match info {
-                ExactNumberInfo::None => Ok(Self::Decimal(None, None)),
-                ExactNumberInfo::Precision(p) => Ok(Self::Decimal(Some(p as u8), None)),
-                ExactNumberInfo::PrecisionAndScale(p, s) => {
-                    Ok(Self::Decimal(Some(p as u8), Some(s as u8)))
-                }
-            },
-            other => Err(TypeError::NotImplementedSqlparserDataType(
+            other => Err(DatabaseError::NotImplementedSqlparserDataType(
                 other.to_string(),
             )),
         }

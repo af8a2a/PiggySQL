@@ -2,8 +2,8 @@ use std::ops::Bound;
 
 use crossbeam_skiplist::SkipMap;
 
-use super::{StorageEngine, StorageEngineError};
-
+use super::StorageEngine;
+use crate::errors::Result;
 pub struct Memory {
     data: SkipMap<Vec<u8>, Vec<u8>>,
 }
@@ -26,16 +26,16 @@ impl std::fmt::Display for Memory {
 impl StorageEngine for Memory {
     type ScanIterator<'a> = ScanIterator<'a>;
 
-    fn flush(&self) -> Result<(), StorageEngineError> {
+    fn flush(&self) -> Result<()> {
         Ok(())
     }
 
-    fn delete(&self, key: &[u8]) -> Result<(), StorageEngineError> {
+    fn delete(&self, key: &[u8]) -> Result<()> {
         self.data.remove(key);
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageEngineError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.data.get(key).map(|e| e.value().clone()))
     }
 
@@ -47,8 +47,7 @@ impl StorageEngine for Memory {
         }
     }
 
-    fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), StorageEngineError> {
-
+    fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
         self.data.insert(key.to_vec(), value);
         Ok(())
     }
@@ -61,7 +60,7 @@ pub struct ScanIterator<'a> {
 }
 
 impl<'a> Iterator for ScanIterator<'a> {
-    type Item = Result<(Vec<u8>, Vec<u8>), StorageEngineError>;
+    type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner

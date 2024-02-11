@@ -1,3 +1,4 @@
+use crate::errors::*;
 use crate::{
     optimizer::{
         core::{
@@ -5,7 +6,6 @@ use crate::{
             rule::Rule,
         },
         heuristic::graph::{HepGraph, HepNodeId},
-        OptimizerError,
     },
     planner::operator::{join::JoinCondition, Operator},
 };
@@ -24,7 +24,7 @@ lazy_static! {
 pub struct ConstantFolder;
 
 impl ConstantFolder {
-    fn _apply(node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn _apply(node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         let operator = graph.operator_mut(node_id);
 
         match operator {
@@ -80,7 +80,7 @@ impl Rule for ConstantFolder {
         }
     }
 
-    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         Self::_apply(node_id, graph)?;
         // mark changed to skip this rule batch
         graph.version += 1;

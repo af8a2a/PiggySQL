@@ -139,7 +139,6 @@ mod tests {
     use crate::types::tuple::Tuple;
     use crate::types::value::DataValue;
     use crate::types::LogicalType;
-    use rust_decimal::Decimal;
     use std::sync::Arc;
 
     #[test]
@@ -217,12 +216,7 @@ mod tests {
                 ColumnDesc::new(LogicalType::Date, false, false, None),
                 None,
             )),
-            Arc::new(ColumnCatalog::new(
-                "c13".to_string(),
-                false,
-                ColumnDesc::new(LogicalType::Decimal(None, None), false, false, None),
-                None,
-            )),
+
         ];
 
         let tuples = vec![
@@ -242,7 +236,6 @@ mod tests {
                     Arc::new(DataValue::Boolean(Some(true))),
                     Arc::new(DataValue::Date64(Some(0))),
                     Arc::new(DataValue::Date32(Some(0))),
-                    Arc::new(DataValue::Decimal(Some(Decimal::new(0, 3)))),
                 ],
             },
             Tuple {
@@ -261,7 +254,6 @@ mod tests {
                     Arc::new(DataValue::Boolean(None)),
                     Arc::new(DataValue::Date64(None)),
                     Arc::new(DataValue::Date32(None)),
-                    Arc::new(DataValue::Decimal(None)),
                 ],
             },
         ];

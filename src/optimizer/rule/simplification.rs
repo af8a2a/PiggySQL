@@ -2,7 +2,7 @@
 use crate::optimizer::core::pattern::{Pattern, PatternChildrenPredicate};
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
-use crate::optimizer::OptimizerError;
+use crate::errors::*;
 
 use crate::planner::operator::Operator;
 use lazy_static::lazy_static;
@@ -25,7 +25,7 @@ impl Rule for SimplifyFilter {
         &SIMPLIFY_FILTER_RULE
     }
 
-    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<(), OptimizerError> {
+    fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
         if let Operator::Filter(mut filter_op) = graph.operator(node_id).clone() {
             filter_op.predicate.simplify()?;
             filter_op.predicate.constant_calculation()?;

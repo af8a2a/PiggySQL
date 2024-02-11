@@ -6,7 +6,7 @@ use crate::execution::executor::{BoxedExecutor, Executor};
 use crate::expression::ScalarExpression;
 use crate::planner::operator::join::{JoinCondition, JoinOperator};
 use crate::storage::Transaction;
-use crate::types::errors::TypeError;
+use crate::errors::*;
 use crate::types::tuple::Tuple;
 use crate::types::value::DataValue;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt, RandomState};
@@ -239,7 +239,7 @@ impl HashJoin {
         on_keys: &[ScalarExpression],
         hash_random_state: &RandomState,
         tuple: &Tuple,
-    ) -> Result<u64, TypeError> {
+    ) -> Result<u64> {
         let mut values = Vec::with_capacity(on_keys.len());
 
         for expr in on_keys {

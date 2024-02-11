@@ -1,4 +1,5 @@
-use crate::binder::{lower_case_name, split_name, BindError, Binder};
+use crate::binder::{lower_case_name, split_name, Binder};
+use crate::errors::*;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
 use crate::planner::operator::Operator;
@@ -15,7 +16,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         to: &TableWithJoins,
         selection: &Option<Expr>,
         assignments: &[Assignment],
-    ) -> Result<LogicalPlan, BindError> {
+    ) -> Result<LogicalPlan> {
         if let TableFactor::Table { name, .. } = &to.relation {
             let name = lower_case_name(name);
             let (_, name) = split_name(&name)?;
@@ -53,7 +54,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
             // let values_plan = self.bind_values(vec![], columns);
 
             Ok(LogicalPlan {
-                operator: Operator::Update(UpdateOperator { columns,set_expr, table_name }),
+                operator: Operator::Update(UpdateOperator {
+                    columns,
+                    set_expr,
+                    table_name,
+                }),
                 childrens: vec![plan],
             })
         } else {

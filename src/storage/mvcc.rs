@@ -1,20 +1,20 @@
 use std::{collections::HashSet, ops::Bound, sync::Arc, vec};
 
-use serde::{Deserialize, Serialize};
-
 use super::{
-    engine::{StorageEngine, StorageEngineError},
+    engine::StorageEngine,
     keycode::{encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
 };
+use crate::errors::*;
+use serde::{Deserialize, Serialize};
 type Version = u64;
 
 /// Serializes MVCC metadata.
-fn serialize<V: Serialize>(value: &V) -> Result<Vec<u8>, MVCCError> {
+fn serialize<V: Serialize>(value: &V) -> Result<Vec<u8>> {
     Ok(bincode::serialize(value)?)
 }
 
 /// Deserializes MVCC metadata.
-fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V, MVCCError> {
+fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V> {
     Ok(bincode::deserialize(bytes)?)
 }
 
@@ -51,7 +51,7 @@ enum KeyPrefix {
     Unversioned,
 }
 impl KeyPrefix {
-    fn encode(&self) -> Result<Vec<u8>, MVCCError> {
+    fn encode(&self) -> Result<Vec<u8>> {
         match self {
             KeyPrefix::NextVersion => Ok(vec![0x01]),
             KeyPrefix::TxnActive => Ok(vec![0x02]),
@@ -64,7 +64,7 @@ impl KeyPrefix {
 }
 
 impl Key {
-    pub fn decode(mut bytes: &[u8]) -> Result<Self, MVCCError> {
+    pub fn decode(mut bytes: &[u8]) -> Result<Self> {
         let bytes = &mut bytes;
         Ok(match take_byte(bytes)? {
             0x01 => Self::NextVersion,
@@ -74,7 +74,7 @@ impl Key {
             0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
             0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
             _ => {
-                return Err(MVCCError::Internal(format!(
+                return Err(DatabaseError::InternalError(format!(
                     "Invalid key prefix {:?}",
                     bytes[0]
                 )))
@@ -82,7 +82,7 @@ impl Key {
         })
     }
 
-    pub fn encode(&self) -> Result<Vec<u8>, MVCCError> {
+    pub fn encode(&self) -> Result<Vec<u8>> {
         match self {
             Key::NextVersion => Ok(vec![0x01]),
             Key::TxnActive(version) => Ok([&[0x02][..], &encode_u64(*version)].concat()),
@@ -121,7 +121,7 @@ impl TransactionState {
     }
 }
 impl<E: StorageEngine> MVCCTransaction<E> {
-    pub fn begin(engine: Arc<E>, read_only: bool) -> Result<MVCCTransaction<E>, MVCCError> {
+    pub fn begin(engine: Arc<E>, read_only: bool) -> Result<MVCCTransaction<E>> {
         let version = match engine.get(&Key::NextVersion.encode()?)? {
             Some(ref v) => deserialize(v)?,
             None => 1,
@@ -147,7 +147,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             },
         })
     }
-    pub fn begin_as_of(engine: Arc<E>, version: Version) -> Result<MVCCTransaction<E>, MVCCError> {
+    pub fn begin_as_of(engine: Arc<E>, version: Version) -> Result<MVCCTransaction<E>> {
         let snapshot = engine
             .get(&Key::TxnActiveSnapshot(version).encode()?)?
             .expect("fetch snapshot error");
@@ -161,14 +161,14 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             },
         })
     }
-    pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<(), MVCCError> {
+    pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
         self.write_version(key, Some(value))
     }
 
     pub fn read_only(&self) -> bool {
         self.state.read_only
     }
-    pub fn commit(self) -> Result<(), MVCCError> {
+    pub fn commit(self) -> Result<()> {
         if self.state.read_only {
             return Ok(());
         }
@@ -183,9 +183,8 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
         self.engine
             .delete(&Key::TxnActive(self.state.version).encode()?)
-            .map_err(|e| MVCCError::from(e))
     }
-    pub fn rollback(self) -> Result<(), MVCCError> {
+    pub fn rollback(self) -> Result<()> {
         if self.state.read_only {
             return Ok(());
         }
@@ -201,7 +200,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                     // the version
                 }
                 key => {
-                    return Err(MVCCError::KeyError(format!(
+                    return Err(DatabaseError::InternalError(format!(
                         "Expected TxnWrite, got {:?}",
                         key
                     )))
@@ -215,12 +214,14 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         }
         self.engine
             .delete(&Key::TxnActive(self.state.version).encode()?)
-            .map_err(|e| MVCCError::from(e)) // remove from active set
+            .map_err(|e| DatabaseError::from(e)) // remove from active set
     }
 
-    fn write_version(&self, key: &[u8], value: Option<Vec<u8>>) -> Result<(), MVCCError> {
+    fn write_version(&self, key: &[u8], value: Option<Vec<u8>>) -> Result<()> {
         if self.state.read_only {
-            return Err(MVCCError::Internal("Write in read only mode".into()));
+            return Err(DatabaseError::InternalError(
+                "Write in read only mode".into(),
+            ));
         }
 
         // Check for write conflicts, i.e. if the latest key is invisible to us
@@ -245,11 +246,11 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                     //被不可见事务修改
                     if !self.state.is_visible(version) {
                         //我们尚未实现可序列化隔离等级,无法处理W-W冲突
-                        return Err(MVCCError::Serialization);
+                        return Err(DatabaseError::Serialization);
                     }
                 }
                 key => {
-                    return Err(MVCCError::Internal(format!(
+                    return Err(DatabaseError::InternalError(format!(
                         "Expected Key::Version got {:?}",
                         key
                     )))
@@ -270,10 +271,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 &Key::Version(key.into(), self.state.version).encode()?,
                 serialize(&value)?,
             )
-            .map_err(|e| MVCCError::from(e))
+            .map_err(|e| DatabaseError::from(e))
     }
 
-    pub fn scan(&self, start: Bound<Vec<u8>>, end: Bound<Vec<u8>>) -> Result<Scan<E>, MVCCError> {
+    pub fn scan(&self, start: Bound<Vec<u8>>, end: Bound<Vec<u8>>) -> Result<Scan<E>> {
         let start = match start {
             Bound::Excluded(k) => Bound::Excluded(Key::Version(k.clone(), u64::MAX).encode()?),
             Bound::Included(k) => Bound::Included(Key::Version(k.clone(), 0).encode()?),
@@ -292,7 +293,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         ))
     }
 
-    pub fn scan_prefix(&self, prefix: &[u8]) -> Result<Scan<E>, MVCCError> {
+    pub fn scan_prefix(&self, prefix: &[u8]) -> Result<Scan<E>> {
         // Normally, KeyPrefix::Version will only match all versions of the
         // exact given key. We want all keys maching the prefix, so we chop off
         // the KeyCode byte slice terminator 0x0000 at the end.
@@ -302,18 +303,18 @@ impl<E: StorageEngine> MVCCTransaction<E> {
     }
 
     /// 向存储引擎写入tombstone.
-    pub fn delete(&self, key: &[u8]) -> Result<(), MVCCError> {
+    pub fn delete(&self, key: &[u8]) -> Result<()> {
         self.write_version(key, None)
     }
 
-    fn scan_active(session: &Arc<E>) -> Result<HashSet<Version>, MVCCError> {
+    fn scan_active(session: &Arc<E>) -> Result<HashSet<Version>> {
         let mut active = HashSet::new();
         let mut scan = session.scan_prefix(&KeyPrefix::TxnActive.encode()?);
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
                 Key::TxnActive(version) => active.insert(version),
                 _ => {
-                    return Err(MVCCError::KeyError(format!(
+                    return Err(DatabaseError::InternalError(format!(
                         "Expected TxnActive key, got {:?}",
                         key
                     )))
@@ -324,7 +325,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
     }
 
     ///查找最新数据
-    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MVCCError> {
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let from = Key::Version(key.into(), 0).encode()?;
         let to = Key::Version(key.into(), self.state.version).encode()?;
 
@@ -338,7 +339,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                     }
                 }
                 key => {
-                    return Err(MVCCError::Internal(format!(
+                    return Err(DatabaseError::InternalError(format!(
                         "Expected Key::Version got {:?}",
                         key
                     )))
@@ -360,11 +361,11 @@ impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
     }
     /// Decodes a raw engine key into an MVCC key and version, returning None if
     /// the version is not visible.
-    fn decode_visible(&self, key: &[u8]) -> Result<Option<(Vec<u8>, Version)>, MVCCError> {
+    fn decode_visible(&self, key: &[u8]) -> Result<Option<(Vec<u8>, Version)>> {
         let (key, version) = match Key::decode(key)? {
             Key::Version(key, version) => (key.to_vec(), version),
             key => {
-                return Err(MVCCError::KeyError(format!(
+                return Err(DatabaseError::InternalError(format!(
                     "Expected Key::Version got {:?}",
                     key
                 )))
@@ -377,7 +378,7 @@ impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
         }
     }
     // Fallible next(), emitting the next item, or None if exhausted.
-    fn try_next(&mut self) -> Result<Option<(Vec<u8>, Version, Vec<u8>)>, MVCCError> {
+    fn try_next(&mut self) -> Result<Option<(Vec<u8>, Version, Vec<u8>)>> {
         while let Some((key, value)) = self.inner.next().transpose()? {
             if let Some((key, version)) = self.decode_visible(&key)? {
                 return Ok(Some((key, version, value)));
@@ -386,7 +387,7 @@ impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
         Ok(None)
     }
     // Fallible next_back(), emitting the previous item, or None if exhausted.
-    fn try_next_back(&mut self) -> Result<Option<(Vec<u8>, Version, Vec<u8>)>, MVCCError> {
+    fn try_next_back(&mut self) -> Result<Option<(Vec<u8>, Version, Vec<u8>)>> {
         while let Some((key, value)) = self.inner.next_back().transpose()? {
             if let Some((key, version)) = self.decode_visible(&key)? {
                 return Ok(Some((key, version, value)));
@@ -397,7 +398,7 @@ impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
 }
 
 impl<'a, E: StorageEngine> Iterator for VersionIterator<'a, E> {
-    type Item = Result<(Vec<u8>, Version, Vec<u8>), MVCCError>;
+    type Item = Result<(Vec<u8>, Version, Vec<u8>)>;
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().transpose()
     }
@@ -417,21 +418,21 @@ impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
         Self { engine }
     }
-    pub fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>, MVCCError> {
+    pub fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>> {
         MVCCTransaction::begin(self.engine.clone(), read_only)
     }
-    pub fn begin_as_of(&self, version: Version) -> Result<MVCCTransaction<E>, MVCCError> {
+    pub fn begin_as_of(&self, version: Version) -> Result<MVCCTransaction<E>> {
         MVCCTransaction::begin_as_of(self.engine.clone(), version)
     }
-    pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MVCCError> {
+    pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.engine
             .get(&Key::Unversioned(key.to_vec()).encode()?)
-            .map_err(|e| MVCCError::from(e))
+            .map_err(|e| DatabaseError::from(e))
     }
-    pub fn set_unversioned(&self, key: &[u8], value: Vec<u8>) -> Result<(), MVCCError> {
+    pub fn set_unversioned(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
         self.engine
             .set(&Key::Unversioned(key.into()).encode()?, value)
-            .map_err(|e| MVCCError::from(e))
+            .map_err(|e| DatabaseError::from(e))
     }
 }
 
@@ -482,7 +483,7 @@ impl<'a, E: StorageEngine + 'a> Scan<'a, E> {
     }
 
     /// Collects the result to a vector.
-    pub fn to_vec(&mut self) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MVCCError> {
+    pub fn to_vec(&mut self) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
         self.iter().collect()
     }
 }
@@ -504,12 +505,12 @@ impl<'a, E: StorageEngine + 'a> ScanIterator<'a, E> {
     }
 
     /// Fallible next(), emitting the next item, or None if exhausted.
-    fn try_next(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>, MVCCError> {
+    fn try_next(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
         while let Some((key, _version, value)) = self.inner.next().transpose()? {
             // If the next key equals this one, we're not at the latest version.
             match self.inner.peek() {
                 Some(Ok((next, _, _))) if next == &key => continue,
-                Some(Err(err)) => return Err(err.clone()),
+                Some(Err(err)) => return Err(DatabaseError::InternalError(err.to_string())),
                 Some(Ok(_)) | None => {}
             }
             // If the key is live (not a tombstone), emit it.
@@ -521,7 +522,7 @@ impl<'a, E: StorageEngine + 'a> ScanIterator<'a, E> {
     }
     /// Fallible next_back(), emitting the next item from the back, or None if
     /// exhausted.
-    fn try_next_back(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>, MVCCError> {
+    fn try_next_back(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
         while let Some((key, _version, value)) = self.inner.next_back().transpose()? {
             // If this key is the same as the last emitted key from the back,
             // this must be an older version, so skip it.
@@ -542,7 +543,7 @@ impl<'a, E: StorageEngine + 'a> ScanIterator<'a, E> {
 }
 
 impl<'a, E: StorageEngine> Iterator for ScanIterator<'a, E> {
-    type Item = Result<(Vec<u8>, Vec<u8>), MVCCError>;
+    type Item = Result<(Vec<u8>, Vec<u8>)>;
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().transpose()
     }
@@ -551,37 +552,6 @@ impl<'a, E: StorageEngine> Iterator for ScanIterator<'a, E> {
 impl<'a, E: StorageEngine> DoubleEndedIterator for ScanIterator<'a, E> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.try_next_back().transpose()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MVCCError {
-    InvalidVersion(String),
-    EncodeError(String),
-    StorageError(String),
-    Internal(String),
-    KeyError(String),
-    Serialization,
-}
-impl From<bincode::Error> for MVCCError {
-    fn from(e: bincode::Error) -> Self {
-        MVCCError::EncodeError(format!("{:?}", e))
-    }
-}
-impl From<StorageEngineError> for MVCCError {
-    fn from(e: StorageEngineError) -> Self {
-        MVCCError::StorageError(format!("{:?}", e))
-    }
-}
-impl From<std::array::TryFromSliceError> for MVCCError {
-    fn from(err: std::array::TryFromSliceError) -> Self {
-        MVCCError::Internal(err.to_string())
-    }
-}
-
-impl From<std::string::FromUtf8Error> for MVCCError {
-    fn from(err: std::string::FromUtf8Error) -> Self {
-        MVCCError::Internal(err.to_string())
     }
 }
 
@@ -594,7 +564,6 @@ pub mod tests {
     use crate::storage::engine::memory::Memory;
 
     use super::*;
-    type Result<T> = std::result::Result<T, MVCCError>;
     /// Asserts that a scan yields the expected result.
     macro_rules! assert_scan {
         ( $scan:expr => { $( $key:expr => $value:expr),* $(,)? } ) => {
@@ -925,10 +894,20 @@ pub mod tests {
         t3.set(b"c", vec![3])?;
         t4.set(b"d", vec![4])?;
         t4.commit()?;
+        let x = t2.set(b"a", vec![2]);
 
-        assert_eq!(t2.set(b"a", vec![2]), Err(MVCCError::Serialization)); // past uncommitted
-        assert_eq!(t2.set(b"c", vec![2]), Err(MVCCError::Serialization)); // future uncommitted
-        assert_eq!(t2.set(b"d", vec![2]), Err(MVCCError::Serialization)); // future committed
+        assert_eq!(
+            matches!(t2.set(b"a", vec![2]), Err(DatabaseError::Serialization)),
+            true
+        ); // past uncommitted
+        assert_eq!(
+            matches!(t2.set(b"c", vec![2]), Err(DatabaseError::Serialization)),
+            true
+        ); // future uncommitted
+        assert_eq!(
+            matches!(t2.set(b"d", vec![2]), Err(DatabaseError::Serialization)),
+            true
+        ); // future committed
 
         Ok(())
     }
@@ -956,8 +935,14 @@ pub mod tests {
         t3.set(b"d", vec![3])?;
 
         // Both t1 and t3 will get serialization errors with t2.
-        assert_eq!(t1.set(b"b", vec![1]), Err(MVCCError::Serialization));
-        assert_eq!(t3.set(b"c", vec![3]), Err(MVCCError::Serialization));
+        assert!(matches!(
+            t1.set(b"b", vec![1]),
+            Err(DatabaseError::Serialization)
+        ));
+        assert!(matches!(
+            t3.set(b"c", vec![3]),
+            Err(DatabaseError::Serialization)
+        ));
 
         // When t2 is rolled back, none of its writes will be visible, and t1
         // and t3 can perform their writes and successfully commit.
@@ -996,7 +981,10 @@ pub mod tests {
         t1.set(b"key", vec![1])?;
 
         let t2 = mvcc.begin(false)?;
-        assert_eq!(t2.set(b"key", vec![2]), Err(MVCCError::Serialization));
+        assert!(matches!(
+            t2.set(b"key", vec![2]),
+            Err(DatabaseError::Serialization)
+        ));
 
         Ok(())
     }
@@ -1029,7 +1017,10 @@ pub mod tests {
         t2.get(b"key")?;
 
         t1.set(b"key", vec![1])?;
-        assert_eq!(t2.set(b"key", vec![2]), Err(MVCCError::Serialization));
+        assert!(matches!(
+            t2.set(b"key", vec![2]),
+            Err(DatabaseError::Serialization)
+        ));
         t1.commit()?;
 
         Ok(())

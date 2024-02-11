@@ -2,7 +2,6 @@ use chrono::format::{DelayedFormat, StrftimeItems};
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use integer_encoding::FixedInt;
 use lazy_static::lazy_static;
-use rust_decimal::Decimal;
 use std::cmp::Ordering;
 use std::fmt::Formatter;
 use std::hash::Hash;
@@ -10,9 +9,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::{fmt, mem};
 
-use crate::types::errors::TypeError;
+use crate::errors::*;
 use ordered_float::OrderedFloat;
-use rust_decimal::prelude::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
 use super::LogicalType;
@@ -48,7 +46,6 @@ pub enum DataValue {
     Date32(Option<i32>),
     /// Date stored as a signed 64bit int timestamp since UNIX epoch 1970-01-01
     Date64(Option<i64>),
-    Decimal(Option<Decimal>),
 }
 
 macro_rules! generate_get_option {
@@ -79,8 +76,7 @@ generate_get_option!(DataValue,
     u16 : UInt16(Option<u16>),
     u32 : UInt32(Option<u32>),
     u64 : UInt64(Option<u64>),
-    utf8 : Utf8(Option<String>),
-    decimal : Decimal(Option<Decimal>)
+    utf8 : Utf8(Option<String>)
 );
 
 impl PartialEq for DataValue {
@@ -125,8 +121,6 @@ impl PartialEq for DataValue {
             (Date32(_), _) => false,
             (Date64(v1), Date64(v2)) => v1.eq(v2),
             (Date64(_), _) => false,
-            (Decimal(v1), Decimal(v2)) => v1.eq(v2),
-            (Decimal(_), _) => false,
         }
     }
 }
@@ -173,8 +167,6 @@ impl PartialOrd for DataValue {
             (Date32(_), _) => None,
             (Date64(v1), Date64(v2)) => v1.partial_cmp(v2),
             (Date64(_), _) => None,
-            (Decimal(v1), Decimal(v2)) => v1.partial_cmp(v2),
-            (Decimal(_), _) => None,
         }
     }
 }
@@ -212,7 +204,6 @@ impl Hash for DataValue {
             Null => 1.hash(state),
             Date32(v) => v.hash(state),
             Date64(v) => v.hash(state),
-            Decimal(v) => v.hash(state),
         }
     }
 }
@@ -223,7 +214,7 @@ macro_rules! varchar_cast {
                 let string_value = format!("{}", v);
                 if let Some(len) = $len {
                     if string_value.len() > *len as usize {
-                        return Err(TypeError::TooLong);
+                        return Err(DatabaseError::TooLong);
                     }
                 }
                 Ok(DataValue::Utf8(Some(string_value)))
@@ -249,29 +240,17 @@ impl DataValue {
         }
     }
 
-    pub(crate) fn check_len(&self, logic_type: &LogicalType) -> Result<(), TypeError> {
+    pub(crate) fn check_len(&self, logic_type: &LogicalType) -> Result<()> {
         let is_over_len = match (logic_type, self) {
             (LogicalType::Varchar(Some(len)), DataValue::Utf8(Some(val))) => {
                 val.len() > *len as usize
             }
-            (LogicalType::Decimal(full_len, scale_len), DataValue::Decimal(Some(val))) => {
-                if let Some(len) = full_len {
-                    if val.mantissa().ilog10() + 1 > *len as u32 {
-                        return Err(TypeError::TooLong);
-                    }
-                }
-                if let Some(len) = scale_len {
-                    if val.scale() > *len as u32 {
-                        return Err(TypeError::TooLong);
-                    }
-                }
-                false
-            }
+
             _ => false,
         };
 
         if is_over_len {
-            return Err(TypeError::TooLong);
+            return Err(DatabaseError::TooLong);
         }
 
         Ok(())
@@ -306,7 +285,6 @@ impl DataValue {
             DataValue::Utf8(value) => value.is_none(),
             DataValue::Date32(value) => value.is_none(),
             DataValue::Date64(value) => value.is_none(),
-            DataValue::Decimal(value) => value.is_none(),
         }
     }
 
@@ -328,7 +306,6 @@ impl DataValue {
             LogicalType::Varchar(_) => DataValue::Utf8(None),
             LogicalType::Date => DataValue::Date32(None),
             LogicalType::DateTime => DataValue::Date64(None),
-            LogicalType::Decimal(_, _) => DataValue::Decimal(None),
         }
     }
 
@@ -350,7 +327,6 @@ impl DataValue {
             LogicalType::Varchar(_) => DataValue::Utf8(Some("".to_string())),
             LogicalType::Date => DataValue::Date32(Some(UNIX_DATETIME.num_days_from_ce())),
             LogicalType::DateTime => DataValue::Date64(Some(UNIX_DATETIME.timestamp())),
-            LogicalType::Decimal(_, _) => DataValue::Decimal(Some(Decimal::new(0, 0))),
         }
     }
 
@@ -371,7 +347,6 @@ impl DataValue {
             DataValue::Utf8(v) => v.clone().map(|v| v.into_bytes()),
             DataValue::Date32(v) => v.map(|v| v.encode_fixed_vec()),
             DataValue::Date64(v) => v.map(|v| v.encode_fixed_vec()),
-            DataValue::Decimal(v) => v.map(|v| v.serialize().to_vec()),
         }
         .unwrap_or(vec![])
     }
@@ -424,10 +399,6 @@ impl DataValue {
             LogicalType::DateTime => {
                 DataValue::Date64((!bytes.is_empty()).then(|| i64::decode_fixed(bytes)))
             }
-            LogicalType::Decimal(_, _) => DataValue::Decimal(
-                (!bytes.is_empty())
-                    .then(|| Decimal::deserialize(<[u8; 16]>::try_from(bytes).unwrap())),
-            ),
         }
     }
 
@@ -448,7 +419,6 @@ impl DataValue {
             DataValue::Utf8(_) => LogicalType::Varchar(None),
             DataValue::Date32(_) => LogicalType::Date,
             DataValue::Date64(_) => LogicalType::DateTime,
-            DataValue::Decimal(_) => LogicalType::Decimal(None, None),
         }
     }
 
@@ -500,7 +470,7 @@ impl DataValue {
         }
     }
 
-    pub fn to_primary_key(&self, b: &mut Vec<u8>) -> Result<(), TypeError> {
+    pub fn to_primary_key(&self, b: &mut Vec<u8>) -> Result<()> {
         match self {
             DataValue::Int8(Some(v)) => encode_u!(b, *v as u8 ^ 0x80_u8),
             DataValue::Int16(Some(v)) => encode_u!(b, *v as u16 ^ 0x8000_u16),
@@ -513,9 +483,9 @@ impl DataValue {
             DataValue::Utf8(Some(v)) => Self::encode_bytes(b, v.as_bytes()),
             value => {
                 return if value.is_null() {
-                    Err(TypeError::PrimaryKeyNotFound)
+                    Err(DatabaseError::PrimaryKeyNotFound)
                 } else {
-                    Err(TypeError::InvalidType)
+                    Err(DatabaseError::InvalidType)
                 }
             }
         }
@@ -523,7 +493,7 @@ impl DataValue {
         Ok(())
     }
 
-    pub fn to_index_key(&self, b: &mut Vec<u8>) -> Result<(), TypeError> {
+    pub fn to_index_key(&self, b: &mut Vec<u8>) -> Result<()> {
         match self {
             DataValue::Int8(Some(v)) => encode_u!(b, *v as u8 ^ 0x80_u8),
             DataValue::Int16(Some(v)) => encode_u!(b, *v as u16 ^ 0x8000_u16),
@@ -561,12 +531,11 @@ impl DataValue {
 
                 encode_u!(b, u);
             }
-            DataValue::Decimal(Some(_v)) => todo!(),
             value => {
                 return if value.is_null() {
                     todo!()
                 } else {
-                    Err(TypeError::InvalidType)
+                    Err(DatabaseError::InvalidType)
                 }
             }
         }
@@ -574,10 +543,10 @@ impl DataValue {
         Ok(())
     }
 
-    pub fn cast(self, to: &LogicalType) -> Result<DataValue, TypeError> {
+    pub fn cast(self, to: &LogicalType) -> Result<DataValue> {
         match self {
             DataValue::Null => match to {
-                LogicalType::Invalid => Err(TypeError::CastFail),
+                LogicalType::Invalid => Err(DatabaseError::CastFail),
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(None)),
                 LogicalType::Tinyint => Ok(DataValue::Int8(None)),
@@ -593,7 +562,6 @@ impl DataValue {
                 LogicalType::Varchar(_) => Ok(DataValue::Utf8(None)),
                 LogicalType::Date => Ok(DataValue::Date32(None)),
                 LogicalType::DateTime => Ok(DataValue::Date64(None)),
-                LogicalType::Decimal(_, _) => Ok(DataValue::Decimal(None)),
             },
             DataValue::Boolean(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -609,40 +577,22 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Float32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Float => Ok(DataValue::Float32(value)),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(
-                    value
-                        .map(|v| {
-                            let mut decimal = Decimal::from_f32(v).ok_or(TypeError::CastFail)?;
-                            Self::decimal_round_f(option, &mut decimal);
 
-                            Ok::<Decimal, TypeError>(decimal)
-                        })
-                        .transpose()?,
-                )),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Float64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Double => Ok(DataValue::Float64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(
-                    value
-                        .map(|v| {
-                            let mut decimal = Decimal::from_f64(v).ok_or(TypeError::CastFail)?;
-                            Self::decimal_round_f(option, &mut decimal);
 
-                            Ok::<Decimal, TypeError>(decimal)
-                        })
-                        .transpose()?,
-                )),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Int8(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -663,13 +613,8 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
 
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Int16(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -689,13 +634,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
-
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Int32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -713,13 +652,7 @@ impl DataValue {
                 LogicalType::Bigint => Ok(DataValue::Int64(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
-
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Int64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -735,13 +668,8 @@ impl DataValue {
                 }
                 LogicalType::Bigint => Ok(DataValue::Int64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
 
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::UInt8(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -755,13 +683,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
-
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::UInt16(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -773,13 +695,8 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
 
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::UInt32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -788,28 +705,16 @@ impl DataValue {
                 LogicalType::UBigint => Ok(DataValue::UInt64(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
-
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::UInt64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::UBigint => Ok(DataValue::UInt64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(value.map(|v| {
-                    let mut decimal = Decimal::from(v);
-                    Self::decimal_round_i(option, &mut decimal);
-
-                    decimal
-                }))),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Utf8(value) => match to {
-                LogicalType::Invalid => Err(TypeError::CastFail),
+                LogicalType::Invalid => Err(DatabaseError::CastFail),
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(
                     value.map(|v| bool::from_str(&v)).transpose()?,
@@ -869,9 +774,6 @@ impl DataValue {
 
                     Ok(DataValue::Date64(option))
                 }
-                LogicalType::Decimal(_, _) => Ok(DataValue::Decimal(
-                    value.map(|v| Decimal::from_str(&v)).transpose()?,
-                )),
             },
             DataValue::Date32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -886,7 +788,7 @@ impl DataValue {
 
                     Ok(DataValue::Date64(option))
                 }
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
             DataValue::Date64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -900,33 +802,11 @@ impl DataValue {
                     Ok(DataValue::Date32(option))
                 }
                 LogicalType::DateTime => Ok(DataValue::Date64(value)),
-                _ => Err(TypeError::CastFail),
-            },
-            DataValue::Decimal(value) => match to {
-                LogicalType::SqlNull => Ok(DataValue::Null),
-                LogicalType::Decimal(_, _) => Ok(DataValue::Decimal(value)),
-                LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(TypeError::CastFail),
+                _ => Err(DatabaseError::CastFail),
             },
         }
     }
 
-    fn decimal_round_i(option: &Option<u8>, decimal: &mut Decimal) {
-        if let Some(scale) = option {
-            let new_decimal = decimal.trunc_with_scale(*scale as u32);
-            let _ = mem::replace(decimal, new_decimal);
-        }
-    }
-
-    fn decimal_round_f(option: &Option<u8>, decimal: &mut Decimal) {
-        if let Some(scale) = option {
-            let new_decimal = decimal.round_dp_with_strategy(
-                *scale as u32,
-                rust_decimal::RoundingStrategy::MidpointAwayFromZero,
-            );
-            let _ = mem::replace(decimal, new_decimal);
-        }
-    }
 
     fn date_format<'a>(v: i32) -> Option<DelayedFormat<StrftimeItems<'a>>> {
         NaiveDate::from_num_days_from_ce_opt(v).map(|date| date.format(DATE_FMT))
@@ -936,9 +816,6 @@ impl DataValue {
         NaiveDateTime::from_timestamp_opt(v, 0).map(|date_time| date_time.format(DATE_TIME_FMT))
     }
 
-    fn decimal_format(v: &Decimal) -> String {
-        v.to_string()
-    }
 }
 
 macro_rules! impl_scalar {
@@ -1023,7 +900,6 @@ impl fmt::Display for DataValue {
             DataValue::Null => write!(f, "null")?,
             DataValue::Date32(e) => format_option!(f, e.and_then(DataValue::date_format))?,
             DataValue::Date64(e) => format_option!(f, e.and_then(DataValue::date_time_format))?,
-            DataValue::Decimal(e) => format_option!(f, e.as_ref().map(DataValue::decimal_format))?,
         };
         Ok(())
     }
@@ -1048,18 +924,17 @@ impl fmt::Debug for DataValue {
             DataValue::Null => write!(f, "null"),
             DataValue::Date32(_) => write!(f, "Date32({})", self),
             DataValue::Date64(_) => write!(f, "Date64({})", self),
-            DataValue::Decimal(_) => write!(f, "Decimal({})", self),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::types::errors::TypeError;
+    use super::*;
     use crate::types::value::DataValue;
 
     #[test]
-    fn test_to_primary_key() -> Result<(), TypeError> {
+    fn test_to_primary_key() -> Result<()> {
         let mut key_i8_1 = Vec::new();
         let mut key_i8_2 = Vec::new();
         let mut key_i8_3 = Vec::new();
@@ -1116,7 +991,7 @@ mod test {
     }
 
     #[test]
-    fn test_to_index_key_f() -> Result<(), TypeError> {
+    fn test_to_index_key_f() -> Result<()> {
         let mut key_f32_1 = Vec::new();
         let mut key_f32_2 = Vec::new();
         let mut key_f32_3 = Vec::new();
