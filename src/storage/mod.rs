@@ -411,7 +411,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let column = catalog.get_column_by_id(&col_id).unwrap();
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
-
+            self.cache.remove(table_name);
             Ok(col_id)
         } else {
             Err(DatabaseError::TableNotFound)
@@ -430,7 +430,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
                 let (index_meta_key, _) = TableCodec::encode_index_meta(table_name, index_meta)?;
                 self.tx.delete(&index_meta_key)?;
-
+                
                 let (index_min, index_max) = TableCodec::index_bound(table_name, &index_meta.id);
                 Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
             }
@@ -446,7 +446,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
                 // }
                 err => err?,
             }
-
+            self.cache.remove(table_name);
             Ok(())
         } else {
             Err(DatabaseError::TableNotFound)
@@ -575,7 +575,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             col.desc.is_unique = true;
             let mut table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
             Self::create_index(&mut self.tx, &mut table, Some(index_name.to_string()))?;
-            self.cache.insert(table_name, table);
+            self.cache.remove(&table_name);
 
         }
         Ok(())
@@ -615,7 +615,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
         let table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
         Self::update_table_meta(&mut self.tx, &table)?;
-        self.cache.insert(table_name, table);
+        self.cache.remove(&table_name);
 
         Ok(())
     }
