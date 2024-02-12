@@ -1,10 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use piggysql::{
     db::Database,
+    errors::*,
     storage::{engine::memory::Memory, MVCCLayer},
 };
-
-use anyhow::Result;
 
 async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
     let db = Database::new(MVCCLayer::new(Memory::new()))?;

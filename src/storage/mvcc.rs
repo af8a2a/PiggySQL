@@ -1,4 +1,9 @@
-use std::{collections::HashSet, ops::Bound, sync::Arc, vec};
+use std::{
+    collections::HashSet,
+    ops::Bound,
+    sync::{atomic::AtomicU64, Arc},
+    vec,
+};
 
 use super::{
     engine::StorageEngine,
@@ -126,6 +131,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             Some(ref v) => deserialize(v)?,
             None => 1,
         };
+        println!("version = {}", version);
         engine.set(&Key::NextVersion.encode()?, serialize(&(version + 1))?)?;
 
         let active = Self::scan_active(&engine)?;
@@ -417,6 +423,26 @@ impl<E: StorageEngine> MVCC<E> {
             .set(&Key::Unversioned(key.into()).encode()?, value)
             .map_err(|e| DatabaseError::from(e))
     }
+    pub fn gc(&self) -> Result<()> {
+        let mut scan = self.engine.scan(..).rev();
+        let mut hashset=HashSet::new();
+        while let Some((key, _)) = scan.next().transpose()? {
+            match Key::decode(&key)? {
+                Key::Version(key, version) => {
+                    //删除过时的键值对
+                    if hashset.contains(&key) {
+                        self.engine.delete(&Key::Version(key, version).encode()?)?;
+                    }else{
+                        hashset.insert(key.clone());
+                    }
+                }
+                _ => {
+                    //nothing to do
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 pub struct Scan<'a, E: StorageEngine + 'a> {
@@ -542,7 +568,7 @@ impl<'a, E: StorageEngine> DoubleEndedIterator for ScanIterator<'a, E> {
 pub mod tests {
     use std::collections::HashMap;
 
-    
+    use itertools::Itertools;
 
     use crate::storage::engine::memory::Memory;
 
@@ -1076,6 +1102,39 @@ pub mod tests {
         // Replacing an unversioned key should be fine.
         mvcc.set_unversioned(b"a", vec![1])?;
         assert_eq!(mvcc.get_unversioned(b"a")?, Some(vec![1]));
+
+        Ok(())
+    }
+
+    #[test]
+    /// Tests MVCC GC.
+    fn gc() -> Result<()> {
+        let mvcc = MVCC::new(Arc::new(Memory::new()));
+
+        let t1 = mvcc.begin(false)?;
+        t1.set(b"a", vec![1])?;
+        t1.commit()?;
+        let t2 = mvcc.begin(false)?;
+        t2.set(b"a", vec![2])?;
+        t2.commit()?;
+
+        let t3 = mvcc.begin(false)?;
+        t3.set(b"a", vec![3])?;
+        t3.commit()?;
+        let scan = mvcc
+            .engine
+            .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)
+            .collect_vec();
+        assert_eq!(scan.len(), 3);
+        mvcc.gc()?;
+        let scan = mvcc
+            .engine
+            .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)
+            .collect::<Result<Vec<_>>>()?;
+        assert_eq!(scan.len(), 1);
+        let t4 = mvcc.begin(false)?;
+        let kv=t4.get(b"a")?.unwrap();
+        assert_eq!(kv, vec![3]);
 
         Ok(())
     }
