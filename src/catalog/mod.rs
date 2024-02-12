@@ -8,8 +8,8 @@ pub(crate) use self::table::*;
 /// The type of catalog reference.
 pub type RootRef = Arc<RootCatalog>;
 
-pub(crate) static DEFAULT_DATABASE_NAME: &str = "kipsql";
-pub(crate) static DEFAULT_SCHEMA_NAME: &str = "kipsql";
+pub(crate) static DEFAULT_DATABASE_NAME: &str = "Piggysql";
+pub(crate) static DEFAULT_SCHEMA_NAME: &str = "Piggysql";
 
 mod column;
 mod root;
