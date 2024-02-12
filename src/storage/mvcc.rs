@@ -131,7 +131,6 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             Some(ref v) => deserialize(v)?,
             None => 1,
         };
-        println!("version = {}", version);
         engine.set(&Key::NextVersion.encode()?, serialize(&(version + 1))?)?;
 
         let active = Self::scan_active(&engine)?;

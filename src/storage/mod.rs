@@ -4,6 +4,7 @@ pub mod mvcc;
 mod table_codec;
 
 use itertools::Itertools;
+use moka::sync::Cache;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
@@ -15,9 +16,9 @@ use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use std::collections::{Bound, VecDeque};
+use std::collections::{Bound, HashMap, VecDeque};
 use std::mem;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use self::engine::memory::Memory;
 use self::engine::StorageEngine;
@@ -280,6 +281,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
 
 pub struct MVCCTransaction<E: StorageEngine> {
     tx: mvcc::MVCCTransaction<E>,
+    cache:Arc<Cache<TableName,TableCatalog>>,
 }
 impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     type IterType<'a> = MVCCIter<'a, E>;
@@ -474,8 +476,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
         }
-        // let indexs=Self::index_meta_collect(&table_name, &self.tx);
-        // println!("{:#?}", indexs);
+        self.cache.insert(table_name.clone(), table_catalog);
 
         Ok(table_name)
     }
@@ -498,7 +499,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
         self.tx
             .delete(&TableCodec::encode_root_table_key(table_name))?;
-
+        self.cache.remove(&Arc::new(table_name.to_string()));
         Ok(())
     }
     ///删除一个表内所有数据
@@ -515,15 +516,21 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
     fn table(&self, table_name: TableName) -> Option<TableCatalog> {
         // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
+        if self.cache.contains_key(&table_name){
+            return self.cache.get(&table_name);
+        }
         let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
         let indexes = Self::index_meta_collect(&table_name, &self.tx)?
             .into_iter()
             .map(Arc::new)
             .collect_vec();
-        // println!("{:#?}", indexes);
+
         match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
             Ok(table) => Some(table),
-            Err(_) => None,
+            Err(e) => {
+                println!("{:#?}", e);
+                None
+            }
         }
     }
 
@@ -568,10 +575,9 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             col.desc.is_unique = true;
             let mut table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
             Self::create_index(&mut self.tx, &mut table, Some(index_name.to_string()))?;
-        }
-        // let indexs=Self::index_meta_collect(&table_name, &self.tx);
-        // println!("{:#?}", indexs);
+            self.cache.insert(table_name, table);
 
+        }
         Ok(())
     }
 
@@ -607,15 +613,16 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         let (index_min, index_max) = TableCodec::index_bound(&table_name, &item.id);
         Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
 
-        let table = TableCatalog::new_with_indexes(table_name, cols, indexs)?;
-        Self::update_table_meta(&mut self.tx, table)?;
+        let table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
+        Self::update_table_meta(&mut self.tx, &table)?;
+        self.cache.insert(table_name, table);
 
         Ok(())
     }
 }
 
 impl<E: StorageEngine> MVCCTransaction<E> {
-    fn update_table_meta(tx: &mvcc::MVCCTransaction<E>, table: TableCatalog) -> Result<()> {
+    fn update_table_meta(tx: &mvcc::MVCCTransaction<E>, table:&TableCatalog) -> Result<()> {
         for column in table.columns.values() {
             let (key, value) = TableCodec::encode_column(&table.name, column)?;
             tx.set(&key, value.to_vec())?;
@@ -741,11 +748,13 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 #[derive(Clone, Debug)]
 pub struct MVCCLayer<E: StorageEngine> {
     layer: mvcc::MVCC<E>,
+    cache:Arc<Cache<TableName,TableCatalog>>,
 }
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
         Self {
             layer: MVCC::new(Arc::new(engine)),
+            cache: Arc::new(Cache::new(20)),
         }
     }
 }
@@ -753,6 +762,7 @@ impl MVCCLayer<Memory> {
     pub fn new_memory() -> Self {
         Self {
             layer: MVCC::new(Arc::new(Memory::new())),
+            cache: Arc::new(Cache::new(20)),
         }
     }
 }
@@ -762,6 +772,7 @@ impl<E: StorageEngine> Storage for MVCCLayer<E> {
     fn transaction(&self) -> Result<Self::TransactionType> {
         Ok(MVCCTransaction {
             tx: self.layer.begin(false)?,
+            cache: Arc::clone(&self.cache),
         })
     }
 }
