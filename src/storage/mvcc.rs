@@ -1,7 +1,10 @@
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     ops::Bound,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc,
+    },
     vec,
 };
 
@@ -10,6 +13,8 @@ use super::{
     keycode::{encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
 };
 use crate::errors::*;
+use bytes::Bytes;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 type Version = u64;
 
@@ -105,6 +110,7 @@ impl Key {
 
 pub struct MVCCTransaction<E: StorageEngine> {
     engine: Arc<E>,
+    write_buf:BTreeMap<Bytes,Bytes>,
     state: TransactionState,
 }
 
@@ -150,6 +156,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 read_only,
                 active,
             },
+            write_buf: BTreeMap::new(),
         })
     }
     pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
@@ -208,6 +215,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             .map_err(|e| DatabaseError::from(e)) // remove from active set
     }
 
+    fn retry(&self) -> Result<()> {
+        todo!()
+    }
+
     fn write_version(&self, key: &[u8], value: Option<Vec<u8>>) -> Result<()> {
         if self.state.read_only {
             return Err(DatabaseError::InternalError(
@@ -228,13 +239,15 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 .copied()
                 .unwrap_or(self.state.version + 1),
         )
-        .encode()?;
+        .encode()?;//活跃事务中最老的版本或下一个版本
         let to = Key::Version(key.into(), u64::MAX).encode()?;
 
         if let Some((key, _)) = self.engine.scan(from..=to).last().transpose()? {
+            //检查key是否被其他事务修改
+            //在写写冲突判断中,出现更新的版本要么是自己写入的,要么是被其它不可见事务写入,也就是活跃事务
             match Key::decode(&key)? {
                 Key::Version(_, version) => {
-                    //被不可见事务修改
+                    //被其它活跃事务修改
                     if !self.state.is_visible(version) {
                         //我们尚未实现可序列化隔离等级,无法处理W-W冲突
                         return Err(DatabaseError::Serialization);
@@ -403,13 +416,20 @@ impl<'a, E: StorageEngine> DoubleEndedIterator for VersionIterator<'a, E> {
 
 #[derive(Clone, Debug)]
 pub struct MVCC<E: StorageEngine> {
+    has_write: Arc<AtomicBool>,
     engine: Arc<E>,
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
-        Self { engine }
+        Self {
+            engine,
+            has_write: Arc::new(AtomicBool::new(false)),
+        }
     }
-    pub fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>> {
+    pub async fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>> {
+        // if !read_only {
+        //     self.has_write.store(true, Ordering::SeqCst);
+        // }
         MVCCTransaction::begin(self.engine.clone(), read_only)
     }
     pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -424,14 +444,14 @@ impl<E: StorageEngine> MVCC<E> {
     }
     pub fn gc(&self) -> Result<()> {
         let mut scan = self.engine.scan(..).rev();
-        let mut hashset=HashSet::new();
+        let mut hashset = HashSet::new();
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
                 Key::Version(key, version) => {
                     //删除过时的键值对
                     if hashset.contains(&key) {
                         self.engine.delete(&Key::Version(key, version).encode()?)?;
-                    }else{
+                    } else {
                         hashset.insert(key.clone());
                     }
                 }
@@ -584,7 +604,7 @@ pub mod tests {
     }
 
     impl<E: StorageEngine> MVCC<E> {
-        fn setup(&self, data: Vec<(&[u8], Version, Option<&[u8]>)>) -> Result<()> {
+        async fn setup(&self, data: Vec<(&[u8], Version, Option<&[u8]>)>) -> Result<()> {
             // Segment the writes by version.
             let mut writes = HashMap::new();
             for (key, version, value) in data {
@@ -595,7 +615,7 @@ pub mod tests {
             }
             // Insert the writes with individual transactions.
             for i in 1..=writes.keys().max().copied().unwrap_or(0) {
-                let txn = self.begin(false)?;
+                let txn = self.begin(false).await?;
                 for (key, value) in writes.get(&i).unwrap_or(&Vec::new()) {
                     if let Some(value) = value {
                         txn.set(key, value.clone())?;
@@ -608,9 +628,9 @@ pub mod tests {
             Ok(())
         }
     }
-    #[test]
+    #[tokio::test]
     /// Tests that key prefixes are actually prefixes of keys.
-    fn key_prefix() -> Result<()> {
+    async fn key_prefix() -> Result<()> {
         let cases = vec![
             (KeyPrefix::NextVersion, Key::NextVersion),
             (KeyPrefix::TxnActive, Key::TxnActive(1)),
@@ -637,12 +657,12 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     /// Begin should create txns with new versions and current active sets.
-    fn begin() -> Result<()> {
+    async fn begin() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         assert_eq!(
             t1.state,
             TransactionState {
@@ -652,7 +672,7 @@ pub mod tests {
             }
         );
 
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         assert_eq!(
             t2.state,
             TransactionState {
@@ -662,7 +682,7 @@ pub mod tests {
             }
         );
 
-        let t3 = mvcc.begin(false)?;
+        let t3 = mvcc.begin(false).await?;
         assert_eq!(
             t3.state,
             TransactionState {
@@ -674,7 +694,7 @@ pub mod tests {
 
         t2.commit()?; // commit to remove from active set
 
-        let t4 = mvcc.begin(false)?;
+        let t4 = mvcc.begin(false).await?;
         assert_eq!(
             t4.state,
             TransactionState {
@@ -686,11 +706,11 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     /// Get should return the correct latest value.
-    fn get() -> Result<()> {
+    async fn get() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![1])?;
         t1.set(b"updated", vec![1])?;
         t1.set(b"updated", vec![2])?;
@@ -700,7 +720,7 @@ pub mod tests {
         t1.write_version(b"tombstone", None)?;
         t1.commit()?;
 
-        let t1 = mvcc.begin(true)?;
+        let t1 = mvcc.begin(true).await?;
         assert_eq!(t1.get(b"key")?, Some(vec![1]));
         assert_eq!(t1.get(b"updated")?, Some(vec![2]));
         assert_eq!(t1.get(b"deleted")?, None);
@@ -708,26 +728,26 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     /// Get should be isolated from future and uncommitted transactions.
-    fn get_isolation() -> Result<()> {
+    async fn get_isolation() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;
         t1.set(b"b", vec![1])?;
         t1.set(b"d", vec![1])?;
         t1.set(b"e", vec![1])?;
         t1.commit()?;
 
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         t2.set(b"a", vec![2])?;
         t2.delete(b"b")?;
         t2.set(b"c", vec![2])?;
 
-        let t3 = mvcc.begin(true)?;
+        let t3 = mvcc.begin(true).await?;
 
-        let t4 = mvcc.begin(false)?;
+        let t4 = mvcc.begin(false).await?;
         t4.set(b"d", vec![3])?;
         t4.delete(b"e")?;
         t4.set(b"f", vec![3])?;
@@ -742,15 +762,15 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     // A fuzzy (or unrepeatable) read is when t2 sees a value change after t1
     // updates it. Snapshot isolation prevents this.
-    fn anomaly_fuzzy_read() -> Result<()> {
+    async fn anomaly_fuzzy_read() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"key", 1, Some(&[0]))])?;
-
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
+        mvcc.setup(vec![(b"key", 1, Some(&[0]))]).await?;
+        //todo change test
+        let t1 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin(false).await?;
 
         assert_eq!(t2.get(b"key")?, Some(vec![0]));
         t1.set(b"key", b"t1".to_vec())?;
@@ -760,15 +780,15 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     // Read skew is when t1 reads a and b, but t2 modifies b in between the
     // reads. Snapshot isolation prevents this.
-    fn anomaly_read_skew() -> Result<()> {
+    async fn anomaly_read_skew() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"a", 1, Some(&[0])), (b"b", 1, Some(&[0]))])?;
+        mvcc.setup(vec![(b"a", 1, Some(&[0])), (b"b", 1, Some(&[0]))]).await?;
 
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(true).await?;
+        let t2 = mvcc.begin(false).await?;
 
         assert_eq!(t1.get(b"a")?, Some(vec![0]));
         t2.set(b"a", vec![2])?;
@@ -779,17 +799,17 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     // Write skew is when t1 reads a and writes it to b while t2 reads b and
     // writes it to a. Snapshot isolation DOES NOT prevent this, which is
     // expected, so we assert the current behavior. Fixing this requires
     // implementing serializable snapshot isolation.
-    fn anomaly_write_skew() -> Result<()> {
+    async fn anomaly_write_skew() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))])?;
+        mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))]).await?;
 
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin(false).await?;
 
         assert_eq!(t1.get(b"a")?, Some(vec![1]));
         assert_eq!(t2.get(b"b")?, Some(vec![2]));
@@ -802,26 +822,26 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     /// Scan should be isolated from future and uncommitted transactions.
-    fn scan_isolation() -> Result<()> {
+    async fn scan_isolation() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;
         t1.set(b"b", vec![1])?;
         t1.set(b"d", vec![1])?;
         t1.set(b"e", vec![1])?;
         t1.commit()?;
 
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         t2.set(b"a", vec![2])?;
         t2.delete(b"b")?;
         t2.set(b"c", vec![2])?;
 
-        let t3 = mvcc.begin(true)?;
+        let t3 = mvcc.begin(true).await?;
 
-        let t4 = mvcc.begin(false)?;
+        let t4 = mvcc.begin(false).await?;
         t4.set(b"d", vec![3])?;
         t4.delete(b"e")?;
         t4.set(b"f", vec![3])?;
@@ -838,7 +858,7 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     /// Tests that the key encoding is resistant to key/version overlap.
     /// For example, a naïve concatenation of keys and versions would
     /// produce incorrect ordering in this case:
@@ -846,37 +866,37 @@ pub mod tests {
     // 00|00 00 00 00 00 00 00 01
     // 00 00 00 00 00 00 00 00 02|00 00 00 00 00 00 00 02
     // 00|00 00 00 00 00 00 00 03
-    fn scan_key_version_encoding() -> Result<()> {
+    async fn scan_key_version_encoding() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(&[0], vec![1])?;
         t1.commit()?;
 
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         t2.set(&[0], vec![2])?;
         t2.set(&[0, 0, 0, 0, 0, 0, 0, 0, 2], vec![2])?;
         t2.commit()?;
 
-        let t3 = mvcc.begin(false)?;
+        let t3 = mvcc.begin(false).await?;
         t3.set(&[0], vec![3])?;
         t3.commit()?;
 
-        let t4 = mvcc.begin(true)?;
+        let t4 = mvcc.begin(true).await?;
         assert_scan!(t4.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"\x00" => [3],
             b"\x00\x00\x00\x00\x00\x00\x00\x00\x02" => [2],
         });
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     /// Sets should work on both existing, missing, and deleted keys, and be
     /// idempotent.
-    fn set() -> Result<()> {
+    async fn set() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)])?;
+        mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)]).await?;
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![2])?; // update
         t1.set(b"tombstone", vec![2])?; // update tombstone
         t1.set(b"new", vec![1])?; // new write
@@ -887,16 +907,16 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     /// Set should return serialization errors both for uncommitted versions
     /// (past and future), and future committed versions.
-    fn set_conflict() -> Result<()> {
+    async fn set_conflict() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
-        let t3 = mvcc.begin(false)?;
-        let t4 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin(false).await?;
+        let t3 = mvcc.begin(false).await?;
+        let t4 = mvcc.begin(false).await?;
 
         t1.set(b"a", vec![1])?;
         t3.set(b"c", vec![3])?;
@@ -920,22 +940,22 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     /// Tests that transaction rollback properly rolls back uncommitted writes,
     /// allowing other concurrent transactions to write the keys.
-    fn rollback() -> Result<()> {
+    async fn rollback() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
         mvcc.setup(vec![
             (b"a", 1, Some(&[0])),
             (b"b", 1, Some(&[0])),
             (b"c", 1, Some(&[0])),
             (b"d", 1, Some(&[0])),
-        ])?;
+        ]).await?;
 
         // t2 will be rolled back. t1 and t3 are concurrent transactions.
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
-        let t3 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin(false).await?;
+        let t3 = mvcc.begin(false).await?;
 
         t1.set(b"a", vec![1])?;
         t2.set(b"b", vec![2])?;
@@ -956,7 +976,7 @@ pub mod tests {
         // and t3 can perform their writes and successfully commit.
         t2.rollback()?;
 
-        let t4 = mvcc.begin(true)?;
+        let t4 = mvcc.begin(true).await?;
         assert_scan!(t4.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"a" => [0],
             b"b" => [0],
@@ -969,7 +989,7 @@ pub mod tests {
         t1.commit()?;
         t3.commit()?;
 
-        let t5 = mvcc.begin(true)?;
+        let t5 = mvcc.begin(true).await?;
         assert_scan!(t5.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"a" => [1],
             b"b" => [1],
@@ -979,16 +999,16 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     // A dirty write is when t2 overwrites an uncommitted value written by t1.
     // Snapshot isolation prevents this.
-    fn anomaly_dirty_write() -> Result<()> {
+    async fn anomaly_dirty_write() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![1])?;
 
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         assert!(matches!(
             t2.set(b"key", vec![2]),
             Err(DatabaseError::Serialization)
@@ -997,29 +1017,29 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     // A dirty read is when t2 can read an uncommitted value set by t1.
     // Snapshot isolation prevents this.
-    fn anomaly_dirty_read() -> Result<()> {
+    async fn anomaly_dirty_read() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![1])?;
 
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         assert_eq!(t2.get(b"key")?, None);
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     // A lost update is when t1 and t2 both read a value and update it, where
     // t2's update replaces t1. Snapshot isolation prevents this.
-    fn anomaly_lost_update() -> Result<()> {
+    async fn anomaly_lost_update() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"key", 1, Some(&[0]))])?;
+        mvcc.setup(vec![(b"key", 1, Some(&[0]))]).await?;
 
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin(false).await?;
 
         t1.get(b"key")?;
         t2.get(b"key")?;
@@ -1034,22 +1054,22 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     // A phantom read is when t1 reads entries matching some predicate, but a
     // modification by t2 changes which entries that match the predicate such
     // that a later read by t1 returns them. Snapshot isolation prevents this.
     //
     // We use a prefix scan as our predicate.
-    fn anomaly_phantom_read() -> Result<()> {
+    async fn anomaly_phantom_read() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
         mvcc.setup(vec![
             (b"a", 1, Some(&[0])),
             (b"ba", 1, Some(&[0])),
             (b"bb", 1, Some(&[0])),
-        ])?;
+        ]).await?;
 
-        let t1 = mvcc.begin(false)?;
-        let t2 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin(false).await?;
 
         assert_scan!(t1.scan_prefix(b"b")? => {
             b"ba" => [0],
@@ -1067,15 +1087,15 @@ pub mod tests {
 
         Ok(())
     }
-    #[test]
+    #[tokio::test]
     /// Tests unversioned key/value pairs, via set/get_unversioned().
-    fn unversioned() -> Result<()> {
+    async fn unversioned() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
         // Interleave versioned and unversioned writes.
         mvcc.set_unversioned(b"a", vec![0])?;
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;
         t1.set(b"b", vec![1])?;
         t1.set(b"c", vec![1])?;
@@ -1085,7 +1105,7 @@ pub mod tests {
         mvcc.set_unversioned(b"d", vec![0])?;
 
         // Scans should not see the unversioned writes.
-        let t2 = mvcc.begin(true)?;
+        let t2 = mvcc.begin(true).await?;
         assert_scan!(t2.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"a" => [1],
             b"b" => [1],
@@ -1105,19 +1125,19 @@ pub mod tests {
         Ok(())
     }
 
-    #[test]
+    #[tokio::test]
     /// Tests MVCC GC.
-    fn gc() -> Result<()> {
+    async fn gc() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false)?;
+        let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;
         t1.commit()?;
-        let t2 = mvcc.begin(false)?;
+        let t2 = mvcc.begin(false).await?;
         t2.set(b"a", vec![2])?;
         t2.commit()?;
 
-        let t3 = mvcc.begin(false)?;
+        let t3 = mvcc.begin(false).await?;
         t3.set(b"a", vec![3])?;
         t3.commit()?;
         let scan = mvcc
@@ -1131,8 +1151,8 @@ pub mod tests {
             .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)
             .collect::<Result<Vec<_>>>()?;
         assert_eq!(scan.len(), 1);
-        let t4 = mvcc.begin(false)?;
-        let kv=t4.get(b"a")?.unwrap();
+        let t4 = mvcc.begin(false).await?;
+        let kv = t4.get(b"a")?.unwrap();
         assert_eq!(kv, vec![3]);
 
         Ok(())

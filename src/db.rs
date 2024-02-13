@@ -1,4 +1,4 @@
-
+use pgwire::api::query;
 
 use crate::binder::{Binder, BinderContext};
 
@@ -31,7 +31,7 @@ impl<S: Storage> Database<S> {
 
     // /// Run SQL queries.
     pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>> {
-        let mut transaction = self.storage.transaction()?;
+        let mut transaction = self.storage.transaction().await?;
         let tuples = Self::_run(sql, &mut transaction)?;
 
         transaction.commit()?;
@@ -40,9 +40,12 @@ impl<S: Storage> Database<S> {
     }
 
     pub async fn new_transaction(&self) -> Result<DBTransaction<S>> {
-        let transaction = self.storage.transaction()?;
+        let transaction = self.storage.transaction().await?;
 
-        Ok(DBTransaction { inner: transaction })
+        Ok(DBTransaction {
+            inner: transaction,
+            query_list: vec![],
+        })
     }
 
     fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<Source> {
@@ -62,13 +65,22 @@ impl<S: Storage> Database<S> {
 }
 
 pub struct DBTransaction<S: Storage> {
+    query_list: Vec<String>,
     inner: S::TransactionType,
 }
 
 impl<S: Storage> DBTransaction<S> {
     pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>> {
+        self.query_list.push(sql.to_string());
         let stream = Database::<S>::_run(sql, &mut self.inner)?;
-        Ok(stream?)
+        match stream{
+            Ok(_) => Ok(stream?),
+            Err(DatabaseError::Serialization) => {
+                //rollback and retry
+                todo!()
+            },
+            _=> todo!(),
+        }
     }
     pub async fn commit(self) -> Result<()> {
         self.inner.commit()?;
@@ -85,13 +97,13 @@ impl<S: Storage> DBTransaction<S> {
 #[cfg(test)]
 mod test {
     use super::*;
-    
+
     use crate::db::Database;
     use crate::storage::engine::memory::Memory;
     use crate::storage::MVCCLayer;
     use crate::types::tuple::create_table;
     use crate::types::value::DataValue;
-    
+
     use std::sync::Arc;
     #[tokio::test]
     async fn test_transaction_sql() -> Result<()> {
@@ -128,7 +140,6 @@ mod test {
             .await?;
         let _ = database.run("insert into t1 (a, b, k, z) values (-99, 1, 1, 'k'), (-1, 2, 2, 'i'), (5, 3, 2, 'p'), (29, 4, 2, 'db')").await?;
         let _ = database.run("insert into t2 (d, c, e) values (2, 1, '2021-05-20 21:00:00'), (3, 4, '2023-09-10 00:00:00')").await?;
-
 
         println!("full t1:");
         let tuples_full_fields_t1 = database.run("select * from t1").await?;
@@ -289,7 +300,6 @@ mod test {
 
         println!("drop t1:");
         let _ = database.run("drop table t1").await?;
-
 
         Ok(())
     }

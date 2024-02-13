@@ -16,9 +16,9 @@ use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use std::collections::{Bound, HashMap, VecDeque};
+use std::collections::{Bound,  VecDeque};
 use std::mem;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 use self::engine::memory::Memory;
 use self::engine::StorageEngine;
@@ -27,7 +27,7 @@ pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
 
     #[allow(async_fn_in_trait)]
-    fn transaction(&self) -> Result<Self::TransactionType>;
+    async fn transaction(&self) -> Result<Self::TransactionType>;
 }
 
 /// Optional bounds of the reader, of the form (offset, limit).
@@ -769,9 +769,9 @@ impl MVCCLayer<Memory> {
 impl<E: StorageEngine> Storage for MVCCLayer<E> {
     type TransactionType = MVCCTransaction<E>;
 
-    fn transaction(&self) -> Result<Self::TransactionType> {
+    async fn transaction(&self) -> Result<Self::TransactionType> {
         Ok(MVCCTransaction {
-            tx: self.layer.begin(false)?,
+            tx: self.layer.begin(false).await?,
             cache: Arc::clone(&self.cache),
         })
     }
@@ -788,10 +788,10 @@ mod test {
     use self::engine::memory::Memory;
 
     use super::*;
-    #[test]
-    fn test_in_storage_works_with_data() -> Result<()> {
+    #[tokio::test]
+    async fn test_in_storage_works_with_data() -> Result<()> {
         let storage = MVCCLayer::new(Memory::new());
-        let mut transaction = storage.transaction()?;
+        let mut transaction = storage.transaction().await?;
         let columns = vec![
             Arc::new(ColumnCatalog::new(
                 "c1".to_string(),

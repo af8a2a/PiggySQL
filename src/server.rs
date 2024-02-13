@@ -115,15 +115,6 @@ impl SimpleQueryHandler for Session {
                     self.inner.run(query).await
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-                // match tuples {
-                //     Ok(tuples) => Ok(vec![Response::Query(encode_tuples(tuples)?)]),
-                //     Err(e) => {
-                //         if let DatabaseError::Serialization = e {
-                //             self.
-                //         }
-                //         let err = PgWireError::ApiError(Box::new(e));
-                //     },
-                // }
 
                 Ok(vec![Response::Query(encode_tuples(tuples)?)])
             }
