@@ -107,16 +107,23 @@ impl SimpleQueryHandler for Session {
                 Ok(vec![Response::Execution(Tag::new("OK").into())])
             }
             _ => {
-                let mut guard = self.tx.lock().await;
+                for _ in 0..100 {
+                    let mut guard = self.tx.lock().await;
 
-                let tuples = if let Some(transaction) = guard.as_mut() {
-                    transaction.run(query).await
-                } else {
-                    self.inner.run(query).await
+                    let tuples = if let Some(transaction) = guard.as_mut() {
+                        transaction.run(query).await
+                    } else {
+                        self.inner.run(query).await
+                    };
+                    match tuples {
+                        Ok(tuple) => return Ok(vec![Response::Query(encode_tuples(tuple)?)]),
+                        Err(DatabaseError::Serialization) => {},
+                        Err(e) => return Err(PgWireError::ApiError(Box::new(e))),
+                    };
+
+                    // .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
                 }
-                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-
-                Ok(vec![Response::Query(encode_tuples(tuples)?)])
+                Err(PgWireError::ApiError(Box::new(DatabaseError::Serialization)))
             }
         }
     }

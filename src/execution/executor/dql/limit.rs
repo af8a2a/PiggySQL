@@ -53,7 +53,6 @@ impl<T: Transaction> Executor<T> for Limit {
             }
             tuples.push(tuple.clone());
         }
-        println!("limit collect tuple {}", tuples.len());
         Ok(tuples)
     }
 }

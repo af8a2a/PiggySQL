@@ -72,15 +72,8 @@ pub struct DBTransaction<S: Storage> {
 impl<S: Storage> DBTransaction<S> {
     pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>> {
         self.query_list.push(sql.to_string());
-        let stream = Database::<S>::_run(sql, &mut self.inner)?;
-        match stream{
-            Ok(_) => Ok(stream?),
-            Err(DatabaseError::Serialization) => {
-                //rollback and retry
-                todo!()
-            },
-            _=> todo!(),
-        }
+        Database::<S>::_run(sql, &mut self.inner)?
+        
     }
     pub async fn commit(self) -> Result<()> {
         self.inner.commit()?;
