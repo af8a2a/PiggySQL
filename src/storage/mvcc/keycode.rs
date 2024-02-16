@@ -11,7 +11,100 @@
 // use crate::sql::types::Value;
 use std::convert::TryInto;
 
+use serde::{Deserialize, Serialize};
+
 use crate::errors::*;
+
+use super::Version;
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Key {
+    /// The next available version.
+    NextVersion,
+    /// Active (uncommitted) transactions.
+    TxnActive(Version),
+    /// A snapshot of the active set at each version. Only written for
+    /// versions where the active set is non-empty (excluding itself).
+    TxnActiveSnapshot(Version),
+    /// Keeps track of all keys written to by an active transaction (identified
+    /// by its version), in case it needs to roll back.   
+    /// Write set for a transaction version.
+    TxnWrite(Version, Vec<u8>),
+    /// A versioned key/value pair.
+    Version(Vec<u8>, Version),
+    /// Unversioned non-transactional key/value pairs. These exist separately
+    /// from versioned keys, i.e. the unversioned key "foo" is entirely
+    /// independent of the versioned key "foo@7". These are mostly used
+    /// for metadata.
+    Unversioned(Vec<u8>),
+}
+/// MVCC key prefixes, for prefix scans. These must match the keys above,
+/// including the enum variant index.
+#[derive(Debug, Deserialize, Serialize)]
+pub enum KeyPrefix {
+    NextVersion,
+    TxnActive,
+    TxnActiveSnapshot,
+    TxnWrite(Version),
+    Version(Vec<u8>),
+    Unversioned,
+}
+
+
+
+impl KeyPrefix {
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        match self {
+            KeyPrefix::NextVersion => Ok(vec![0x01]),
+            KeyPrefix::TxnActive => Ok(vec![0x02]),
+            KeyPrefix::TxnActiveSnapshot => Ok(vec![0x03]),
+            KeyPrefix::TxnWrite(version) => Ok([&[0x04][..], &encode_u64(*version)].concat()),
+            KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
+            KeyPrefix::Unversioned => Ok(vec![0x06]),
+        }
+    }
+}
+
+impl Key {
+    pub fn decode(mut bytes: &[u8]) -> Result<Self> {
+        let bytes = &mut bytes;
+        Ok(match take_byte(bytes)? {
+            0x01 => Self::NextVersion,
+            0x02 => Self::TxnActive(take_u64(bytes)?),
+            0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
+            0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?.into()),
+            0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
+            0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
+            _ => {
+                return Err(DatabaseError::InternalError(format!(
+                    "Invalid key prefix {:?}",
+                    bytes[0]
+                )))
+            }
+        })
+    }
+
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        match self {
+            Key::NextVersion => Ok(vec![0x01]),
+            Key::TxnActive(version) => Ok([&[0x02][..], &encode_u64(*version)].concat()),
+            Key::TxnActiveSnapshot(version) => Ok([&[0x03][..], &encode_u64(*version)].concat()),
+            Key::TxnWrite(version, key) => {
+                Ok([&[0x04][..], &encode_u64(*version), &encode_bytes(&key)].concat())
+            }
+            Key::Version(key, version) => {
+                Ok([&[0x05][..], &encode_bytes(&key), &encode_u64(*version)].concat())
+            }
+            Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
+        }
+    }
+}
+
+
+
+
+
 
 /// Encodes a boolean, using 0x00 for false and 0x01 for true.
 pub fn encode_boolean(bool: bool) -> u8 {

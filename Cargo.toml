@@ -27,7 +27,6 @@ comfy-table = "7.0.1"
 bytes = { version = "1.5.0", features = ["serde"] }
 regex = "1.10.2"
 clap ={version =  "4.5.0", features = ["derive"] }
-crossbeam = "0.8"
 crossbeam-skiplist = "0.1"
 rand = "~0.8.3"
 sled="0.34.7"
@@ -36,7 +35,7 @@ async-trait = "0.1"
 tokio-postgres = {version="0.7.10",features=["runtime"]}
 moka = {version="0.12.5",features=["sync"] }
 names = "~0.14.0"
-
+dashmap = "5.4.0"
 [dev-dependencies]
 cargo-tarpaulin = "0.27.1"
 tokio-test = "0.4.2"

@@ -1,3 +1,5 @@
+mod keycode;
+mod lock_manager;
 use std::{
     collections::{BTreeMap, HashSet},
     ops::Bound,
@@ -8,12 +10,10 @@ use std::{
     vec,
 };
 
-use super::{
-    engine::StorageEngine,
-    keycode::{encode_bytes, encode_u64, take_byte, take_bytes, take_u64},
-};
+use super::engine::StorageEngine;
 use crate::errors::*;
 use bytes::Bytes;
+pub use keycode::*;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 type Version = u64;
@@ -28,89 +28,9 @@ fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V> {
     Ok(bincode::deserialize(bytes)?)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub enum Key {
-    /// The next available version.
-    NextVersion,
-    /// Active (uncommitted) transactions.
-    TxnActive(Version),
-    /// A snapshot of the active set at each version. Only written for
-    /// versions where the active set is non-empty (excluding itself).
-    TxnActiveSnapshot(Version),
-    /// Keeps track of all keys written to by an active transaction (identified
-    /// by its version), in case it needs to roll back.   
-    /// Write set for a transaction version.
-    TxnWrite(Version, Vec<u8>),
-    /// A versioned key/value pair.
-    Version(Vec<u8>, Version),
-    /// Unversioned non-transactional key/value pairs. These exist separately
-    /// from versioned keys, i.e. the unversioned key "foo" is entirely
-    /// independent of the versioned key "foo@7". These are mostly used
-    /// for metadata.
-    Unversioned(Vec<u8>),
-}
-/// MVCC key prefixes, for prefix scans. These must match the keys above,
-/// including the enum variant index.
-#[derive(Debug, Deserialize, Serialize)]
-enum KeyPrefix {
-    NextVersion,
-    TxnActive,
-    TxnActiveSnapshot,
-    TxnWrite(Version),
-    Version(Vec<u8>),
-    Unversioned,
-}
-impl KeyPrefix {
-    fn encode(&self) -> Result<Vec<u8>> {
-        match self {
-            KeyPrefix::NextVersion => Ok(vec![0x01]),
-            KeyPrefix::TxnActive => Ok(vec![0x02]),
-            KeyPrefix::TxnActiveSnapshot => Ok(vec![0x03]),
-            KeyPrefix::TxnWrite(version) => Ok([&[0x04][..], &encode_u64(*version)].concat()),
-            KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
-            KeyPrefix::Unversioned => Ok(vec![0x06]),
-        }
-    }
-}
-
-impl Key {
-    pub fn decode(mut bytes: &[u8]) -> Result<Self> {
-        let bytes = &mut bytes;
-        Ok(match take_byte(bytes)? {
-            0x01 => Self::NextVersion,
-            0x02 => Self::TxnActive(take_u64(bytes)?),
-            0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
-            0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?.into()),
-            0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
-            0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
-            _ => {
-                return Err(DatabaseError::InternalError(format!(
-                    "Invalid key prefix {:?}",
-                    bytes[0]
-                )))
-            }
-        })
-    }
-
-    pub fn encode(&self) -> Result<Vec<u8>> {
-        match self {
-            Key::NextVersion => Ok(vec![0x01]),
-            Key::TxnActive(version) => Ok([&[0x02][..], &encode_u64(*version)].concat()),
-            Key::TxnActiveSnapshot(version) => Ok([&[0x03][..], &encode_u64(*version)].concat()),
-            Key::TxnWrite(version, key) => {
-                Ok([&[0x04][..], &encode_u64(*version), &encode_bytes(&key)].concat())
-            }
-            Key::Version(key, version) => {
-                Ok([&[0x05][..], &encode_bytes(&key), &encode_u64(*version)].concat())
-            }
-            Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
-        }
-    }
-}
-
 pub struct MVCCTransaction<E: StorageEngine> {
     engine: Arc<E>,
-    write_buf:BTreeMap<Bytes,Bytes>,
+    write_buf: BTreeMap<Bytes, Bytes>,
     state: TransactionState,
 }
 
@@ -239,7 +159,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 .copied()
                 .unwrap_or(self.state.version + 1),
         )
-        .encode()?;//活跃事务中最老的版本或下一个版本
+        .encode()?; //活跃事务中最老的版本或下一个版本
         let to = Key::Version(key.into(), u64::MAX).encode()?;
 
         if let Some((key, _)) = self.engine.scan(from..=to).last().transpose()? {
@@ -416,15 +336,11 @@ impl<'a, E: StorageEngine> DoubleEndedIterator for VersionIterator<'a, E> {
 
 #[derive(Clone, Debug)]
 pub struct MVCC<E: StorageEngine> {
-    has_write: Arc<AtomicBool>,
     engine: Arc<E>,
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
-        Self {
-            engine,
-            has_write: Arc::new(AtomicBool::new(false)),
-        }
+        Self { engine }
     }
     pub async fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>> {
         // if !read_only {
@@ -785,7 +701,8 @@ pub mod tests {
     // reads. Snapshot isolation prevents this.
     async fn anomaly_read_skew() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"a", 1, Some(&[0])), (b"b", 1, Some(&[0]))]).await?;
+        mvcc.setup(vec![(b"a", 1, Some(&[0])), (b"b", 1, Some(&[0]))])
+            .await?;
 
         let t1 = mvcc.begin(true).await?;
         let t2 = mvcc.begin(false).await?;
@@ -806,7 +723,8 @@ pub mod tests {
     // implementing serializable snapshot isolation.
     async fn anomaly_write_skew() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))]).await?;
+        mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))])
+            .await?;
 
         let t1 = mvcc.begin(false).await?;
         let t2 = mvcc.begin(false).await?;
@@ -894,7 +812,8 @@ pub mod tests {
     /// idempotent.
     async fn set() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)]).await?;
+        mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)])
+            .await?;
 
         let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![2])?; // update
@@ -950,7 +869,8 @@ pub mod tests {
             (b"b", 1, Some(&[0])),
             (b"c", 1, Some(&[0])),
             (b"d", 1, Some(&[0])),
-        ]).await?;
+        ])
+        .await?;
 
         // t2 will be rolled back. t1 and t3 are concurrent transactions.
         let t1 = mvcc.begin(false).await?;
@@ -1066,7 +986,8 @@ pub mod tests {
             (b"a", 1, Some(&[0])),
             (b"ba", 1, Some(&[0])),
             (b"bb", 1, Some(&[0])),
-        ]).await?;
+        ])
+        .await?;
 
         let t1 = mvcc.begin(false).await?;
         let t2 = mvcc.begin(false).await?;
