@@ -1,5 +1,5 @@
 mod keycode;
-mod lock_manager;
+pub mod lock_manager;
 use std::{
     collections::{BTreeMap, HashSet},
     ops::Bound,
@@ -9,6 +9,8 @@ use std::{
     },
     vec,
 };
+
+use self::lock_manager::LockManager;
 
 use super::engine::StorageEngine;
 use crate::errors::*;
@@ -30,7 +32,8 @@ fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V> {
 
 pub struct MVCCTransaction<E: StorageEngine> {
     engine: Arc<E>,
-    write_buf: BTreeMap<Bytes, Bytes>,
+    lock_manager: Option<Arc<LockManager>>,
+
     state: TransactionState,
 }
 
@@ -52,7 +55,11 @@ impl TransactionState {
     }
 }
 impl<E: StorageEngine> MVCCTransaction<E> {
-    pub fn begin(engine: Arc<E>, read_only: bool) -> Result<MVCCTransaction<E>> {
+    pub fn begin(
+        engine: Arc<E>,
+        read_only: bool,
+        lock_manager: Option<Arc<LockManager>>,
+    ) -> Result<MVCCTransaction<E>> {
         let version = match engine.get(&Key::NextVersion.encode()?)? {
             Some(ref v) => deserialize(v)?,
             None => 1,
@@ -69,6 +76,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         }
         //设置活跃事务
         engine.set(&Key::TxnActive(version).encode()?, vec![])?;
+        if let Some(ref lock_manager) = lock_manager {
+            lock_manager.init_txn(version);
+        }
+
         Ok(Self {
             engine,
             state: TransactionState {
@@ -76,7 +87,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 read_only,
                 active,
             },
-            write_buf: BTreeMap::new(),
+            lock_manager,
         })
     }
     pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
@@ -90,6 +101,15 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         if self.state.read_only {
             return Ok(());
         }
+        if let (Some(lock_manager), true) = (&self.lock_manager, !self.read_only()) {
+            lock_manager.check_abort(self.state.version)?;
+            let commit_timestamp = match self.engine.get(&Key::NextVersion.encode()?)? {
+                Some(ref v) => deserialize(v)?,
+                None => 1,
+            };
+            lock_manager.commit_txn(self.state.version, commit_timestamp)?;
+        }
+
         let remove = self
             .engine
             .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)
@@ -106,6 +126,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         if self.state.read_only {
             return Ok(());
         }
+        if let Some(lock_manager) = &self.lock_manager {
+            lock_manager.rollback_txn(self.state.version);
+        }
+
         //回滚最新事务的所有修改
         let mut rollback = Vec::new();
         let mut scan = self
@@ -132,7 +156,6 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         }
         self.engine
             .delete(&Key::TxnActive(self.state.version).encode()?)
-            .map_err(|e| DatabaseError::from(e)) // remove from active set
     }
 
     fn retry(&self) -> Result<()> {
@@ -144,6 +167,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             return Err(DatabaseError::InternalError(
                 "Write in read only mode".into(),
             ));
+        }
+        if let (Some(lock_manager), true) = (&self.lock_manager, !self.read_only()) {
+            lock_manager.acquire_write_lock(key.to_vec(), self.state.version);
+            lock_manager.check_read_locks(key.to_vec(), self.state.version)?;
         }
 
         // Check for write conflicts, i.e. if the latest key is invisible to us
@@ -190,12 +217,10 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             &Key::TxnWrite(self.state.version, key.into()).encode()?,
             vec![],
         )?;
-        self.engine
-            .set(
-                &Key::Version(key.into(), self.state.version).encode()?,
-                serialize(&value)?,
-            )
-            .map_err(|e| DatabaseError::from(e))
+        self.engine.set(
+            &Key::Version(key.into(), self.state.version).encode()?,
+            serialize(&value)?,
+        )
     }
 
     pub fn scan(&self, start: Bound<Vec<u8>>, end: Bound<Vec<u8>>) -> Result<Scan<E>> {
@@ -250,6 +275,12 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
     ///查找最新数据
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        // Acquires the SIREAD lock and records RW-dependencies with other writers.
+        if let (Some(lock_manager), true) = (&self.lock_manager, !self.read_only()) {
+            lock_manager.acquire_read_lock(key.to_vec(), self.state.version);
+            lock_manager.check_write_locks(key.to_vec(), self.state.version)?;
+        }
+
         let from = Key::Version(key.into(), 0).encode()?;
         let to = Key::Version(key.into(), self.state.version).encode()?;
 
@@ -270,6 +301,27 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 }
             };
         }
+        let from = Key::Version(key.into(), self.state.version + 1).encode()?;
+        let to = Key::Version(key.into(), std::u64::MAX).encode()?;
+
+        // Records RW-dependencies with the creators of newer-versioned entries.
+        if let (Some(lock_manager), true) = (&self.lock_manager, !self.read_only()) {
+            let mut scan = self.engine.scan(from..=to);
+            while let Some((k, _)) = scan.next().transpose()? {
+                match Key::decode(&key)? {
+                    Key::Version(_, version) => {
+                        lock_manager.abort_or_record_conflict(version, self.state.version)?
+                    }
+                    k => {
+                        return Err(DatabaseError::InternalError(format!(
+                            "Expected Txn::Record, got {:?}",
+                            k
+                        )))
+                    }
+                }
+            }
+        }
+
         Ok(None)
     }
 }
@@ -334,19 +386,26 @@ impl<'a, E: StorageEngine> DoubleEndedIterator for VersionIterator<'a, E> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MVCC<E: StorageEngine> {
     engine: Arc<E>,
+    lock_manager: Option<Arc<LockManager>>,
 }
 impl<E: StorageEngine> MVCC<E> {
-    pub fn new(engine: Arc<E>) -> Self {
-        Self { engine }
+    pub fn new(engine: Arc<E>, serializable: bool) -> Self {
+        Self {
+            engine,
+            lock_manager: match serializable {
+                true => Some(Arc::new(LockManager::new())),
+                false => None,
+            },
+        }
     }
     pub async fn begin(&self, read_only: bool) -> Result<MVCCTransaction<E>> {
         // if !read_only {
         //     self.has_write.store(true, Ordering::SeqCst);
         // }
-        MVCCTransaction::begin(self.engine.clone(), read_only)
+        MVCCTransaction::begin(self.engine.clone(), read_only, self.lock_manager.clone())
     }
     pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.engine
@@ -576,7 +635,7 @@ pub mod tests {
     #[tokio::test]
     /// Begin should create txns with new versions and current active sets.
     async fn begin() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         assert_eq!(
@@ -625,7 +684,7 @@ pub mod tests {
     #[tokio::test]
     /// Get should return the correct latest value.
     async fn get() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![1])?;
         t1.set(b"updated", vec![1])?;
@@ -647,7 +706,7 @@ pub mod tests {
     #[tokio::test]
     /// Get should be isolated from future and uncommitted transactions.
     async fn get_isolation() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;
@@ -682,7 +741,7 @@ pub mod tests {
     // A fuzzy (or unrepeatable) read is when t2 sees a value change after t1
     // updates it. Snapshot isolation prevents this.
     async fn anomaly_fuzzy_read() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![(b"key", 1, Some(&[0]))]).await?;
         //todo change test
         let t1 = mvcc.begin(false).await?;
@@ -700,7 +759,7 @@ pub mod tests {
     // Read skew is when t1 reads a and b, but t2 modifies b in between the
     // reads. Snapshot isolation prevents this.
     async fn anomaly_read_skew() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![(b"a", 1, Some(&[0])), (b"b", 1, Some(&[0]))])
             .await?;
 
@@ -722,7 +781,7 @@ pub mod tests {
     // expected, so we assert the current behavior. Fixing this requires
     // implementing serializable snapshot isolation.
     async fn anomaly_write_skew() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))])
             .await?;
 
@@ -732,18 +791,31 @@ pub mod tests {
         assert_eq!(t1.get(b"a")?, Some(vec![1]));
         assert_eq!(t2.get(b"b")?, Some(vec![2]));
 
-        t1.set(b"b", vec![1])?;
-        t2.set(b"a", vec![2])?;
+        //write set has intersetion with read set
+        assert_eq!(
+            matches!(t1.set(b"b", vec![1]), Err(DatabaseError::Serialization)),
+            false
+        );
+        assert_eq!(
+            matches!(t2.set(b"a", vec![2]), Err(DatabaseError::Serialization)),
+            true
+        );
 
-        t1.commit()?;
-        t2.commit()?;
+        assert_eq!(
+            matches!(t1.commit(), Err(DatabaseError::Serialization)),
+            true
+        );
+        assert_eq!(
+            matches!(t2.commit(), Err(DatabaseError::Serialization)),
+            true
+        );
 
         Ok(())
     }
     #[tokio::test]
     /// Scan should be isolated from future and uncommitted transactions.
     async fn scan_isolation() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;
@@ -785,7 +857,7 @@ pub mod tests {
     // 00 00 00 00 00 00 00 00 02|00 00 00 00 00 00 00 02
     // 00|00 00 00 00 00 00 00 03
     async fn scan_key_version_encoding() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         t1.set(&[0], vec![1])?;
@@ -811,7 +883,7 @@ pub mod tests {
     /// Sets should work on both existing, missing, and deleted keys, and be
     /// idempotent.
     async fn set() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)])
             .await?;
 
@@ -830,7 +902,7 @@ pub mod tests {
     /// Set should return serialization errors both for uncommitted versions
     /// (past and future), and future committed versions.
     async fn set_conflict() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         let t2 = mvcc.begin(false).await?;
@@ -863,7 +935,7 @@ pub mod tests {
     /// Tests that transaction rollback properly rolls back uncommitted writes,
     /// allowing other concurrent transactions to write the keys.
     async fn rollback() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![
             (b"a", 1, Some(&[0])),
             (b"b", 1, Some(&[0])),
@@ -923,7 +995,7 @@ pub mod tests {
     // A dirty write is when t2 overwrites an uncommitted value written by t1.
     // Snapshot isolation prevents this.
     async fn anomaly_dirty_write() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![1])?;
@@ -941,7 +1013,7 @@ pub mod tests {
     // A dirty read is when t2 can read an uncommitted value set by t1.
     // Snapshot isolation prevents this.
     async fn anomaly_dirty_read() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         t1.set(b"key", vec![1])?;
@@ -955,7 +1027,7 @@ pub mod tests {
     // A lost update is when t1 and t2 both read a value and update it, where
     // t2's update replaces t1. Snapshot isolation prevents this.
     async fn anomaly_lost_update() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![(b"key", 1, Some(&[0]))]).await?;
 
         let t1 = mvcc.begin(false).await?;
@@ -964,12 +1036,23 @@ pub mod tests {
         t1.get(b"key")?;
         t2.get(b"key")?;
 
-        t1.set(b"key", vec![1])?;
-        assert!(matches!(
-            t2.set(b"key", vec![2]),
-            Err(DatabaseError::Serialization)
-        ));
-        t1.commit()?;
+        assert_eq!(
+            matches!(t1.set(b"key", vec![1]), Err(DatabaseError::Serialization)),
+            false
+        );
+        //in SSI islotation, t2 should get serialization error
+        assert_eq!(
+            matches!(t2.set(b"key", vec![2]), Err(DatabaseError::Serialization)),
+            true
+        );
+        assert_eq!(
+            matches!(t1.commit(), Err(DatabaseError::Serialization)),
+            true
+        );
+        assert_eq!(
+            matches!(t2.commit(), Err(DatabaseError::Serialization)),
+            true
+        );
 
         Ok(())
     }
@@ -981,7 +1064,7 @@ pub mod tests {
     //
     // We use a prefix scan as our predicate.
     async fn anomaly_phantom_read() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
         mvcc.setup(vec![
             (b"a", 1, Some(&[0])),
             (b"ba", 1, Some(&[0])),
@@ -1011,7 +1094,7 @@ pub mod tests {
     #[tokio::test]
     /// Tests unversioned key/value pairs, via set/get_unversioned().
     async fn unversioned() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         // Interleave versioned and unversioned writes.
         mvcc.set_unversioned(b"a", vec![0])?;
@@ -1049,7 +1132,7 @@ pub mod tests {
     #[tokio::test]
     /// Tests MVCC GC.
     async fn gc() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
+        let mvcc = MVCC::new(Arc::new(Memory::new()), true);
 
         let t1 = mvcc.begin(false).await?;
         t1.set(b"a", vec![1])?;

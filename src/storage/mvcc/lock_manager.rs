@@ -15,7 +15,7 @@ struct TxnStatus {
 
 /// A lock manager for Serializable Snapshot Isolation.
 #[derive(Clone)]
-pub(super) struct LockManager {
+pub struct LockManager {
     read_locks: DashMap<Vec<u8>, HashSet<u64>>,
     write_locks: DashMap<Vec<u8>, HashSet<u64>>,
     txn_status: DashMap<u64, TxnStatus>,

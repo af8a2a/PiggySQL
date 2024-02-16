@@ -744,7 +744,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         Ok(columns)
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MVCCLayer<E: StorageEngine> {
     layer: mvcc::MVCC<E>,
     cache:Arc<Cache<TableName,TableCatalog>>,
@@ -752,7 +752,7 @@ pub struct MVCCLayer<E: StorageEngine> {
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
         Self {
-            layer: MVCC::new(Arc::new(engine)),
+            layer: MVCC::new(Arc::new(engine),true),
             cache: Arc::new(Cache::new(20)),
         }
     }
@@ -760,7 +760,7 @@ impl<E: StorageEngine> MVCCLayer<E> {
 impl MVCCLayer<Memory> {
     pub fn new_memory() -> Self {
         Self {
-            layer: MVCC::new(Arc::new(Memory::new())),
+            layer: MVCC::new(Arc::new(Memory::new()),false),
             cache: Arc::new(Cache::new(20)),
         }
     }
