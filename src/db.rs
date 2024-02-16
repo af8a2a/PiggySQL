@@ -1,4 +1,4 @@
-use pgwire::api::query;
+
 
 use crate::binder::{Binder, BinderContext};
 

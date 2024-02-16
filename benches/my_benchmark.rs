@@ -15,12 +15,15 @@ async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
             ",
     )
     .await?;
+    let mut batch = String::new();
     for i in 0..100000 {
-        db.run(&format!("INSERT INTO BenchTable VALUES ({},{})", i, i,))
-            .await
-            .expect("insert error");
+        batch += format!("({},{})", i, i).as_str();
+        batch += ","
     }
+    batch += format!("({},{})", 100001, 100001).as_str();
 
+    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+        .await?;
     Ok(db)
 }
 
