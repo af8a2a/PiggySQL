@@ -752,7 +752,7 @@ pub struct MVCCLayer<E: StorageEngine> {
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
         Self {
-            layer: MVCC::new(Arc::new(engine),true),
+            layer: MVCC::new(Arc::new(engine)),
             cache: Arc::new(Cache::new(20)),
         }
     }
@@ -760,7 +760,7 @@ impl<E: StorageEngine> MVCCLayer<E> {
 impl MVCCLayer<Memory> {
     pub fn new_memory() -> Self {
         Self {
-            layer: MVCC::new(Arc::new(Memory::new()),false),
+            layer: MVCC::new(Arc::new(Memory::new())),
             cache: Arc::new(Cache::new(20)),
         }
     }
