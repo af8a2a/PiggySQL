@@ -1,10 +1,9 @@
 mod keycode;
 pub mod lock_manager;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{HashSet},
     ops::Bound,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     vec,
@@ -14,9 +13,9 @@ use self::lock_manager::LockManager;
 
 use super::engine::StorageEngine;
 use crate::errors::*;
-use bytes::Bytes;
+
 pub use keycode::*;
-use parking_lot::RwLock;
+
 use serde::{Deserialize, Serialize};
 type Version = u64;
 
@@ -307,7 +306,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         // Records RW-dependencies with the creators of newer-versioned entries.
         if let (Some(lock_manager), true) = (&self.lock_manager, !self.read_only()) {
             let mut scan = self.engine.scan(from..=to);
-            while let Some((k, _)) = scan.next().transpose()? {
+            while let Some((_k, _)) = scan.next().transpose()? {
                 match Key::decode(&key)? {
                     Key::Version(_, version) => {
                         lock_manager.abort_or_record_conflict(version, self.state.version)?
