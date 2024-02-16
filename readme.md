@@ -24,6 +24,7 @@
   - [x] Join: Inner/Left/Right
   - [x] Alias
   - [x] SubQuery(from)
+  - [x] Show tables
 - DML
   - [x] Insert
   - [x] Update
@@ -38,9 +39,8 @@
     - [x] Rollback
   - [x] Isolation Level
     - [x] Snapshot Isolation
-    - [ ] Serializable Snapshot Isolation
+    - [x] Serializable Snapshot Isolation
   - [x] Multi-Version Concurrency Control  
-    - [x] MVOCC
 - Optimization
   - [x] RBO
     - [x] Predicate Pushdown
@@ -49,6 +49,9 @@
     - [x] Coloumn Pruning
 - Execution
   - [x] Volcano
+- Net
+  - [x] psql Client
+  - [x] Server
 
 ## References
 We have referred to the following excellent open-source database projects and express our gratitude for their work
