@@ -1,5 +1,8 @@
 use std::{
-    array::TryFromSliceError, num::{ParseFloatError, ParseIntError, TryFromIntError}, str::ParseBoolError, string::FromUtf8Error
+    array::TryFromSliceError,
+    num::{ParseFloatError, ParseIntError, TryFromIntError},
+    str::ParseBoolError,
+    string::FromUtf8Error,
 };
 
 use chrono::ParseError;
@@ -158,5 +161,10 @@ pub enum DatabaseError {
         #[source]
         sled::Error,
     ),
-
+    #[error("client error {0}")]
+    ClientError(
+        #[from]
+        #[source]
+        tokio_postgres::Error,
+    ),
 }
