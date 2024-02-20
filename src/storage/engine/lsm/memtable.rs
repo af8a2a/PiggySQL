@@ -1,10 +1,13 @@
-use std::ops::{Bound, Range, RangeBounds};
+use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 use crate::errors::Result;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
+
+use super::iterators::StorageIter;
+use super::sstable::SsTableBuilder;
 
 /// A basic mem-table based on crossbeam-skiplist
 pub struct MemTable {
@@ -148,106 +151,108 @@ impl DoubleEndedIterator for MemTableIter {
 }
 
 #[cfg(test)]
-use tempfile::tempdir;
+mod test {
+    use tempfile::tempdir;
 
-use super::iterators::StorageIter;
-use super::sstable::SsTableBuilder;
+    use crate::storage::engine::lsm::sstable::SsTableIter;
 
-#[test]
-fn test_memtable_get() {
-    let memtable = MemTable::create();
-    memtable.set(b"key1", b"value1".to_vec());
-    memtable.set(b"key2", b"value2".to_vec());
-    memtable.set(b"key3", b"value3".to_vec());
-    assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value1");
-    assert_eq!(&memtable.get(b"key2").unwrap()[..], b"value2");
-    assert_eq!(&memtable.get(b"key3").unwrap()[..], b"value3");
-}
+    use super::*;
 
-#[test]
-fn test_memtable_overwrite() {
-    let memtable = MemTable::create();
-    memtable.set(b"key1", b"value1".to_vec());
-    memtable.set(b"key2", b"value2".to_vec());
-    memtable.set(b"key3", b"value3".to_vec());
-    memtable.set(b"key1", b"value11".to_vec());
-    memtable.set(b"key2", b"value22".to_vec());
-    memtable.set(b"key3", b"value33".to_vec());
-    assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value11");
-    assert_eq!(&memtable.get(b"key2").unwrap()[..], b"value22");
-    assert_eq!(&memtable.get(b"key3").unwrap()[..], b"value33");
-}
+    #[test]
+    fn test_memtable_get() {
+        let memtable = MemTable::create();
+        memtable.set(b"key1", b"value1".to_vec());
+        memtable.set(b"key2", b"value2".to_vec());
+        memtable.set(b"key3", b"value3".to_vec());
+        assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value1");
+        assert_eq!(&memtable.get(b"key2").unwrap()[..], b"value2");
+        assert_eq!(&memtable.get(b"key3").unwrap()[..], b"value3");
+    }
 
-#[test]
-fn test_memtable_flush() {
-    use super::sstable::SsTableIter;
-    let memtable = MemTable::create();
-    memtable.set(b"key1", b"value1".to_vec());
-    memtable.set(b"key2", b"value2".to_vec());
-    memtable.set(b"key3", b"value3".to_vec());
-    let mut builder = SsTableBuilder::new(128);
-    memtable.flush(&mut builder).unwrap();
-    let dir = tempdir().unwrap();
-    let sst = builder.build_for_test(dir.path().join("1.sst")).unwrap();
-    let mut iter = SsTableIter::new(sst.into()).unwrap();
-    let (key, value) = iter.next().unwrap().unwrap();
-    assert_eq!(key, b"key1");
-    assert_eq!(value, b"value1");
-    let (key, value) = iter.next().unwrap().unwrap();
-    assert_eq!(key, b"key2");
-    assert_eq!(value, b"value2");
-    let (key, value) = iter.next().unwrap().unwrap();
-    assert_eq!(key, b"key3");
-    assert_eq!(value, b"value3");
-    assert!(!iter.is_valid());
-}
+    #[test]
+    fn test_memtable_overwrite() {
+        let memtable = MemTable::create();
+        memtable.set(b"key1", b"value1".to_vec());
+        memtable.set(b"key2", b"value2".to_vec());
+        memtable.set(b"key3", b"value3".to_vec());
+        memtable.set(b"key1", b"value11".to_vec());
+        memtable.set(b"key2", b"value22".to_vec());
+        memtable.set(b"key3", b"value33".to_vec());
+        assert_eq!(&memtable.get(b"key1").unwrap()[..], b"value11");
+        assert_eq!(&memtable.get(b"key2").unwrap()[..], b"value22");
+        assert_eq!(&memtable.get(b"key3").unwrap()[..], b"value33");
+    }
 
-#[test]
-fn test_memtable_iter() {
-    let memtable = MemTable::create();
-    memtable.set(b"key1", b"value1".to_vec());
-    memtable.set(b"key2", b"value2".to_vec());
-    memtable.set(b"key3", b"value3".to_vec());
-
-    {
-        let mut iter = memtable.scan(..);
-        iter.next().unwrap().unwrap();
-        let (key, value) = iter.front_entry().unwrap();
+    #[test]
+    fn test_memtable_flush() {
+        let memtable = MemTable::create();
+        memtable.set(b"key1", b"value1".to_vec());
+        memtable.set(b"key2", b"value2".to_vec());
+        memtable.set(b"key3", b"value3".to_vec());
+        let mut builder = SsTableBuilder::new(128);
+        memtable.flush(&mut builder).unwrap();
+        let dir = tempdir().unwrap();
+        let sst = builder.build_for_test(dir.path().join("1.sst")).unwrap();
+        let mut iter = SsTableIter::new(sst.into()).unwrap();
+        let (key, value) = iter.next().unwrap().unwrap();
         assert_eq!(key, b"key1");
         assert_eq!(value, b"value1");
-        iter.next_back().unwrap().unwrap();
-        let (key, value) = iter.back_entry().unwrap();
+        let (key, value) = iter.next().unwrap().unwrap();
+        assert_eq!(key, b"key2");
+        assert_eq!(value, b"value2");
+        let (key, value) = iter.next().unwrap().unwrap();
         assert_eq!(key, b"key3");
         assert_eq!(value, b"value3");
-        iter.next().unwrap().unwrap();
-        let (key, value) = iter.front_entry().unwrap();
-        assert_eq!(key, b"key2");
-        assert_eq!(value, b"value2");
-        iter.next();
         assert!(!iter.is_valid());
     }
 
-    {
-        let mut iter = memtable.scan(b"key1".to_vec()..=b"key2".to_vec());
-        iter.next().unwrap().unwrap();
-        let (key, value) = iter.front_entry().unwrap();
-        assert_eq!(key, b"key1");
-        assert_eq!(value, b"value1");
-        iter.next().unwrap().unwrap();
-        let (key, value) = iter.front_entry().unwrap();
-        assert_eq!(key, b"key2");
-        assert_eq!(value, b"value2");
-        iter.next();
-        assert!(!iter.is_valid());
-    }
+    #[test]
+    fn test_memtable_iter() {
+        let memtable = MemTable::create();
+        memtable.set(b"key1", b"value1".to_vec());
+        memtable.set(b"key2", b"value2".to_vec());
+        memtable.set(b"key3", b"value3".to_vec());
 
-    {
-        let mut iter = memtable.scan(Range::from(b"key2".to_vec()..b"key3".to_vec()));
-        iter.next().unwrap().unwrap();
-        let (key, value) = iter.front_entry().unwrap();
-        assert_eq!(key, b"key2");
-        assert_eq!(value, b"value2");
-        iter.next();
-        assert!(!iter.is_valid());
+        {
+            let mut iter = memtable.scan(..);
+            iter.next().unwrap().unwrap();
+            let (key, value) = iter.front_entry().unwrap();
+            assert_eq!(key, b"key1");
+            assert_eq!(value, b"value1");
+            iter.next_back().unwrap().unwrap();
+            let (key, value) = iter.back_entry().unwrap();
+            assert_eq!(key, b"key3");
+            assert_eq!(value, b"value3");
+            iter.next().unwrap().unwrap();
+            let (key, value) = iter.front_entry().unwrap();
+            assert_eq!(key, b"key2");
+            assert_eq!(value, b"value2");
+            iter.next();
+            assert!(!iter.is_valid());
+        }
+
+        {
+            let mut iter = memtable.scan(b"key1".to_vec()..=b"key2".to_vec());
+            iter.next().unwrap().unwrap();
+            let (key, value) = iter.front_entry().unwrap();
+            assert_eq!(key, b"key1");
+            assert_eq!(value, b"value1");
+            iter.next().unwrap().unwrap();
+            let (key, value) = iter.front_entry().unwrap();
+            assert_eq!(key, b"key2");
+            assert_eq!(value, b"value2");
+            iter.next();
+            assert!(!iter.is_valid());
+        }
+
+        {
+            let mut iter = memtable.scan(b"key2".to_vec()..b"key3".to_vec());
+            iter.next().unwrap().unwrap();
+            let (key, value) = iter.front_entry().unwrap();
+            assert_eq!(key, b"key2");
+            assert_eq!(value, b"value2");
+            iter.next();
+            assert!(!iter.is_valid());
+        }
     }
 }

@@ -195,7 +195,7 @@ mod test{
     
     
     fn generate_memtable_mergeiter(scales: Vec<usize>, expected: Vec<(Vec<u8>, Vec<u8>)>) -> MergeIter<MemTableIter> {
-        use std::ops::Range;
+        
     
         let mut index = 0;
         let mut memtable_iters = vec![];

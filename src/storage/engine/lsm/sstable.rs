@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::ops::{Bound, Range, RangeBounds};
+use std::ops::{Bound, RangeBounds};
 use std::os::windows::fs::FileExt;
 use std::path::Path;
 use std::sync::Arc;
@@ -10,6 +10,11 @@ use super::block::{Block, BlockBuilder, BlockIter};
 use super::iterators::StorageIter;
 use super::lsm_storage::BlockCache;
 use crate::errors::{DatabaseError, Result};
+/// Data alignment:
+///
+/// | meta_entry_1 |  
+/// | --- | --- | --- |  
+/// | offset (4B) | first_key_len (2B) | first_key (first_key_len) | ... |  
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
@@ -19,11 +24,6 @@ pub struct BlockMeta {
     pub first_key: Bytes,
 }
 
-/// Data alignment:
-///
-///     |                        meta_entry_1                          |
-///     | offset (4B) | first_key_len (2B) | first_key (first_key_len) | ... |
-///
 impl BlockMeta {
     /// Encode block meta to a buffer.
     pub fn encode_block_meta(block_meta: &[BlockMeta], buffer: &mut Vec<u8>) {
@@ -501,251 +501,252 @@ impl DoubleEndedIterator for SsTableIter {
         self.try_next_back().transpose()
     }
 }
-
 #[cfg(test)]
-use tempfile::{tempdir, TempDir};
-
-#[test]
-fn test_sst_build_single_key() {
-    let mut builder = SsTableBuilder::new(16);
-    builder.add(b"233", b"233333");
-    let dir = tempdir().unwrap();
-    builder.build_for_test(dir.path().join("1.sst")).unwrap();
-}
-
-#[test]
-fn test_sst_build_two_blocks() {
-    let mut builder = SsTableBuilder::new(16);
-    builder.add(b"11", b"11");
-    builder.add(b"22", b"22");
-    builder.add(b"33", b"11");
-    builder.add(b"44", b"22");
-    builder.add(b"55", b"11");
-    builder.add(b"66", b"22");
-    assert!(builder.meta.len() >= 2);
-    let dir = tempdir().unwrap();
-    builder.build_for_test(dir.path().join("1.sst")).unwrap();
-}
-
-#[cfg(test)]
-fn key_of(idx: usize) -> Vec<u8> {
-    format!("key_{:03}", idx * 5).into_bytes()
-}
-
-#[cfg(test)]
-fn value_of(idx: usize) -> Vec<u8> {
-    format!("value_{:010}", idx).into_bytes()
-}
-
-#[cfg(test)]
-fn num_of_keys() -> usize {
-    100
-}
-
-#[cfg(test)]
-fn generate_sst() -> (TempDir, SsTable) {
-    let mut builder = SsTableBuilder::new(128);
-    for idx in 0..num_of_keys() {
-        let key = key_of(idx);
-        let value = value_of(idx);
-        builder.add(&key[..], &value[..]);
+mod test {
+    use super::*;
+    use tempfile::{tempdir, TempDir};
+    #[test]
+    fn test_sst_build_single_key() {
+        let mut builder = SsTableBuilder::new(16);
+        builder.add(b"233", b"233333");
+        let dir = tempdir().unwrap();
+        builder.build_for_test(dir.path().join("1.sst")).unwrap();
     }
-    let dir = tempdir().unwrap();
-    let path = dir.path().join("1.sst");
-    (dir, builder.build_for_test(path).unwrap())
-}
 
-#[test]
-fn test_sst_build_all() {
-    generate_sst();
-}
-
-#[test]
-fn test_sst_decode() {
-    let (_dir, sst) = generate_sst();
-    let meta = sst.block_metas.clone();
-    let new_sst = SsTable::open_for_test(sst.file).unwrap();
-    assert_eq!(new_sst.block_metas, meta);
-}
-
-#[cfg(test)]
-fn as_bytes(x: &[u8]) -> Bytes {
-    Bytes::copy_from_slice(x)
-}
-
-#[test]
-fn test_sst_iter() {
-    let (_dir, sst) = generate_sst();
-    let sst = Arc::new(sst);
-    let iter = SsTableIter::new(sst).unwrap();
-    let mut i = 0;
-    for entry in iter {
-        let (key, value) = entry.unwrap();
-        assert_eq!(
-            &key[..],
-            key_of(i),
-            "expected key: {:?}, actual key: {:?}",
-            as_bytes(&key_of(i)),
-            as_bytes(&key[..])
-        );
-        assert_eq!(
-            &value[..],
-            value_of(i),
-            "expected value: {:?}, actual value: {:?}",
-            as_bytes(&value_of(i)),
-            as_bytes(&value[..])
-        );
-        i += 1;
+    #[test]
+    fn test_sst_build_two_blocks() {
+        let mut builder = SsTableBuilder::new(16);
+        builder.add(b"11", b"11");
+        builder.add(b"22", b"22");
+        builder.add(b"33", b"11");
+        builder.add(b"44", b"22");
+        builder.add(b"55", b"11");
+        builder.add(b"66", b"22");
+        assert!(builder.meta.len() >= 2);
+        let dir = tempdir().unwrap();
+        builder.build_for_test(dir.path().join("1.sst")).unwrap();
     }
-}
 
-#[test]
-fn test_sst_iter_rev() {
-    let (_dir, sst) = generate_sst();
-    let sst = Arc::new(sst);
-    let iter = SsTableIter::new(sst).unwrap();
-    let mut i = num_of_keys();
-    for entry in iter.rev() {
-        i -= 1;
-        let (key, value) = entry.unwrap();
-        assert_eq!(
-            &key[..],
-            key_of(i),
-            "expected key: {:?}, actual key: {:?}",
-            as_bytes(&key_of(i)),
-            as_bytes(&key[..])
-        );
-        assert_eq!(
-            &value[..],
-            value_of(i),
-            "expected value: {:?}, actual value: {:?}",
-            as_bytes(&value_of(i)),
-            as_bytes(&value[..])
-        );
+    #[cfg(test)]
+    fn key_of(idx: usize) -> Vec<u8> {
+        format!("key_{:03}", idx * 5).into_bytes()
     }
-}
 
-#[test]
-fn test_sst_iter_intersection() {
-    let (_dir, sst) = generate_sst();
-    let sst = Arc::new(sst);
-    let mut iter = SsTableIter::new(sst).unwrap();
-    for i in 0..(num_of_keys() / 2) {
-        let (key, value) = iter.next().unwrap().unwrap();
-        assert_eq!(
-            &key[..],
-            key_of(i),
-            "expected key: {:?}, actual key: {:?}",
-            as_bytes(&key_of(i)),
-            as_bytes(&key[..])
-        );
-        assert_eq!(
-            &value[..],
-            value_of(i),
-            "expected value: {:?}, actual value: {:?}",
-            as_bytes(&value_of(i)),
-            as_bytes(&value[..])
-        );
-
-        let (back_key, back_value) = iter.next_back().unwrap().unwrap();
-        assert_eq!(
-            &back_key[..],
-            key_of(num_of_keys() - i - 1),
-            "expected key: {:?}, actual key: {:?}",
-            as_bytes(&key_of(num_of_keys() - i - 1)),
-            as_bytes(&back_key[..])
-        );
-        assert_eq!(
-            &back_value[..],
-            value_of(num_of_keys() - i - 1),
-            "expected value: {:?}, actual value: {:?}",
-            as_bytes(&value_of(num_of_keys() - i - 1)),
-            as_bytes(&back_value[..])
-        );
+    #[cfg(test)]
+    fn value_of(idx: usize) -> Vec<u8> {
+        format!("value_{:010}", idx).into_bytes()
     }
-}
 
-#[test]
-fn test_sst_iter_intersection_random() {
-    use rand::Rng;
-    let (_dir, sst) = generate_sst();
-    let sst = Arc::new(sst);
-    let mut iter = SsTableIter::new(sst).unwrap();
-    let mut forward = 0;
-    let mut backward = 0;
-    for _ in 0..num_of_keys() {
-        match rand::thread_rng().gen_range(0..=1) {
-            1 => {
-                let (key, value) = iter.next().unwrap().unwrap();
-                assert_eq!(
-                    &key[..],
-                    key_of(forward),
-                    "expected key: {:?}, actual key: {:?}",
-                    as_bytes(&key_of(forward)),
-                    as_bytes(&key[..])
-                );
-                assert_eq!(
-                    &value[..],
-                    value_of(forward),
-                    "expected value: {:?}, actual value: {:?}",
-                    as_bytes(&value_of(forward)),
-                    as_bytes(&value[..])
-                );
-                forward += 1;
-            }
+    #[cfg(test)]
+    fn num_of_keys() -> usize {
+        100
+    }
 
-            0 => {
-                let (back_key, back_value) = iter.next_back().unwrap().unwrap();
-                assert_eq!(
-                    &back_key[..],
-                    key_of(num_of_keys() - backward - 1),
-                    "expected key: {:?}, actual key: {:?}",
-                    as_bytes(&key_of(num_of_keys() - backward - 1)),
-                    as_bytes(&back_key[..])
-                );
-                assert_eq!(
-                    &back_value[..],
-                    value_of(num_of_keys() - backward - 1),
-                    "expected value: {:?}, actual value: {:?}",
-                    as_bytes(&value_of(num_of_keys() - backward - 1)),
-                    as_bytes(&back_value[..])
-                );
-                backward += 1;
-            }
-
-            _ => {
-                assert!(false)
-            }
+    #[cfg(test)]
+    fn generate_sst() -> (TempDir, SsTable) {
+        let mut builder = SsTableBuilder::new(128);
+        for idx in 0..num_of_keys() {
+            let key = key_of(idx);
+            let value = value_of(idx);
+            builder.add(&key[..], &value[..]);
         }
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("1.sst");
+        (dir, builder.build_for_test(path).unwrap())
     }
-    assert!(!iter.is_valid());
-}
 
-#[test]
-fn test_sst_seek_key_iter() {
-    let (_dir, sst) = generate_sst();
-    let sst = Arc::new(sst);
-    let mut iter = SsTableIter::create_and_seek_to_key(sst, &key_of(0), true).unwrap();
-    for offset in 1..=5 {
-        for i in 0..num_of_keys() {
-            let (key, value) = iter.next().unwrap().unwrap();
+    #[test]
+    fn test_sst_build_all() {
+        generate_sst();
+    }
+
+    #[test]
+    fn test_sst_decode() {
+        let (_dir, sst) = generate_sst();
+        let meta = sst.block_metas.clone();
+        let new_sst = SsTable::open_for_test(sst.file).unwrap();
+        assert_eq!(new_sst.block_metas, meta);
+    }
+
+    #[cfg(test)]
+    fn as_bytes(x: &[u8]) -> Bytes {
+        Bytes::copy_from_slice(x)
+    }
+
+    #[test]
+    fn test_sst_iter() {
+        let (_dir, sst) = generate_sst();
+        let sst = Arc::new(sst);
+        let iter = SsTableIter::new(sst).unwrap();
+        let mut i = 0;
+        for entry in iter {
+            let (key, value) = entry.unwrap();
             assert_eq!(
-                key,
+                &key[..],
                 key_of(i),
                 "expected key: {:?}, actual key: {:?}",
                 as_bytes(&key_of(i)),
-                as_bytes(&key)
+                as_bytes(&key[..])
             );
             assert_eq!(
-                value,
+                &value[..],
                 value_of(i),
                 "expected value: {:?}, actual value: {:?}",
                 as_bytes(&value_of(i)),
-                as_bytes(&value)
+                as_bytes(&value[..])
             );
-            iter.front_seek_to_key(&format!("key_{:03}", i * 5 + offset).into_bytes(), true)
-                .unwrap();
+            i += 1;
         }
-        iter.front_seek_to_key(b"k", true).unwrap();
+    }
+
+    #[test]
+    fn test_sst_iter_rev() {
+        let (_dir, sst) = generate_sst();
+        let sst = Arc::new(sst);
+        let iter = SsTableIter::new(sst).unwrap();
+        let mut i = num_of_keys();
+        for entry in iter.rev() {
+            i -= 1;
+            let (key, value) = entry.unwrap();
+            assert_eq!(
+                &key[..],
+                key_of(i),
+                "expected key: {:?}, actual key: {:?}",
+                as_bytes(&key_of(i)),
+                as_bytes(&key[..])
+            );
+            assert_eq!(
+                &value[..],
+                value_of(i),
+                "expected value: {:?}, actual value: {:?}",
+                as_bytes(&value_of(i)),
+                as_bytes(&value[..])
+            );
+        }
+    }
+
+    #[test]
+    fn test_sst_iter_intersection() {
+        let (_dir, sst) = generate_sst();
+        let sst = Arc::new(sst);
+        let mut iter = SsTableIter::new(sst).unwrap();
+        for i in 0..(num_of_keys() / 2) {
+            let (key, value) = iter.next().unwrap().unwrap();
+            assert_eq!(
+                &key[..],
+                key_of(i),
+                "expected key: {:?}, actual key: {:?}",
+                as_bytes(&key_of(i)),
+                as_bytes(&key[..])
+            );
+            assert_eq!(
+                &value[..],
+                value_of(i),
+                "expected value: {:?}, actual value: {:?}",
+                as_bytes(&value_of(i)),
+                as_bytes(&value[..])
+            );
+
+            let (back_key, back_value) = iter.next_back().unwrap().unwrap();
+            assert_eq!(
+                &back_key[..],
+                key_of(num_of_keys() - i - 1),
+                "expected key: {:?}, actual key: {:?}",
+                as_bytes(&key_of(num_of_keys() - i - 1)),
+                as_bytes(&back_key[..])
+            );
+            assert_eq!(
+                &back_value[..],
+                value_of(num_of_keys() - i - 1),
+                "expected value: {:?}, actual value: {:?}",
+                as_bytes(&value_of(num_of_keys() - i - 1)),
+                as_bytes(&back_value[..])
+            );
+        }
+    }
+
+    #[test]
+    fn test_sst_iter_intersection_random() {
+        use rand::Rng;
+        let (_dir, sst) = generate_sst();
+        let sst = Arc::new(sst);
+        let mut iter = SsTableIter::new(sst).unwrap();
+        let mut forward = 0;
+        let mut backward = 0;
+        for _ in 0..num_of_keys() {
+            match rand::thread_rng().gen_range(0..=1) {
+                1 => {
+                    let (key, value) = iter.next().unwrap().unwrap();
+                    assert_eq!(
+                        &key[..],
+                        key_of(forward),
+                        "expected key: {:?}, actual key: {:?}",
+                        as_bytes(&key_of(forward)),
+                        as_bytes(&key[..])
+                    );
+                    assert_eq!(
+                        &value[..],
+                        value_of(forward),
+                        "expected value: {:?}, actual value: {:?}",
+                        as_bytes(&value_of(forward)),
+                        as_bytes(&value[..])
+                    );
+                    forward += 1;
+                }
+
+                0 => {
+                    let (back_key, back_value) = iter.next_back().unwrap().unwrap();
+                    assert_eq!(
+                        &back_key[..],
+                        key_of(num_of_keys() - backward - 1),
+                        "expected key: {:?}, actual key: {:?}",
+                        as_bytes(&key_of(num_of_keys() - backward - 1)),
+                        as_bytes(&back_key[..])
+                    );
+                    assert_eq!(
+                        &back_value[..],
+                        value_of(num_of_keys() - backward - 1),
+                        "expected value: {:?}, actual value: {:?}",
+                        as_bytes(&value_of(num_of_keys() - backward - 1)),
+                        as_bytes(&back_value[..])
+                    );
+                    backward += 1;
+                }
+
+                _ => {
+                    assert!(false)
+                }
+            }
+        }
+        assert!(!iter.is_valid());
+    }
+
+    #[test]
+    fn test_sst_seek_key_iter() {
+        let (_dir, sst) = generate_sst();
+        let sst = Arc::new(sst);
+        let mut iter = SsTableIter::create_and_seek_to_key(sst, &key_of(0), true).unwrap();
+        for offset in 1..=5 {
+            for i in 0..num_of_keys() {
+                let (key, value) = iter.next().unwrap().unwrap();
+                assert_eq!(
+                    key,
+                    key_of(i),
+                    "expected key: {:?}, actual key: {:?}",
+                    as_bytes(&key_of(i)),
+                    as_bytes(&key)
+                );
+                assert_eq!(
+                    value,
+                    value_of(i),
+                    "expected value: {:?}, actual value: {:?}",
+                    as_bytes(&value_of(i)),
+                    as_bytes(&value)
+                );
+                iter.front_seek_to_key(&format!("key_{:03}", i * 5 + offset).into_bytes(), true)
+                    .unwrap();
+            }
+            iter.front_seek_to_key(b"k", true).unwrap();
+        }
     }
 }
