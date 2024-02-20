@@ -36,6 +36,7 @@ tokio-postgres = {version="0.7.10",features=["runtime"]}
 moka = {version="0.12.5",features=["sync"] }
 ouroboros = "0.15"
 dashmap = "5.4.0"
+crc32fast = "1.3.2"
 
 
 [dev-dependencies]
