@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::ops::{Bound, RangeBounds};
-use std::os::windows::fs::FileExt;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -71,12 +70,23 @@ impl FileObject {
 
     pub fn read(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
         let mut data = vec![0; len as usize];
-        self.0.seek_read(&mut data[..], offset)?;
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::fs::FileExt;
+            self.0.seek_read(&mut data[..], offset)?;
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::fs::FileExt;
+            self.0.read_exact_at(&mut data[..], offset)?;
+        }
         Ok(data)
     }
 
-    pub fn open(_path: &Path) -> Result<Self> {
-        unimplemented!()
+    pub fn open(path: &Path) -> Result<Self> {
+        let file = File::options().read(true).write(false).open(path)?;
+        let size = file.metadata()?.len();
+        Ok(FileObject(file, size))
     }
 
     pub fn size(&self) -> u64 {
