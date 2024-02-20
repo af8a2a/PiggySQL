@@ -50,6 +50,37 @@ impl MakeHandler for Server {
         })
     }
 }
+
+// impl ExtendedQueryHandler for Server {
+//     type Statement;
+
+//     type QueryParser;
+
+//     #[doc = r" Get a reference to associated `QueryParser` implementation"]
+// fn query_parser(&self) -> Arc<Self::QueryParser>  {
+//         todo!()
+//     }
+
+//     #[doc = r" Return resultset metadata without actually executing statement or portal"]
+// #[must_use]
+// #[allow(clippy::type_complexity,clippy::type_repetition_in_bounds)]
+// fn do_describe<'life0,'life1,'life2,'async_trait,C, >(&'life0 self,client: &'life1 mut C,target:StatementOrPortal<'life2,Self::Statement> ,) ->  ::core::pin::Pin<Box<dyn ::core::future::Future<Output = PgWireResult<DescribeResponse> > + ::core::marker::Send+'async_trait> >where C:ClientInfo+ClientPortalStore+Sink<PgWireBackendMessage> +Unpin+Send+Sync,C::PortalStore:PortalStore<Statement = Self::Statement> ,C::Error:Debug,PgWireError:From< <C as Sink<PgWireBackendMessage> > ::Error> ,C:'async_trait+ ,'life0:'async_trait,'life1:'async_trait,'life2:'async_trait,Self:'async_trait {
+//         todo!()
+//     }
+
+//     #[doc = r" This is the main implementation for query execution. Context has"]
+// #[doc = r" been provided:"]
+// #[doc = r""]
+// #[doc = r" - `client`: Information of the client sending the query"]
+// #[doc = r" - `portal`: Statement and parameters for the query"]
+// #[doc = r" - `max_rows`: Max requested rows of the query"]
+// #[must_use]
+// #[allow(clippy::type_complexity,clippy::type_repetition_in_bounds)]
+// fn do_query<'a,'b,'life0,'async_trait,C, >(&'b self,client: &'life0 mut C,portal: &'a Portal<Self::Statement> ,max_rows:usize,) ->  ::core::pin::Pin<Box<dyn ::core::future::Future<Output = PgWireResult<Response<'a> > > + ::core::marker::Send+'async_trait> >where C:ClientInfo+ClientPortalStore+Sink<PgWireBackendMessage> +Unpin+Send+Sync,C::PortalStore:PortalStore<Statement = Self::Statement> ,C::Error:Debug,PgWireError:From< <C as Sink<PgWireBackendMessage> > ::Error> ,'a:'async_trait+ ,'b:'async_trait+'a,C:'async_trait+ ,'life0:'async_trait,Self:'async_trait {
+//         todo!()
+//     }
+// }
+
 #[async_trait]
 impl SimpleQueryHandler for Session {
     async fn do_query<'a, 'b: 'a, C>(
