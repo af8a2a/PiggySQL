@@ -52,30 +52,6 @@ impl StorageEngine for Memory {
         Ok(())
     }
 }
-// type SkipMapRangeIter<'a> =
-//     crossbeam_skiplist::map::Range<'a, Vec<u8>, (Bound<Vec<u8>>, Bound<Vec<u8>>), Vec<u8>, Vec<u8>>;
-
-// pub struct ScanIterator<'a> {
-//     inner: SkipMapRangeIter<'a>,
-// }
-
-// impl<'a> Iterator for ScanIterator<'a> {
-//     type Item = Result<(Vec<u8>, Vec<u8>)>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.inner
-//             .next()
-//             .map(|entry| Ok((entry.key().clone(), entry.value().clone())))
-//     }
-// }
-
-// impl<'a> DoubleEndedIterator for ScanIterator<'a> {
-//     fn next_back(&mut self) -> Option<Self::Item> {
-//         self.inner
-//             .next_back()
-//             .map(|entry| Ok((entry.key().clone(), entry.value().clone())))
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

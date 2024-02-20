@@ -6,12 +6,6 @@ pub mod lsm;
 pub type KvScan = Box<dyn DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
 
 pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
-    /// The iterator returned by scan(). Traits can't return "impl Trait", and
-    /// we don't want to use trait objects, so the type must be specified.
-    // type ScanIterator<'a>: DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>>
-    //     + 'a
-    // where
-    //     Self: 'a;
     /// Deletes a key, or does nothing if it does not exist.
     fn delete(&self, key: &[u8]) -> Result<()>;
 
@@ -103,19 +97,19 @@ mod tests {
 
                 Ok(())
             }
-
-            #[test]
-            /// Tests Engine point operations on empty keys and values. These
-            /// are as valid as any other key/value.
-            fn point_ops_empty() -> Result<()> {
-                let s = $setup;
-                assert_eq!(s.get(b"")?, None);
-                s.set(b"", vec![])?;
-                assert_eq!(s.get(b"")?, Some(vec![]));
-                s.delete(b"")?;
-                assert_eq!(s.get(b"")?, None);
-                Ok(())
-            }
+            //为了便于KV存储引擎的设计,需要使用空字符串作为墓碑值,因此底层不在支持空key和空value
+            // #[test]
+            // /// Tests Engine point operations on empty keys and values. These
+            // /// are as valid as any other key/value.
+            // fn point_ops_empty() -> Result<()> {
+            //     let s = $setup;
+            //     assert_eq!(s.get(b"")?, None);
+            //     s.set(b"", vec![])?;
+            //     assert_eq!(s.get(b"")?, Some(vec![]));
+            //     s.delete(b"")?;
+            //     assert_eq!(s.get(b"")?, None);
+            //     Ok(())
+            // }
 
             #[test]
             /// Tests Engine point operations on keys and values of increasing
@@ -345,7 +339,7 @@ mod tests {
                     if rng.gen::<f64>() < 0.8 && !keys.is_empty() {
                         keys.choose(&mut rng).unwrap().clone()
                     } else {
-                        let mut key = vec![0; rng.gen_range(0..=16)];
+                        let mut key = vec![1; rng.gen_range(1..=16)];
                         rng.fill_bytes(&mut key);
                         keys.push(key.clone());
                         key
@@ -353,7 +347,7 @@ mod tests {
                 };
 
                 let random_value = |rng: &mut rand::rngs::StdRng| -> Vec<u8> {
-                    let mut value = vec![0; rng.gen_range(0..=16)];
+                    let mut value = vec![1; rng.gen_range(1..=16)];
                     rng.fill_bytes(&mut value);
                     value
                 };
