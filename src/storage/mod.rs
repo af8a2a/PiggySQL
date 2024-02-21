@@ -40,7 +40,7 @@ pub trait Transaction: Sync + Send + 'static {
     /// The bounds is applied to the whole data batches, not per batch.
     ///
     /// The projections is column indices.
-    fn read(&self, table_name: TableName, projection: Projections) -> Result<Self::IterType<'_>>;
+    fn read(&self, table_name: TableName, bound:Bounds,projection: Projections) -> Result<Self::IterType<'_>>;
 
     fn read_by_index(
         &self,
@@ -134,11 +134,20 @@ pub(crate) fn tuple_projection(projections: &Projections, tuple: Tuple) -> Resul
 pub struct MVCCIter<'a, E: StorageEngine> {
     projection: Projections,
     all_columns: Vec<ColumnRef>,
+    bound:Bounds,
     scan: Scan<'a, E>,
 }
 
 impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
+        let limit=match self.bound.0{
+            Some(limit) => limit,
+            None => usize::MAX,
+        };
+        let offset=match self.bound.1{
+            Some(offset) => offset,
+            None => 0,
+        };
         let tuples = self
             .scan
             .iter()
@@ -149,6 +158,8 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
                     TableCodec::decode_tuple(self.all_columns.clone(), &val),
                 )
             })
+            .skip(offset)
+            .take(limit)
             .collect::<Result<Vec<_>>>()?;
         // println!("scan collect tuple {}", tuples.len());
         Ok(Some(tuples))
@@ -287,7 +298,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
     type IndexIterType<'a> = MVCCIndexIter<'a, E>;
 
-    fn read(&self, table_name: TableName, projection: Projections) -> Result<Self::IterType<'_>> {
+    fn read(&self, table_name: TableName,bound:Bounds, projection: Projections) -> Result<Self::IterType<'_>> {
         let all_columns = self
             .table(table_name.clone())
             .ok_or(DatabaseError::TableNotFound)?
@@ -296,6 +307,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         Ok(MVCCIter {
             projection,
             all_columns,
+            bound,
             scan: self.tx.scan(Bound::Included(min), Bound::Included(max))?,
         })
     }
@@ -843,6 +855,7 @@ mod test {
         )?;
         let mut iter = transaction.read(
             Arc::new("test".to_string()),
+            (None, None),
             vec![ScalarExpression::ColumnRef(columns[0].clone())],
         )?;
 

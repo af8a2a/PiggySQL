@@ -23,10 +23,10 @@ impl<T: Transaction> Executor<T> for SeqScan {
         let ScanOperator {
             table_name,
             columns,
-            
+            limit,
             ..
         } = self.op;
-        let mut iter = transaction.read(table_name,  columns)?;
+        let mut iter = transaction.read(table_name,limit, columns)?;
         // let mut tuples = Vec::new();
         let tuples = iter.fetch_tuple()?.unwrap_or(vec![]);
         // while let Some(tuple) = iter.next_tuple()? {
