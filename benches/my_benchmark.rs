@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use piggysql::{
     db::Database,
     errors::*,
-    storage::{engine::memory::Memory, MVCCLayer},
+    storage::{engine::{memory::Memory, sled_store::SledStore}, MVCCLayer},
 };
 
 async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
