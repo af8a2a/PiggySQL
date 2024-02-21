@@ -4,7 +4,7 @@ use std::{collections::HashSet, ops::Bound, sync::Arc, vec};
 
 use self::lock_manager::LockManager;
 
-use super::engine::StorageEngine;
+use super::engine::{KvScan, StorageEngine};
 use crate::errors::*;
 
 pub use keycode::*;
@@ -90,7 +90,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
         let remove = self
             .engine
-            .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)
+            .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)?
             .map(|r| r.map(|(k, _)| k).expect("key should not be empty"))
             .collect::<Vec<_>>();
         for key in remove {
@@ -109,7 +109,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         let mut rollback = Vec::new();
         let mut scan = self
             .engine
-            .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?);
+            .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)?;
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
                 Key::TxnWrite(_, key) => {
@@ -156,7 +156,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         .encode()?; //活跃事务中最老的版本或下一个版本
         let to = Key::Version(key.into(), u64::MAX).encode()?;
 
-        if let Some((key, _)) = self.engine.scan(from..=to).last().transpose()? {
+        if let Some((key, _)) = self.engine.scan(from..=to)?.last().transpose()? {
             //检查key是否被其他事务修改
             //在写写冲突判断中,出现更新的版本要么是自己写入的,要么是被其它不可见事务写入,也就是活跃事务
             match Key::decode(&key)? {
@@ -225,7 +225,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
     fn scan_active(session: &Arc<E>) -> Result<HashSet<Version>> {
         let mut active = HashSet::new();
-        let mut scan = session.scan_prefix(&KeyPrefix::TxnActive.encode()?);
+        let mut scan = session.scan_prefix(&KeyPrefix::TxnActive.encode()?)?;
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
                 Key::TxnActive(version) => active.insert(version),
@@ -251,7 +251,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         let from = Key::Version(key.into(), 0).encode()?;
         let to = Key::Version(key.into(), self.state.version).encode()?;
 
-        let mut scan = self.engine.scan(from..=to).rev();
+        let mut scan = self.engine.scan(from..=to)?.rev();
         //从新到旧遍历，找到第一个自己能够看见的版本
         while let Some((key, value)) = scan.next().transpose()? {
             match Key::decode(&key)? {
@@ -273,7 +273,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 
         // Records RW-dependencies with the creators of newer-versioned entries.
         if let Some(lock_manager) = &self.lock_manager {
-            let mut scan = self.engine.scan(from..=to);
+            let mut scan = self.engine.scan(from..=to)?;
             while let Some((_k, _)) = scan.next().transpose()? {
                 match Key::decode(&key)? {
                     Key::Version(_, version) => {
@@ -293,13 +293,13 @@ impl<E: StorageEngine> MVCCTransaction<E> {
     }
 }
 
-struct VersionIterator<'a, E: StorageEngine + 'a> {
+struct VersionIterator<'a,> {
     txn: &'a TransactionState,
-    inner: E::ScanIterator<'a>,
+    inner: KvScan,
 }
 
-impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
-    fn new(txn: &'a TransactionState, inner: E::ScanIterator<'a>) -> Self {
+impl<'a> VersionIterator<'a> {
+    fn new(txn: &'a TransactionState, inner: KvScan) -> Self {
         Self { txn, inner }
     }
     /// Decodes a raw engine key into an MVCC key and version, returning None if
@@ -340,14 +340,14 @@ impl<'a, E: StorageEngine + 'a> VersionIterator<'a, E> {
     }
 }
 
-impl<'a, E: StorageEngine> Iterator for VersionIterator<'a, E> {
+impl<'a> Iterator for VersionIterator<'a> {
     type Item = Result<(Vec<u8>, Version, Vec<u8>)>;
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().transpose()
     }
 }
 
-impl<'a, E: StorageEngine> DoubleEndedIterator for VersionIterator<'a, E> {
+impl<'a> DoubleEndedIterator for VersionIterator<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.try_next_back().transpose()
     }
@@ -390,7 +390,7 @@ impl<E: StorageEngine> MVCC<E> {
             .map_err(|e| DatabaseError::from(e))
     }
     pub fn gc(&self) -> Result<()> {
-        let mut scan = self.engine.scan(..).rev();
+        let mut scan = self.engine.scan(..)?.rev();
         let mut hashset = HashSet::new();
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
@@ -449,11 +449,12 @@ impl<'a, E: StorageEngine + 'a> Scan<'a, E> {
     }
 
     /// Returns an iterator over the result.
-    pub fn iter(&mut self) -> ScanIterator<'_, E> {
+    pub fn iter(&mut self) -> ScanIterator<'_> {
         let inner = match &self.param {
-            ScanType::Range(range) => self.engine.scan(range.clone()),
-            ScanType::Prefix(prefix) => self.engine.scan_prefix(prefix),
+            ScanType::Range(range) => self.engine.scan(range.clone()).unwrap(),
+            ScanType::Prefix(prefix) => self.engine.scan_prefix(prefix).unwrap(),
         };
+
         ScanIterator::new(self.txn, inner)
     }
 
@@ -462,17 +463,17 @@ impl<'a, E: StorageEngine + 'a> Scan<'a, E> {
         self.iter().collect()
     }
 }
-pub struct ScanIterator<'a, E: StorageEngine + 'a> {
+pub struct ScanIterator<'a> {
     /// Decodes and filters visible MVCC versions from the inner engine iterator.
-    inner: std::iter::Peekable<VersionIterator<'a, E>>,
+    inner: std::iter::Peekable<VersionIterator<'a>>,
     /// The previous key emitted by try_next_back(). Note that try_next() does
     /// not affect reverse positioning: double-ended iterators consume from each
     /// end independently.
     last_back: Option<Vec<u8>>,
 }
-impl<'a, E: StorageEngine + 'a> ScanIterator<'a, E> {
+impl<'a> ScanIterator<'a> {
     /// Creates a new scan iterator.
-    fn new(txn: &'a TransactionState, inner: E::ScanIterator<'a>) -> Self {
+    fn new(txn: &'a TransactionState, inner: KvScan) -> Self {
         Self {
             inner: VersionIterator::new(txn, inner).peekable(),
             last_back: None,
@@ -517,14 +518,14 @@ impl<'a, E: StorageEngine + 'a> ScanIterator<'a, E> {
     }
 }
 
-impl<'a, E: StorageEngine> Iterator for ScanIterator<'a, E> {
+impl<'a> Iterator for ScanIterator<'a> {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().transpose()
     }
 }
 
-impl<'a, E: StorageEngine> DoubleEndedIterator for ScanIterator<'a, E> {
+impl<'a> DoubleEndedIterator for ScanIterator<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.try_next_back().transpose()
     }
@@ -1117,13 +1118,13 @@ pub mod tests {
         t3.commit()?;
         let scan = mvcc
             .engine
-            .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)
+            .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
             .collect_vec();
         assert_eq!(scan.len(), 3);
         mvcc.gc()?;
         let scan = mvcc
             .engine
-            .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)
+            .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
             .collect::<Result<Vec<_>>>()?;
         assert_eq!(scan.len(), 1);
         let t4 = mvcc.begin(false).await?;

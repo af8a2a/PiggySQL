@@ -1,7 +1,7 @@
-use futures::{FutureExt, StreamExt};
+
 use piggysql::client::SQLClient;
 use piggysql::errors::*;
-use tokio::sync::mpsc::channel;
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
