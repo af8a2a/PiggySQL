@@ -3,7 +3,7 @@ use crate::errors::*;
 
 use std::sync::Arc;
 
-use super::Binder;
+use super::{is_valid_identifier, Binder};
 use crate::binder::{lower_case_name, split_name};
 use crate::planner::operator::alter_table::AddColumnOperator;
 use crate::planner::operator::alter_table::DropColumnOperator;
@@ -28,6 +28,12 @@ impl<'a, T: Transaction> Binder<'a, T> {
                     column_def,
                 } => {
                     let plan = ScanOperator::build(table_name.clone(), &table);
+                    let column = self.bind_column(column_def)?;
+                    if !is_valid_identifier(column.name()) {
+                        return Err(DatabaseError::InvalidColumn(
+                            "illegal column naming".to_string(),
+                        ));
+                    }
 
                     LogicalPlan {
                         operator: Operator::AddColumn(AddColumnOperator {

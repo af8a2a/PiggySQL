@@ -217,3 +217,90 @@ fn split_name(name: &ObjectName) -> Result<(&str, &str)> {
         _ => return Err(DatabaseError::InvalidTable(name.to_string())),
     })
 }
+pub(crate) fn is_valid_identifier(s: &str) -> bool {
+    s.chars().all(|c| c.is_alphanumeric() || c == '_')
+        && !s.chars().next().unwrap_or_default().is_numeric()
+        && !s.chars().all(|c| c == '_')
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use crate::binder::{Binder, BinderContext};
+    use crate::catalog::{ColumnCatalog, ColumnDesc};
+    use crate::parser;
+    use crate::planner::LogicalPlan;
+    use crate::storage::engine::memory::Memory;
+    use crate::storage::{MVCCLayer, Storage, Transaction};
+    use crate::types::LogicalType::Integer;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+    pub(crate) async fn build_test_catalog() -> Result<MVCCLayer<Memory>> {
+        let storage = MVCCLayer::new_memory();
+        let mut transaction = storage.transaction().await?;
+
+        let _ = transaction.create_table(
+            Arc::new("t1".to_string()),
+            vec![
+                ColumnCatalog::new(
+                    "c1".to_string(),
+                    false,
+                    ColumnDesc::new(Integer, true, false, None),
+                    None
+                ),
+                ColumnCatalog::new(
+                    "c2".to_string(),
+                    false,
+                    ColumnDesc::new(Integer, false, true, None),
+                    None
+                ),
+            ],
+            false,
+        )?;
+
+        let _ = transaction.create_table(
+            Arc::new("t2".to_string()),
+            vec![
+                ColumnCatalog::new(
+                    "c3".to_string(),
+                    false,
+                    ColumnDesc::new(Integer, true, false, None),
+                    None,
+                ),
+                ColumnCatalog::new(
+                    "c4".to_string(),
+                    false,
+                    ColumnDesc::new(Integer, false, false, None),
+                    None,
+                ),
+            ],
+            false,
+        )?;
+
+        transaction.commit()?;
+
+        Ok(storage)
+    }
+
+    pub async fn select_sql_run(sql: &str) -> Result<LogicalPlan> {
+        let temp_dir = TempDir::new().expect("unable to create temporary working directory");
+        let storage = build_test_catalog().await?;
+        let transaction = storage.transaction().await?;
+        let mut binder = Binder::new(BinderContext::new(&transaction));
+        let stmt = parser::parse(sql)?;
+
+        Ok(binder.bind(&stmt[0])?)
+    }
+
+    #[test]
+    pub fn test_valid_identifier() {
+        assert!(is_valid_identifier("valid_table"));
+        assert!(is_valid_identifier("valid_column"));
+        assert!(is_valid_identifier("_valid_column"));
+        assert!(is_valid_identifier("valid_column_1"));
+
+        assert!(!is_valid_identifier("invalid_name&"));
+        assert!(!is_valid_identifier("1_invalid_name"));
+        assert!(!is_valid_identifier("____"));
+    }
+}

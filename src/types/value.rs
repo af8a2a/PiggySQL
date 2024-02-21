@@ -16,8 +16,10 @@ use serde::{Deserialize, Serialize};
 use super::LogicalType;
 
 lazy_static! {
+    pub static ref NULL_VALUE: ValueRef = Arc::new(DataValue::Null);
     static ref UNIX_DATETIME: NaiveDateTime = NaiveDateTime::from_timestamp_opt(0, 0).unwrap();
 }
+
 
 pub const DATE_FMT: &str = "%Y-%m-%d";
 pub const DATE_TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
