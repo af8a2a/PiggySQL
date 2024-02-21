@@ -225,3 +225,186 @@ impl Rule for PushPredicateThroughJoin {
         Ok(())
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use crate::binder::test::select_sql_run;
+    use crate::errors::DatabaseError;
+    use crate::expression::simplify::ConstantBinary::Scope;
+    use crate::expression::{BinaryOperator, ScalarExpression};
+    use crate::optimizer::heuristic::batch::HepBatchStrategy;
+    use crate::optimizer::heuristic::optimizer::HepOptimizer;
+    use crate::optimizer::rule::RuleImpl;
+    use crate::planner::operator::Operator;
+    use crate::types::value::DataValue;
+    use crate::types::LogicalType;
+    use std::collections::Bound;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_push_predicate_into_scan() -> Result<(), DatabaseError> {
+        // 1 - c2 < 0 => c2 > 1
+        let plan = select_sql_run("select * from t1 where -(1 - c2) > 0").await?;
+
+        let best_plan = HepOptimizer::new(plan)
+            .batch(
+                "simplify_filter".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::SimplifyFilter],
+            )
+            .batch(
+                "test_push_predicate_into_scan".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::PushPredicateIntoScan],
+            )
+            .find_best()?;
+
+        if let Operator::Scan(op) = &best_plan.childrens[0].childrens[0].operator {
+            let mock_binaries = vec![Scope {
+                min: Bound::Excluded(Arc::new(DataValue::Int32(Some(1)))),
+                max: Bound::Unbounded,
+            }];
+
+            assert_eq!(op.index_by.clone().unwrap().1, mock_binaries);
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_push_predicate_through_join_in_left_join() -> Result<(), DatabaseError> {
+        let plan =
+            select_sql_run("select * from t1 left join t2 on c1 = c3 where c1 > 1 and c3 < 2")
+                .await?;
+
+        let best_plan = HepOptimizer::new(plan)
+            .batch(
+                "test_push_predicate_through_join".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::PushPredicateThroughJoin],
+            )
+            .find_best()?;
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].operator {
+            match op.predicate {
+                ScalarExpression::Binary {
+                    op: BinaryOperator::Lt,
+                    ty: LogicalType::Boolean,
+                    ..
+                } => (),
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].childrens[0].childrens[0].operator {
+            match op.predicate {
+                ScalarExpression::Binary {
+                    op: BinaryOperator::Gt,
+                    ty: LogicalType::Boolean,
+                    ..
+                } => (),
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_push_predicate_through_join_in_right_join() -> Result<(), DatabaseError> {
+        let plan =
+            select_sql_run("select * from t1 right join t2 on c1 = c3 where c1 > 1 and c3 < 2")
+                .await?;
+
+        let best_plan = HepOptimizer::new(plan)
+            .batch(
+                "test_push_predicate_through_join".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::PushPredicateThroughJoin],
+            )
+            .find_best()?;
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].operator {
+            match op.predicate {
+                ScalarExpression::Binary {
+                    op: BinaryOperator::Gt,
+                    ty: LogicalType::Boolean,
+                    ..
+                } => (),
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].childrens[0].childrens[1].operator {
+            match op.predicate {
+                ScalarExpression::Binary {
+                    op: BinaryOperator::Lt,
+                    ty: LogicalType::Boolean,
+                    ..
+                } => (),
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_push_predicate_through_join_in_inner_join() -> Result<(), DatabaseError> {
+        let plan =
+            select_sql_run("select * from t1 inner join t2 on c1 = c3 where c1 > 1 and c3 < 2")
+                .await?;
+
+        let best_plan = HepOptimizer::new(plan)
+            .batch(
+                "test_push_predicate_through_join".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::PushPredicateThroughJoin],
+            )
+            .find_best()?;
+
+        if let Operator::Join(_) = &best_plan.childrens[0].operator {
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].childrens[0].operator {
+            match op.predicate {
+                ScalarExpression::Binary {
+                    op: BinaryOperator::Gt,
+                    ty: LogicalType::Boolean,
+                    ..
+                } => (),
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].childrens[1].operator {
+            match op.predicate {
+                ScalarExpression::Binary {
+                    op: BinaryOperator::Lt,
+                    ty: LogicalType::Boolean,
+                    ..
+                } => (),
+                _ => unreachable!(),
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        Ok(())
+    }
+}

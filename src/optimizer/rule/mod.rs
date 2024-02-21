@@ -11,7 +11,7 @@ use self::{
     column_pruning::ColumnPruning,
     combine_operators::{CollapseProject, CombineFilter},
     constant_folder::ConstantFolder,
-    pushdown_limit::PushLimitIntoScan,
+    pushdown_limit::{EliminateLimits, LimitProjectTranspose, PushLimitIntoScan, PushLimitThroughJoin},
     pushdown_predicates::{PushPredicateIntoScan, PushPredicateThroughJoin},
     simplification::SimplifyFilter,
 };
@@ -30,6 +30,9 @@ pub enum RuleImpl {
     SimplifyFilter,
 
     PushLimitIntoTableScan,
+    EliminateLimits,
+    LimitProjectTranspose,
+    PushLimitThroughJoin,
     // PushDown predicates
     PushPredicateIntoScan,
     PushPredicateThroughJoin,
@@ -47,6 +50,10 @@ impl Rule for RuleImpl {
             RuleImpl::CollapseProject => CollapseProject.pattern(),
             RuleImpl::CombineFilter => CombineFilter.pattern(),
             RuleImpl::SimplifyFilter => SimplifyFilter.pattern(),
+            RuleImpl::EliminateLimits=> EliminateLimits.pattern(),
+            RuleImpl::LimitProjectTranspose => LimitProjectTranspose.pattern(),
+            RuleImpl::PushLimitThroughJoin => PushLimitThroughJoin.pattern(),
+
         }
     }
 
@@ -60,6 +67,9 @@ impl Rule for RuleImpl {
             RuleImpl::CollapseProject => CollapseProject.apply(node_id, graph),
             RuleImpl::CombineFilter => CombineFilter.apply(node_id, graph),
             RuleImpl::SimplifyFilter => SimplifyFilter.apply(node_id, graph),
+            RuleImpl::EliminateLimits => EliminateLimits.apply(node_id, graph),
+            RuleImpl::LimitProjectTranspose => LimitProjectTranspose.apply(node_id, graph),
+            RuleImpl::PushLimitThroughJoin => PushLimitThroughJoin.apply(node_id, graph),
         }
     }
 }

@@ -178,3 +178,57 @@ impl Rule for ColumnPruning {
         Ok(())
     }
 }
+#[cfg(test)]
+mod tests {
+    use crate::binder::test::select_sql_run;
+    use crate::errors::DatabaseError;
+    use crate::optimizer::heuristic::batch::HepBatchStrategy;
+    use crate::optimizer::heuristic::optimizer::HepOptimizer;
+    use crate::optimizer::rule::RuleImpl;
+    use crate::planner::operator::join::JoinCondition;
+    use crate::planner::operator::Operator;
+
+    #[tokio::test]
+    async fn test_column_pruning() -> Result<(), DatabaseError> {
+        let plan = select_sql_run("select c1, c3 from t1 left join t2 on c1 = c3").await?;
+
+        let best_plan = HepOptimizer::new(plan.clone())
+            .batch(
+                "test_column_pruning".to_string(),
+                HepBatchStrategy::once_topdown(),
+                vec![RuleImpl::ColumnPruning],
+            )
+            .find_best()?;
+
+        assert_eq!(best_plan.childrens.len(), 1);
+        match best_plan.operator {
+            Operator::Project(op) => {
+                assert_eq!(op.exprs.len(), 2);
+            }
+            _ => unreachable!("Should be a project operator"),
+        }
+        match &best_plan.childrens[0].operator {
+            Operator::Join(op) => match &op.on {
+                JoinCondition::On { on, filter } => {
+                    assert_eq!(on.len(), 1);
+                    assert!(filter.is_none());
+                }
+                _ => unreachable!("Should be a on condition"),
+            },
+            _ => unreachable!("Should be a join operator"),
+        }
+
+        assert_eq!(best_plan.childrens[0].childrens.len(), 2);
+
+        for grandson_plan in &best_plan.childrens[0].childrens {
+            match &grandson_plan.operator {
+                Operator::Scan(op) => {
+                    assert_eq!(op.columns.len(), 1);
+                }
+                _ => unreachable!("Should be a scan operator"),
+            }
+        }
+
+        Ok(())
+    }
+}

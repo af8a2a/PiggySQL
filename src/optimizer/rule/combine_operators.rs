@@ -84,3 +84,65 @@ impl Rule for CombineFilter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::binder::test::select_sql_run;
+    use crate::errors::DatabaseError;
+    use crate::expression::ScalarExpression::Constant;
+    use crate::expression::{BinaryOperator, ScalarExpression};
+    use crate::optimizer::heuristic::batch::HepBatchStrategy;
+    use crate::optimizer::heuristic::graph::HepNodeId;
+    use crate::optimizer::heuristic::optimizer::HepOptimizer;
+    use crate::optimizer::rule::RuleImpl;
+    use crate::planner::operator::Operator;
+    use crate::types::value::DataValue;
+    use crate::types::LogicalType;
+    use std::sync::Arc;
+
+
+
+    #[tokio::test]
+    async fn test_combine_filter() -> Result<(), DatabaseError> {
+        let plan = select_sql_run("select * from t1 where c1 > 1").await?;
+
+        let mut optimizer = HepOptimizer::new(plan.clone()).batch(
+            "test_combine_filter".to_string(),
+            HepBatchStrategy::once_topdown(),
+            vec![RuleImpl::CombineFilter],
+        );
+
+        let mut new_filter_op = optimizer.graph.operator(HepNodeId::new(1)).clone();
+
+        if let Operator::Filter(op) = &mut new_filter_op {
+            op.predicate = ScalarExpression::Binary {
+                op: BinaryOperator::Eq,
+                left_expr: Box::new(Constant(Arc::new(DataValue::Int8(Some(1))))),
+                right_expr: Box::new(Constant(Arc::new(DataValue::Int8(Some(1))))),
+                ty: LogicalType::Boolean,
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        optimizer
+            .graph
+            .add_node(HepNodeId::new(0), Some(HepNodeId::new(1)), new_filter_op);
+
+        let best_plan = optimizer.find_best()?;
+
+        if let Operator::Filter(op) = &best_plan.childrens[0].operator {
+            if let ScalarExpression::Binary { op, .. } = &op.predicate {
+                assert_eq!(op, &BinaryOperator::And);
+            } else {
+                unreachable!("Should be a and operator")
+            }
+        } else {
+            unreachable!("Should be a filter operator")
+        }
+
+        Ok(())
+    }
+
+
+}
