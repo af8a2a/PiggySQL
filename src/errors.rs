@@ -8,7 +8,7 @@ use std::{
 use chrono::ParseError;
 use sqlparser::parser::ParserError;
 pub type Result<T> = std::result::Result<T, DatabaseError>;
-use crate::types::LogicalType;
+use crate::types::{value::DataValue, LogicalType};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DatabaseError {
@@ -20,8 +20,8 @@ pub enum DatabaseError {
     PrimaryKeyNotFound,
     #[error("not implemented sqlparser datatype: {0}")]
     NotImplementedSqlparserDataType(String),
-    #[error("cast fail")]
-    CastFail,
+    #[error("Type:{0},lhs:{1} cast to {2} fail")]
+    CastFail(LogicalType,DataValue, LogicalType),
     #[error("too long")]
     TooLong,
     #[error("cannot be Null")]

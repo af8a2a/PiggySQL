@@ -283,7 +283,7 @@ pub mod test {
     }
 
     pub async fn select_sql_run(sql: &str) -> Result<LogicalPlan> {
-        let temp_dir = TempDir::new().expect("unable to create temporary working directory");
+        let _temp_dir = TempDir::new().expect("unable to create temporary working directory");
         let storage = build_test_catalog().await?;
         let transaction = storage.transaction().await?;
         let mut binder = Binder::new(BinderContext::new(&transaction));

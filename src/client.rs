@@ -1,8 +1,8 @@
-use crate::{errors::*, types::tuple::Tuple};
+use crate::{errors::*};
 use futures::pin_mut;
 use futures::stream::TryStreamExt;
 use rand::Rng;
-use tokio_postgres::{Client, NoTls, Row, RowStream, SimpleQueryMessage};
+use tokio_postgres::{Client, NoTls, Row, SimpleQueryMessage};
 pub struct SQLClient {
     pub client: Client,
     pub sleep_ration: u64,

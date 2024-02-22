@@ -1,11 +1,11 @@
 use crossbeam_skiplist::SkipMap;
-use itertools::Itertools;
+
 use parking_lot::Mutex;
 
 use crate::errors::Result;
 
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
-use std::mem;
+
 use std::ops::{Bound, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -68,7 +68,7 @@ impl BitCask {
 
     // /// Opens a BitCask database, and automatically compacts it if the amount
     // /// of garbage exceeds the given ratio when opened.
-    pub fn new_compact(path: PathBuf, garbage_ratio_threshold: f64) -> Result<Self> {
+    pub fn new_compact(path: PathBuf, _garbage_ratio_threshold: f64) -> Result<Self> {
         let mut s = Self::new(path)?;
 
         // let status = s.status()?;
@@ -218,7 +218,7 @@ impl BitCask {
     /// and returns it along with its keydir. Entries are written in key order.
     fn write_log(&self, path: PathBuf) -> Result<(Log, KeyDir)> {
         let new_keydir = KeyDir::new();
-        let mut new_log = Log::new(path)?;
+        let new_log = Log::new(path)?;
         new_log.file.lock().set_len(0)?; // truncate file if it exists
         for (key, (value_pos, value_len)) in self
             .keydir
@@ -239,7 +239,7 @@ impl BitCask {
 /// Attempt to flush the file when the database is closed.
 impl Drop for BitCask {
     fn drop(&mut self) {
-        if let Err(error) = self.flush() {}
+        if let Err(_error) = self.flush() {}
     }
 }
 
@@ -282,7 +282,7 @@ impl Log {
     fn build_keydir(&self) -> Result<KeyDir> {
         let mut file = self.file.lock();
         let mut len_buf = [0u8; 4];
-        let mut keydir = KeyDir::new();
+        let keydir = KeyDir::new();
         let file_len = file.metadata()?.len();
         let mut r = BufReader::new(file.deref_mut());
         let mut pos = r.seek(SeekFrom::Start(0))?;

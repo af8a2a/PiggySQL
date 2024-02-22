@@ -39,7 +39,7 @@ impl Rule for SimplifyFilter {
 mod test {
     use crate::binder::test::select_sql_run;
     use crate::catalog::{ColumnCatalog, ColumnDesc, ColumnSummary};
-    use crate::errors::DatabaseError;
+    
     use crate::expression::simplify::ConstantBinary;
     use crate::expression::{BinaryOperator, ScalarExpression, UnaryOperator};
     use crate::optimizer::heuristic::batch::HepBatchStrategy;

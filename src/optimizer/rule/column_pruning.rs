@@ -1,4 +1,4 @@
-use crate::catalog::{ColumnRef, ColumnSummary};
+use crate::catalog::{ColumnSummary};
 use crate::errors::*;
 use crate::expression::agg::Aggregate;
 use crate::expression::ScalarExpression;

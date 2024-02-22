@@ -1,5 +1,6 @@
 use crate::binder::{lower_case_name, split_name, Binder};
 use crate::catalog::ColumnRef;
+use crate::errors::*;
 use crate::expression::value_compute::unary_op;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::insert::InsertOperator;
@@ -11,7 +12,6 @@ use crate::types::value::{DataValue, ValueRef};
 use sqlparser::ast::{Expr, Ident, ObjectName};
 use std::slice;
 use std::sync::Arc;
-use crate::errors::*;
 
 impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_insert(
