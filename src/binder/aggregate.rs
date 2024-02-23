@@ -20,7 +20,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         agg_calls: Vec<ScalarExpression>,
         groupby_exprs: Vec<ScalarExpression>,
     ) -> LogicalPlan {
-        AggregateOperator::build(children, agg_calls, groupby_exprs)
+        AggregateOperator::build(children, agg_calls, groupby_exprs, false)
     }
 
     pub fn extract_select_aggregate(

@@ -3,11 +3,11 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use integer_encoding::FixedInt;
 use lazy_static::lazy_static;
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{fmt};
 
 use crate::errors::*;
 use ordered_float::OrderedFloat;
@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use super::LogicalType;
 
 lazy_static! {
+    pub static ref NULL_VALUE: ValueRef = Arc::new(DataValue::Null);
     static ref UNIX_DATETIME: NaiveDateTime = NaiveDateTime::from_timestamp_opt(0, 0).unwrap();
 }
 
@@ -546,7 +547,11 @@ impl DataValue {
     pub fn cast(self, to: &LogicalType) -> Result<DataValue> {
         match self {
             DataValue::Null => match to {
-                LogicalType::Invalid => Err(DatabaseError::CastFail),
+                LogicalType::Invalid => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(None)),
                 LogicalType::Tinyint => Ok(DataValue::Int8(None)),
@@ -577,7 +582,11 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Float32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -585,14 +594,22 @@ impl DataValue {
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Float64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Double => Ok(DataValue::Float64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Int8(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -614,7 +631,11 @@ impl DataValue {
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Int16(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -634,7 +655,11 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Int32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -650,9 +675,14 @@ impl DataValue {
                 }
                 LogicalType::Integer => Ok(DataValue::Int32(value)),
                 LogicalType::Bigint => Ok(DataValue::Int64(value.map(|v| v.into()))),
+                LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v as f32))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Int64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -668,8 +698,14 @@ impl DataValue {
                 }
                 LogicalType::Bigint => Ok(DataValue::Int64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
+                LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v as f32))),
+                LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v as f64))),
 
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::UInt8(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -683,7 +719,11 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::UInt16(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -696,7 +736,11 @@ impl DataValue {
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::UInt32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -705,16 +749,28 @@ impl DataValue {
                 LogicalType::UBigint => Ok(DataValue::UInt64(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::UInt64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::UBigint => Ok(DataValue::UInt64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Utf8(value) => match to {
-                LogicalType::Invalid => Err(DatabaseError::CastFail),
+                LogicalType::Invalid => Err(DatabaseError::CastFail(
+                    LogicalType::Invalid,
+                    DataValue::Utf8(value),
+                    to.clone(),
+                )),
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(
                     value.map(|v| bool::from_str(&v)).transpose()?,
@@ -788,7 +844,11 @@ impl DataValue {
 
                     Ok(DataValue::Date64(option))
                 }
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
             DataValue::Date64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -802,11 +862,14 @@ impl DataValue {
                     Ok(DataValue::Date32(option))
                 }
                 LogicalType::DateTime => Ok(DataValue::Date64(value)),
-                _ => Err(DatabaseError::CastFail),
+                _ => Err(DatabaseError::CastFail(
+                    self.logical_type(),
+                    self,
+                    to.clone(),
+                )),
             },
         }
     }
-
 
     fn date_format<'a>(v: i32) -> Option<DelayedFormat<StrftimeItems<'a>>> {
         NaiveDate::from_num_days_from_ce_opt(v).map(|date| date.format(DATE_FMT))
@@ -815,7 +878,6 @@ impl DataValue {
     fn date_time_format<'a>(v: i64) -> Option<DelayedFormat<StrftimeItems<'a>>> {
         NaiveDateTime::from_timestamp_opt(v, 0).map(|date_time| date_time.format(DATE_TIME_FMT))
     }
-
 }
 
 macro_rules! impl_scalar {

@@ -101,7 +101,8 @@ impl<'a, T: Transaction> Binder<'a, T> {
         }
 
         plan = self.bind_project(plan, select_list);
-
+        // println!("plan:");
+        // println!("{:?}", plan);
         Ok(plan)
     }
 

@@ -99,6 +99,19 @@ mod test {
 
     use std::sync::Arc;
     #[tokio::test]
+    async fn playground() -> Result<()> {
+        let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        database
+            .run("create table halloween (id int primary key,salary int)")
+            .await?;
+
+        let tuple=database
+            .run("show tables;")
+            .await?;
+        println!("tuple: {:#?}", tuple);
+        Ok(())
+    }
+    #[tokio::test]
     async fn test_transaction_sql() -> Result<()> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
 

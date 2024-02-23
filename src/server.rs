@@ -6,14 +6,22 @@ use futures::stream;
 use pgwire::{
     api::{
         auth::{noop::NoopStartupHandler, StartupHandler},
-        query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler},
-        results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response, Tag},
+        portal::{Format, Portal},
+        query::{
+            ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler,
+            StatementOrPortal,
+        },
+        results::{
+            DataRowEncoder, DescribeResponse, FieldFormat, FieldInfo, QueryResponse, Response, Tag,
+        },
+        stmt::NoopQueryParser,
         ClientInfo, MakeHandler, StatelessMakeHandler, Type,
     },
     error::{ErrorInfo, PgWireError, PgWireResult},
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
+use tracing::debug;
 
 use crate::{
     db::{DBTransaction, Database},
@@ -50,6 +58,148 @@ impl MakeHandler for Server {
         })
     }
 }
+
+#[async_trait]
+impl ExtendedQueryHandler for Session {
+    type Statement = String;
+
+    type QueryParser = NoopQueryParser;
+
+    fn query_parser(&self) -> Arc<Self::QueryParser> {
+        Arc::new(NoopQueryParser::new())
+    }
+    async fn do_describe<C>(
+        &self,
+        _client: &mut C,
+        target: StatementOrPortal<'_, Self::Statement>,
+    ) -> PgWireResult<DescribeResponse>
+    where
+        C: ClientInfo + Unpin + Send + Sync,
+    {
+        // match target {
+        //     StatementOrPortal::Statement(stmt) => {
+        //         debug!("do_describe Statement: {}", &stmt.statement);
+        //         let param_types = Some(stmt.parameter_types.clone());
+
+        //         let tuples = self
+        //             .inner
+        //             .run(&stmt.statement)
+        //             .await
+        //             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+        //         row_desc_from_stmt(&tuples, &Format::UnifiedBinary)
+        //             .map(|fields| DescribeResponse::new(param_types, fields))
+        //     }
+        //     StatementOrPortal::Portal(portal) => {
+        //         debug!("do_describe portal: {}", &portal.statement.statement);
+
+        //         let tuples = self
+        //             .inner
+        //             .run(&portal.statement.statement)
+        //             .await
+        //             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        //         row_desc_from_stmt(&tuples, &portal.result_column_format)
+        //             .map(|fields| DescribeResponse::new(None, fields))
+        //     }
+        Ok(DescribeResponse::new(None, vec![]))
+    }
+
+    async fn do_query<'a, C>(
+        &self,
+        _client: &mut C,
+        portal: &'a Portal<Self::Statement>,
+        _max_rows: usize,
+    ) -> PgWireResult<Response<'a>>
+    where
+        C: ClientInfo + Unpin + Send + Sync,
+    {
+        let query = &portal.statement.statement;
+        debug!("query: {}", query);
+        match query.to_uppercase().as_str() {
+            "BEGIN;" | "BEGIN" | "START TRANSACTION;" | "START TRANSACTION" => {
+                let mut guard = self.tx.lock().await;
+
+                if guard.is_some() {
+                    return Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::TransactionAlreadyExists,
+                    )));
+                }
+                let transaction = self
+                    .inner
+                    .new_transaction()
+                    .await
+                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                guard.replace(transaction);
+
+                Ok(Response::Execution(Tag::new("OK").into()))
+            }
+            "COMMIT;" | "COMMIT" => {
+                let mut guard = self.tx.lock().await;
+
+                if let Some(transaction) = guard.take() {
+                    transaction
+                        .commit()
+                        .await
+                        .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                    Ok(Response::Execution(Tag::new("OK").into()))
+                } else {
+                    Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::NoTransactionBegin,
+                    )))
+                }
+            }
+            "ROLLBACK;" | "ROLLBACK" => {
+                let mut guard = self.tx.lock().await;
+
+                if guard.is_none() {
+                    return Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::NoTransactionBegin,
+                    )));
+                }
+                drop(guard.take());
+
+                Ok(Response::Execution(Tag::new("OK").into()))
+            }
+            _ => {
+                let mut guard = self.tx.lock().await;
+
+                let tuples = if let Some(transaction) = guard.as_mut() {
+                    transaction.run(query).await
+                } else {
+                    self.inner.run(query).await
+                }
+                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                Ok(Response::Query(encode_tuples(tuples)?))
+            }
+        }
+    }
+}
+fn row_desc_from_stmt(tuple: &Vec<Tuple>, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
+    let iter = tuple.iter().next().cloned();
+    if let Some(tuple) = iter {
+        return tuple
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(idx, col)| {
+                let datatype = col.datatype();
+                let name = col.name();
+
+                Ok(FieldInfo::new(
+                    name.to_string(),
+                    None,
+                    None,
+                    into_pg_type(&datatype).unwrap(),
+                    format.format_for(idx),
+                ))
+            })
+            .collect();
+    }
+    Ok(vec![])
+}
+
 #[async_trait]
 impl SimpleQueryHandler for Session {
     async fn do_query<'a, 'b: 'a, C>(
@@ -107,23 +257,16 @@ impl SimpleQueryHandler for Session {
                 Ok(vec![Response::Execution(Tag::new("OK").into())])
             }
             _ => {
-                for _ in 0..100 {
-                    let mut guard = self.tx.lock().await;
+                let mut guard = self.tx.lock().await;
 
-                    let tuples = if let Some(transaction) = guard.as_mut() {
-                        transaction.run(query).await
-                    } else {
-                        self.inner.run(query).await
-                    };
-                    match tuples {
-                        Ok(tuple) => return Ok(vec![Response::Query(encode_tuples(tuple)?)]),
-                        Err(DatabaseError::Serialization) => {},
-                        Err(e) => return Err(PgWireError::ApiError(Box::new(e))),
-                    };
-
-                    // .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                let tuples = if let Some(transaction) = guard.as_mut() {
+                    transaction.run(query).await
+                } else {
+                    self.inner.run(query).await
                 }
-                Err(PgWireError::ApiError(Box::new(DatabaseError::Serialization)))
+                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                Ok(vec![Response::Query(encode_tuples(tuples)?)])
             }
         }
     }
@@ -142,16 +285,17 @@ impl Server {
 
         let backend = Server::new().await.unwrap();
         let processor = Arc::new(backend);
+
         // We have not implemented extended query in this server, use placeholder instead
-        let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
-            PlaceholderExtendedQueryHandler,
-        )));
+        // let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
+        //     PlaceholderExtendedQueryHandler,
+        // )));
         let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
         let server_addr = format!("{}:{}", args.ip, args.port);
         let listener = TcpListener::bind(server_addr).await.unwrap();
 
         tokio::select! {
-            res = server_run(processor, placeholder, authenticator, listener) => {
+            res = server_run(processor.clone(), processor.clone(), authenticator, listener) => {
                 if let Err(_err) = res {
                 }
             }

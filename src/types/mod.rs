@@ -305,6 +305,8 @@ impl TryFrom<sqlparser::ast::DataType> for LogicalType {
             sqlparser::ast::DataType::UnsignedBigInt(_) => Ok(LogicalType::UBigint),
             sqlparser::ast::DataType::Boolean => Ok(LogicalType::Boolean),
             sqlparser::ast::DataType::Datetime(_) => Ok(LogicalType::DateTime),
+            sqlparser::ast::DataType::Date => Ok(LogicalType::Date),
+            sqlparser::ast::DataType::Datetime(_) => Ok(LogicalType::DateTime),
             other => Err(DatabaseError::NotImplementedSqlparserDataType(
                 other.to_string(),
             )),

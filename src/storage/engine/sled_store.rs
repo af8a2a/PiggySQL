@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use sled::Db;
 
-use super::StorageEngine;
+use super::{KvScan, StorageEngine};
 use crate::errors::Result;
 pub struct SledStore {
     data: Db,
@@ -15,8 +15,6 @@ impl SledStore {
 }
 
 impl StorageEngine for SledStore {
-    type ScanIterator<'a> = ScanIterator<'a>;
-
     fn delete(&self, key: &[u8]) -> Result<()> {
         self.data.remove(key)?;
         Ok(())
@@ -35,11 +33,11 @@ impl StorageEngine for SledStore {
         }
     }
 
-    fn scan<R: std::ops::RangeBounds<Vec<u8>>>(&self, range: R) -> Self::ScanIterator<'_> {
-        ScanIterator {
+    fn scan(&self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Result<KvScan> {
+        Ok(Box::new(ScanIterator {
             inner: self.data.range(range),
             phantom_data: std::marker::PhantomData,
-        }
+        }))
     }
 
     fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {

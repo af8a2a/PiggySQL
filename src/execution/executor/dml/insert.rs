@@ -1,10 +1,11 @@
 use crate::catalog::TableName;
-use crate::execution::executor::{Source, Executor};
 use crate::errors::*;
+use crate::execution::executor::{Executor, Source};
 use crate::planner::operator::insert::InsertOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 use crate::types::tuple::Tuple;
+use crate::types::tuple_builder::TupleBuilder;
 use crate::types::value::DataValue;
 
 use std::collections::HashMap;
@@ -43,9 +44,9 @@ impl<T: Transaction> Executor<T> for Insert {
         } = self;
         let mut primary_key_index = None;
         let mut unique_values = HashMap::new();
-
+        let input = input?;
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
-            for tuple in input?.iter() {
+            for tuple in input.iter() {
                 let Tuple {
                     columns, values, ..
                 } = tuple;
@@ -110,7 +111,8 @@ impl<T: Transaction> Executor<T> for Insert {
                 }
             }
         }
-
-        Ok(vec![])
+        let tuple_builder = TupleBuilder::new_result();
+        let tuple = tuple_builder.push_result("INSERT SUCCESS", &format!("{}", input.len()))?;
+        Ok(vec![tuple])
     }
 }

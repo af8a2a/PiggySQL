@@ -3,7 +3,6 @@ use std::path::Path;
 use sqllogictest::Runner;
 use sqllogictest_test::Mock;
 #[tokio::main]
-
 async fn main() {
     const SLT_PATTERN: &str = "tests/slt/**/*.slt";
 
