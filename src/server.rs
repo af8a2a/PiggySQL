@@ -5,15 +5,13 @@ use clap::Parser;
 use futures::stream;
 use pgwire::{
     api::{
-        auth::{noop::NoopStartupHandler, StartupHandler},
-        query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler},
-        results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response, Tag},
-        ClientInfo, MakeHandler, StatelessMakeHandler, Type,
+        auth::{noop::NoopStartupHandler, StartupHandler}, portal::{Format, Portal}, query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler, StatementOrPortal}, results::{DataRowEncoder, DescribeResponse, FieldFormat, FieldInfo, QueryResponse, Response, Tag}, stmt::NoopQueryParser, ClientInfo, MakeHandler, StatelessMakeHandler, Type
     },
     error::{ErrorInfo, PgWireError, PgWireResult},
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
+use tracing::debug;
 
 use crate::{
     db::{DBTransaction, Database},
@@ -51,35 +49,141 @@ impl MakeHandler for Server {
     }
 }
 
-// impl ExtendedQueryHandler for Server {
-//     type Statement;
+#[async_trait]
+impl ExtendedQueryHandler for Session {
+    type Statement = String;
 
-//     type QueryParser;
+    type QueryParser = NoopQueryParser;
 
-//     #[doc = r" Get a reference to associated `QueryParser` implementation"]
-// fn query_parser(&self) -> Arc<Self::QueryParser>  {
-//         todo!()
-//     }
+    fn query_parser(&self) -> Arc<Self::QueryParser> {
+        Arc::new(NoopQueryParser::new())
+    }
+    async fn do_describe<C>(
+        &self,
+        _client: &mut C,
+        target: StatementOrPortal<'_, Self::Statement>,
+    ) -> PgWireResult<DescribeResponse>
+    where
+        C: ClientInfo + Unpin + Send + Sync,
+    {
+        match target {
+            StatementOrPortal::Statement(stmt) => {
+                debug!("do_describe: {}", &stmt.statement);
+                let param_types = Some(stmt.parameter_types.clone());
+                let tuples = self
+                    .inner
+                    .run(&stmt.statement)
+                    .await
+                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                row_desc_from_stmt(&tuples[0], &Format::UnifiedBinary)
+                    .map(|fields| DescribeResponse::new(param_types, fields))
+            }
+            StatementOrPortal::Portal(portal) => {
+                debug!("do_describe: {}", &portal.statement.statement);
 
-//     #[doc = r" Return resultset metadata without actually executing statement or portal"]
-// #[must_use]
-// #[allow(clippy::type_complexity,clippy::type_repetition_in_bounds)]
-// fn do_describe<'life0,'life1,'life2,'async_trait,C, >(&'life0 self,client: &'life1 mut C,target:StatementOrPortal<'life2,Self::Statement> ,) ->  ::core::pin::Pin<Box<dyn ::core::future::Future<Output = PgWireResult<DescribeResponse> > + ::core::marker::Send+'async_trait> >where C:ClientInfo+ClientPortalStore+Sink<PgWireBackendMessage> +Unpin+Send+Sync,C::PortalStore:PortalStore<Statement = Self::Statement> ,C::Error:Debug,PgWireError:From< <C as Sink<PgWireBackendMessage> > ::Error> ,C:'async_trait+ ,'life0:'async_trait,'life1:'async_trait,'life2:'async_trait,Self:'async_trait {
-//         todo!()
-//     }
+                let tuples = self
+                    .inner
+                    .run(&portal.statement.statement)
+                    .await
+                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                row_desc_from_stmt(&tuples[0], &portal.result_column_format)
+                    .map(|fields| DescribeResponse::new(None, fields))
+            }
+        }
+    }
 
-//     #[doc = r" This is the main implementation for query execution. Context has"]
-// #[doc = r" been provided:"]
-// #[doc = r""]
-// #[doc = r" - `client`: Information of the client sending the query"]
-// #[doc = r" - `portal`: Statement and parameters for the query"]
-// #[doc = r" - `max_rows`: Max requested rows of the query"]
-// #[must_use]
-// #[allow(clippy::type_complexity,clippy::type_repetition_in_bounds)]
-// fn do_query<'a,'b,'life0,'async_trait,C, >(&'b self,client: &'life0 mut C,portal: &'a Portal<Self::Statement> ,max_rows:usize,) ->  ::core::pin::Pin<Box<dyn ::core::future::Future<Output = PgWireResult<Response<'a> > > + ::core::marker::Send+'async_trait> >where C:ClientInfo+ClientPortalStore+Sink<PgWireBackendMessage> +Unpin+Send+Sync,C::PortalStore:PortalStore<Statement = Self::Statement> ,C::Error:Debug,PgWireError:From< <C as Sink<PgWireBackendMessage> > ::Error> ,'a:'async_trait+ ,'b:'async_trait+'a,C:'async_trait+ ,'life0:'async_trait,Self:'async_trait {
-//         todo!()
-//     }
-// }
+    async fn do_query<'a, C>(
+        &self,
+        _client: &mut C,
+        portal: &'a Portal<Self::Statement>,
+        _max_rows: usize,
+    ) -> PgWireResult<Response<'a>>
+    where
+        C: ClientInfo + Unpin + Send + Sync,
+    {
+        let query = &portal.statement.statement;
+        debug!("query: {}", query);
+        match query.to_uppercase().as_str() {
+            "BEGIN;" | "BEGIN" => {
+                let mut guard = self.tx.lock().await;
+
+                if guard.is_some() {
+                    return Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::TransactionAlreadyExists,
+                    )));
+                }
+                let transaction = self
+                    .inner
+                    .new_transaction()
+                    .await
+                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                guard.replace(transaction);
+
+                Ok(Response::Execution(Tag::new("OK").into()))
+            }
+            "COMMIT;" | "COMMIT" => {
+                let mut guard = self.tx.lock().await;
+
+                if let Some(transaction) = guard.take() {
+                    transaction
+                        .commit()
+                        .await
+                        .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                    Ok(Response::Execution(Tag::new("OK").into()))
+                } else {
+                    Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::NoTransactionBegin,
+                    )))
+                }
+            }
+            "ROLLBACK;" | "ROLLBACK" => {
+                let mut guard = self.tx.lock().await;
+
+                if guard.is_none() {
+                    return Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::NoTransactionBegin,
+                    )));
+                }
+                drop(guard.take());
+
+                Ok(Response::Execution(Tag::new("OK").into()))
+            }
+            _ => {
+                let mut guard = self.tx.lock().await;
+
+                let tuples = if let Some(transaction) = guard.as_mut() {
+                    transaction.run(query).await
+                } else {
+                    self.inner.run(query).await
+                }
+                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                Ok(Response::Query(encode_tuples(tuples)?))
+            }
+        }
+    }
+}
+fn row_desc_from_stmt(tuple: &Tuple, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
+    tuple
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(idx, col)| {
+            let datatype = col.datatype();
+            let name = col.name();
+
+            Ok(FieldInfo::new(
+                name.to_string(),
+                None,
+                None,
+                into_pg_type(&datatype).unwrap(),
+                format.format_for(idx),
+            ))
+        })
+        .collect()
+}
+
 
 #[async_trait]
 impl SimpleQueryHandler for Session {
