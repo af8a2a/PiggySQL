@@ -5,7 +5,17 @@ use clap::Parser;
 use futures::stream;
 use pgwire::{
     api::{
-        auth::{noop::NoopStartupHandler, StartupHandler}, portal::{Format, Portal}, query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler, StatementOrPortal}, results::{DataRowEncoder, DescribeResponse, FieldFormat, FieldInfo, QueryResponse, Response, Tag}, stmt::NoopQueryParser, ClientInfo, MakeHandler, StatelessMakeHandler, Type
+        auth::{noop::NoopStartupHandler, StartupHandler},
+        portal::{Format, Portal},
+        query::{
+            ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler,
+            StatementOrPortal,
+        },
+        results::{
+            DataRowEncoder, DescribeResponse, FieldFormat, FieldInfo, QueryResponse, Response, Tag,
+        },
+        stmt::NoopQueryParser,
+        ClientInfo, MakeHandler, StatelessMakeHandler, Type,
     },
     error::{ErrorInfo, PgWireError, PgWireResult},
     tokio::process_socket,
@@ -68,25 +78,27 @@ impl ExtendedQueryHandler for Session {
     {
         match target {
             StatementOrPortal::Statement(stmt) => {
-                debug!("do_describe: {}", &stmt.statement);
+                debug!("do_describe Statement: {}", &stmt.statement);
                 let param_types = Some(stmt.parameter_types.clone());
+
                 let tuples = self
                     .inner
                     .run(&stmt.statement)
                     .await
                     .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-                row_desc_from_stmt(&tuples[0], &Format::UnifiedBinary)
+
+                row_desc_from_stmt(&tuples, &Format::UnifiedBinary)
                     .map(|fields| DescribeResponse::new(param_types, fields))
             }
             StatementOrPortal::Portal(portal) => {
-                debug!("do_describe: {}", &portal.statement.statement);
+                debug!("do_describe portal: {}", &portal.statement.statement);
 
                 let tuples = self
                     .inner
                     .run(&portal.statement.statement)
                     .await
                     .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-                row_desc_from_stmt(&tuples[0], &portal.result_column_format)
+                row_desc_from_stmt(&tuples, &portal.result_column_format)
                     .map(|fields| DescribeResponse::new(None, fields))
             }
         }
@@ -104,7 +116,7 @@ impl ExtendedQueryHandler for Session {
         let query = &portal.statement.statement;
         debug!("query: {}", query);
         match query.to_uppercase().as_str() {
-            "BEGIN;" | "BEGIN" => {
+            "BEGIN;" | "BEGIN" | "START TRANSACTION;" | "START TRANSACTION" => {
                 let mut guard = self.tx.lock().await;
 
                 if guard.is_some() {
@@ -164,26 +176,29 @@ impl ExtendedQueryHandler for Session {
         }
     }
 }
-fn row_desc_from_stmt(tuple: &Tuple, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
-    tuple
-        .columns
-        .iter()
-        .enumerate()
-        .map(|(idx, col)| {
-            let datatype = col.datatype();
-            let name = col.name();
+fn row_desc_from_stmt(tuple: &Vec<Tuple>, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
+    let iter = tuple.iter().next().cloned();
+    if let Some(tuple) = iter {
+        return tuple
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(idx, col)| {
+                let datatype = col.datatype();
+                let name = col.name();
 
-            Ok(FieldInfo::new(
-                name.to_string(),
-                None,
-                None,
-                into_pg_type(&datatype).unwrap(),
-                format.format_for(idx),
-            ))
-        })
-        .collect()
+                Ok(FieldInfo::new(
+                    name.to_string(),
+                    None,
+                    None,
+                    into_pg_type(&datatype).unwrap(),
+                    format.format_for(idx),
+                ))
+            })
+            .collect();
+    }
+    Ok(vec![])
 }
-
 
 #[async_trait]
 impl SimpleQueryHandler for Session {
@@ -270,16 +285,17 @@ impl Server {
 
         let backend = Server::new().await.unwrap();
         let processor = Arc::new(backend);
+
         // We have not implemented extended query in this server, use placeholder instead
-        let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
-            PlaceholderExtendedQueryHandler,
-        )));
+        // let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
+        //     PlaceholderExtendedQueryHandler,
+        // )));
         let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
         let server_addr = format!("{}:{}", args.ip, args.port);
         let listener = TcpListener::bind(server_addr).await.unwrap();
 
         tokio::select! {
-            res = server_run(processor, placeholder, authenticator, listener) => {
+            res = server_run(processor.clone(), processor.clone(), authenticator, listener) => {
                 if let Err(_err) = res {
                 }
             }

@@ -101,9 +101,12 @@ mod test {
     #[tokio::test]
     async fn playground() -> Result<()> {
         let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        database
+            .run("create table halloween (id int primary key,salary int)")
+            .await?;
 
         let tuple=database
-            .run("select 1;")
+            .run("show tables;")
             .await?;
         println!("tuple: {:#?}", tuple);
         Ok(())
