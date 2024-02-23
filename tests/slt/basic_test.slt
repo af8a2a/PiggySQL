@@ -1,32 +1,32 @@
-# query I
-# select 1
-# ----
-# 1
+query I
+select 1
+----
+1
 
-# query R
-# select 10000.00::FLOAT + 234.567::FLOAT
-# ----
-# 10234.567
+query R
+select 10000.00::FLOAT + 234.567::FLOAT
+----
+10234.567
 
-# query R
-# select 100.0::DOUBLE/8.0::DOUBLE
-# ----
-# 12.5
+query R
+select 100.0::DOUBLE/8.0::DOUBLE
+----
+12.5
 
-# query B
-# select 2>1
-# ----
-# true
+query B
+select 2>1
+----
+true
 
-# query B
-# select 3>4
-# ----
-# false
+query B
+select 3>4
+----
+false
 
-# query T
-# select DATE '2001-02-16'
-# ----
-# 2001-02-16
+#query T
+#select DATE '2001-02-16'
+#----
+#2001-02-16
 
 subtest NullType
 
