@@ -1,6 +1,5 @@
 use crate::catalog::ColumnRef;
 use crate::errors::*;
-use crate::expression::value_compute::{binary_op, unary_op};
 use crate::expression::{BinaryOperator, ScalarExpression, UnaryOperator};
 use crate::types::value::{DataValue, ValueRef, NULL_VALUE};
 use crate::types::{ColumnId, LogicalType};
@@ -441,7 +440,7 @@ impl ScalarExpression {
             ScalarExpression::Unary { expr, op, .. } => {
                 let val = expr.unpack_val()?;
 
-                unary_op(&val, op).ok().map(Arc::new)
+                DataValue::unary_op(&val, op).ok().map(Arc::new)
             }
             ScalarExpression::Binary {
                 left_expr,
@@ -452,7 +451,7 @@ impl ScalarExpression {
                 let left = left_expr.unpack_val()?;
                 let right = right_expr.unpack_val()?;
 
-                binary_op(&left, &right, op).ok().map(Arc::new)
+                DataValue::binary_op(&left, &right, op).ok().map(Arc::new)
             }
             _ => None,
         }
@@ -490,7 +489,7 @@ impl ScalarExpression {
                 expr.constant_calculation()?;
 
                 if let ScalarExpression::Constant(unary_val) = expr.as_ref() {
-                    let value = unary_op(unary_val, op)?;
+                    let value = DataValue::unary_op(unary_val, op)?;
                     let _ = mem::replace(self, ScalarExpression::Constant(Arc::new(value)));
                 }
             }
@@ -508,7 +507,7 @@ impl ScalarExpression {
                     ScalarExpression::Constant(right_val),
                 ) = (left_expr.as_ref(), right_expr.as_ref())
                 {
-                    let value = binary_op(left_val, right_val, op)?;
+                    let value = DataValue::binary_op(left_val, right_val, op)?;
                     let _ = mem::replace(self, ScalarExpression::Constant(Arc::new(value)));
                 }
             }
@@ -647,7 +646,7 @@ impl ScalarExpression {
             }
             ScalarExpression::Unary { expr, op, ty } => {
                 if let Some(val) = expr.unpack_val() {
-                    let new_expr = ScalarExpression::Constant(Arc::new(unary_op(&val, op)?));
+                    let new_expr = ScalarExpression::Constant(Arc::new(DataValue::unary_op(&val, op)?));
                     let _ = mem::replace(self, new_expr);
                 } else {
                     replaces.push(Replace::Unary(ReplaceUnary {
