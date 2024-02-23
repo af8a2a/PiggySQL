@@ -76,32 +76,32 @@ impl ExtendedQueryHandler for Session {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
-        match target {
-            StatementOrPortal::Statement(stmt) => {
-                debug!("do_describe Statement: {}", &stmt.statement);
-                let param_types = Some(stmt.parameter_types.clone());
+        // match target {
+        //     StatementOrPortal::Statement(stmt) => {
+        //         debug!("do_describe Statement: {}", &stmt.statement);
+        //         let param_types = Some(stmt.parameter_types.clone());
 
-                let tuples = self
-                    .inner
-                    .run(&stmt.statement)
-                    .await
-                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        //         let tuples = self
+        //             .inner
+        //             .run(&stmt.statement)
+        //             .await
+        //             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-                row_desc_from_stmt(&tuples, &Format::UnifiedBinary)
-                    .map(|fields| DescribeResponse::new(param_types, fields))
-            }
-            StatementOrPortal::Portal(portal) => {
-                debug!("do_describe portal: {}", &portal.statement.statement);
+        //         row_desc_from_stmt(&tuples, &Format::UnifiedBinary)
+        //             .map(|fields| DescribeResponse::new(param_types, fields))
+        //     }
+        //     StatementOrPortal::Portal(portal) => {
+        //         debug!("do_describe portal: {}", &portal.statement.statement);
 
-                let tuples = self
-                    .inner
-                    .run(&portal.statement.statement)
-                    .await
-                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-                row_desc_from_stmt(&tuples, &portal.result_column_format)
-                    .map(|fields| DescribeResponse::new(None, fields))
-            }
-        }
+        //         let tuples = self
+        //             .inner
+        //             .run(&portal.statement.statement)
+        //             .await
+        //             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+        //         row_desc_from_stmt(&tuples, &portal.result_column_format)
+        //             .map(|fields| DescribeResponse::new(None, fields))
+        //     }
+        Ok(DescribeResponse::new(None, vec![]))
     }
 
     async fn do_query<'a, C>(
