@@ -10,7 +10,7 @@ async fn main() {
     std::env::set_current_dir(path).unwrap();
 
     println!("PiggySQL Test Start!\n");
-    for slt_file in glob::glob(TEST).expect("failed to find slt files") {
+    for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
         // for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
         let filepath = slt_file
             .expect("failed to read slt file")

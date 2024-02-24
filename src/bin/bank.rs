@@ -5,14 +5,11 @@ use piggysql::errors::*;
 async fn main() -> Result<()> {
     let setup = SQLClient::connect().await?;
     setup
-        .query(&format!(
-            "SELECT a.id, a.balance 
-                FROM account a JOIN customer c ON a.customer_id = c.id
-                WHERE c.id ={}
-                ORDER BY a.balance DESC
-                LIMIT 1",
-            1
-        ))
+        .query(
+            "CREATE TABLE genres (
+            id INTEGER PRIMARY KEY,
+            name VARCHAR NOT NULL);",
+        )
         .await?;
     setup
         .query(

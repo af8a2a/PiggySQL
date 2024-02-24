@@ -12,7 +12,7 @@ mod test{
     use super::*;
     #[test]
     fn test_parser(){
-        let sql="select 1";
+        let sql="select * from test";
         let ast=parse(sql);
         println!("{:#?}",ast);
     }

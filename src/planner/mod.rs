@@ -1,5 +1,5 @@
 use crate::{
-    catalog::TableName,
+    catalog::TableName, types::LogicalType,
 };
 
 use self::operator::Operator;
@@ -42,4 +42,5 @@ impl LogicalPlan {
 
         result
     }
+
 }

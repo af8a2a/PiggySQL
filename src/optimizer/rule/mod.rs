@@ -36,6 +36,7 @@ pub enum RuleImpl {
     // PushDown predicates
     PushPredicateIntoScan,
     PushPredicateThroughJoin,
+    
     ConstantFolder,
 }
 

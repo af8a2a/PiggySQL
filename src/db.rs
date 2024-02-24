@@ -40,18 +40,11 @@ impl<S: Storage> Database<S> {
     // /// Run SQL queries.
     pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>> {
         let mut transaction = self.storage.transaction().await?;
+        let (tuples,_) = Self::_run(sql, &mut transaction)?;
 
-        let tuples = match self.cache.get(sql) {
-            Some(plan) => build(plan, &mut transaction),
-            None => {
-                let (tuples, plan) = Self::_run(sql, &mut transaction)?;
-                self.cache.insert(sql.to_string(), plan);
-                tuples
-            }
-        };
         transaction.commit()?;
 
-        tuples
+        Ok(tuples?)
     }
 
     pub async fn new_transaction(&self) -> Result<DBTransaction<S>> {
@@ -62,7 +55,20 @@ impl<S: Storage> Database<S> {
             cache: self.cache.clone(),
         })
     }
-
+    pub async fn prepare_sql(&self, sql: &str) -> Result<LogicalPlan> {
+        let mut txn= self.storage.transaction().await?;
+        let stmts = parser::parse(sql)?;
+        if stmts.is_empty() {
+            return Err(DatabaseError::EmptyStatement);
+        }
+        let mut binder = Binder::new(BinderContext::new(&mut txn));
+        let source_plan = binder.bind(&stmts[0])?;
+        // println!("source_plan plan: {:#?}", source_plan);
+        let best_plan=apply_optimization(source_plan)?;
+        txn.rollback()?;
+        Ok(best_plan)
+        
+    }
     fn _run(
         sql: &str,
         transaction: &mut <S as Storage>::TransactionType,
@@ -80,7 +86,6 @@ impl<S: Storage> Database<S> {
 
         Ok((build(best_plan.clone(), transaction), best_plan))
     }
-
 }
 
 pub struct DBTransaction<S: Storage> {
@@ -90,14 +95,8 @@ pub struct DBTransaction<S: Storage> {
 
 impl<S: Storage> DBTransaction<S> {
     pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>> {
-        match self.cache.get(sql) {
-            Some(plan) => build(plan, &mut self.inner),
-            None => {
-                let (tuples, plan) = Database::<S>::_run(sql, &mut self.inner)?;
-                self.cache.insert(sql.to_string(), plan);
-                tuples
-            }
-        }
+        let (tuples, _) = Database::<S>::_run(sql, &mut self.inner)?;
+        tuples
     }
     pub async fn commit(self) -> Result<()> {
         self.inner.commit()?;

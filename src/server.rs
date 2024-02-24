@@ -3,6 +3,7 @@ use std::{io, sync::Arc};
 use async_trait::async_trait;
 use clap::Parser;
 use futures::stream;
+use itertools::Itertools;
 use pgwire::{
     api::{
         auth::{noop::NoopStartupHandler, StartupHandler},
@@ -11,9 +12,7 @@ use pgwire::{
             ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler,
             StatementOrPortal,
         },
-        results::{
-            DataRowEncoder, DescribeResponse, FieldFormat, FieldInfo, QueryResponse, Response, Tag,
-        },
+        results::{DataRowEncoder, DescribeResponse, FieldInfo, QueryResponse, Response, Tag},
         stmt::NoopQueryParser,
         ClientInfo, MakeHandler, StatelessMakeHandler, Type,
     },
@@ -21,10 +20,14 @@ use pgwire::{
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::{
-    binder::Binder, db::{DBTransaction, Database}, errors::*, parser::parse, storage::{engine::memory::Memory, MVCCLayer}, types::{tuple::Tuple, LogicalType}
+    db::{DBTransaction, Database},
+    errors::*,
+    planner::operator::Operator,
+    storage::{engine::memory::Memory, MVCCLayer},
+    types::{tuple::Tuple, LogicalType},
 };
 
 #[derive(clap::Parser, Debug)]
@@ -74,21 +77,63 @@ impl ExtendedQueryHandler for Session {
         C: ClientInfo + Unpin + Send + Sync,
     {
         match target {
-            StatementOrPortal::Statement(_) => {
-                unreachable!()
+            StatementOrPortal::Statement(stmt) => {
+                let plan = self.inner.prepare_sql(&stmt.statement).await.unwrap();
+                // debug!("plan: {:?}", plan);
+                if let Operator::Project(op) = plan.operator {
+                    let filed = op
+                        .ouput_schema()
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, col)| {
+                            let name = col.name();
+                            let data_type = col.datatype();
+                            FieldInfo::new(
+                                name.to_string(),
+                                None,
+                                None,
+                                into_pg_type(data_type).unwrap(),
+                                Format::UnifiedText.format_for(idx),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    // debug!("filed: {:?}", filed);
+                    Ok(DescribeResponse::new(None, filed))
+                } else {
+                    Ok(DescribeResponse::new(None, vec![]))
+                }
             }
             StatementOrPortal::Portal(portal) => {
-                // debug!("do_describe portal: {}", &portal.statement.statement);
-                // let stmt = match parse(&portal.statement.statement) {
-                //     Ok(stmt) => stmt,
-                //     Err(e) => return Err(PgWireError::ApiError(Box::new(e))),
-                // };
-                // let txn=self.inner.new_transaction();
-                // let plan=Binder::bind(&mut self, stmt)
+                let plan = self
+                    .inner
+                    .prepare_sql(&portal.statement.statement)
+                    .await
+                    .unwrap();
+                // debug!("plan: {:?}", plan);
+                if let Operator::Project(op) = plan.operator {
+                    let filed = op
+                        .ouput_schema()
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, col)| {
+                            let name = col.name();
+                            let data_type = col.datatype();
+                            FieldInfo::new(
+                                name.to_string(),
+                                None,
+                                None,
+                                into_pg_type(data_type).unwrap(),
+                                Format::UnifiedText.format_for(idx),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    // debug!("filed: {:?}", filed);
+                    Ok(DescribeResponse::new(None, filed))
+                } else {
+                    Ok(DescribeResponse::new(None, vec![]))
+                }
             }
         }
-
-        Ok(DescribeResponse::new(None, vec![]))
     }
 
     async fn do_query<'a, C>(
@@ -101,7 +146,7 @@ impl ExtendedQueryHandler for Session {
         C: ClientInfo + Unpin + Send + Sync,
     {
         let query = &portal.statement.statement;
-        debug!("query: {}", query);
+        // debug!("query: {}", query);
         match query.to_uppercase().as_str() {
             "BEGIN;" | "BEGIN" | "START TRANSACTION;" | "START TRANSACTION" => {
                 let mut guard = self.tx.lock().await;
@@ -157,7 +202,7 @@ impl ExtendedQueryHandler for Session {
                     self.inner.run(query).await
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-                debug!("tuples: {:?}", tuples);
+                // debug!("tuples: {:?}", tuples);
                 Ok(Response::Query(encode_tuples(tuples)?))
             }
         }
@@ -377,8 +422,8 @@ fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
 
         results.push(encoder.finish());
     }
-    debug!("results: {:?}", results);
-    debug!("schema: {:?}", schema);
+    // debug!("results: {:?}", results);
+    // debug!("schema: {:?}", schema);
     let iter = stream::iter(results.into_iter());
     Ok(QueryResponse::new(schema, iter))
 }

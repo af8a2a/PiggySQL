@@ -169,7 +169,6 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
             .skip(offset)
             .take(limit)
             .collect::<Result<Vec<_>>>()?;
-        // println!("scan collect tuple {}", tuples.len());
         Ok(Some(tuples))
     }
 }
@@ -510,7 +509,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
         }
-        info!("create_table:table_catalog: {:#?}", table_catalog);
+        // info!("create_table:table_catalog: {:#?}", table_catalog);
         self.cache.insert(table_name.clone(), table_catalog);
 
         Ok(table_name)

@@ -16,7 +16,11 @@ pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
         .batch(
             "Simplify Filter".to_string(),
             HepBatchStrategy::fix_point_topdown(10),
-            vec![RuleImpl::SimplifyFilter, RuleImpl::ConstantFolder],
+            vec![
+                RuleImpl::SimplifyFilter,
+                RuleImpl::ConstantFolder,
+                RuleImpl::CollapseProject,
+            ],
         )
         .batch(
             "Predicate Pushdown".to_string(),
@@ -34,7 +38,12 @@ pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
         .batch(
             "Limit Pushdown".to_string(),
             HepBatchStrategy::fix_point_topdown(10),
-            vec![RuleImpl::PushLimitIntoTableScan],
+            vec![
+                RuleImpl::PushLimitIntoTableScan,
+                RuleImpl::EliminateLimits,
+                RuleImpl::LimitProjectTranspose,
+                RuleImpl::PushLimitThroughJoin,
+            ],
         )
         .find_best()
 }

@@ -40,7 +40,6 @@ impl TableCatalog {
 
     pub(crate) fn get_column_by_name(&self, name: &str) -> Option<&ColumnRef> {
         let id = self.column_idxs.get(name)?;
-        debug!("get_column_by_name: {} -> {:?}", name, id);
         self.columns.get(id)
     }
 

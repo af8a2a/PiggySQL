@@ -1,14 +1,12 @@
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::expression::ScalarExpression;
 use crate::planner::operator::project::ProjectOperator;
 use crate::storage::Transaction;
-use crate::types::tuple::{Tuple};
-
-
+use crate::types::tuple::Tuple;
 
 pub struct Projection {
-    exprs: Vec<ScalarExpression>,
+    pub(crate) exprs: Vec<ScalarExpression>,
     input: Source,
 }
 
@@ -22,7 +20,6 @@ impl<T: Transaction> Executor<T> for Projection {
     fn execute(self, _transaction: &mut T) -> Source {
         let Projection { exprs, input } = self;
         let mut tuples = Vec::new();
-        dbg!(exprs.len());
         for tuple in input?.iter() {
             let tuple = tuple;
 
