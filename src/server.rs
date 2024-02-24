@@ -24,10 +24,7 @@ use tokio::{net::TcpListener, sync::Mutex};
 use tracing::debug;
 
 use crate::{
-    db::{DBTransaction, Database},
-    errors::*,
-    storage::{engine::memory::Memory, MVCCLayer},
-    types::{tuple::Tuple, LogicalType},
+    binder::Binder, db::{DBTransaction, Database}, errors::*, parser::parse, storage::{engine::memory::Memory, MVCCLayer}, types::{tuple::Tuple, LogicalType}
 };
 
 #[derive(clap::Parser, Debug)]
@@ -76,31 +73,21 @@ impl ExtendedQueryHandler for Session {
     where
         C: ClientInfo + Unpin + Send + Sync,
     {
-        // match target {
-        //     StatementOrPortal::Statement(stmt) => {
-        //         debug!("do_describe Statement: {}", &stmt.statement);
-        //         let param_types = Some(stmt.parameter_types.clone());
+        match target {
+            StatementOrPortal::Statement(_) => {
+                unreachable!()
+            }
+            StatementOrPortal::Portal(portal) => {
+                // debug!("do_describe portal: {}", &portal.statement.statement);
+                // let stmt = match parse(&portal.statement.statement) {
+                //     Ok(stmt) => stmt,
+                //     Err(e) => return Err(PgWireError::ApiError(Box::new(e))),
+                // };
+                // let txn=self.inner.new_transaction();
+                // let plan=Binder::bind(&mut self, stmt)
+            }
+        }
 
-        //         let tuples = self
-        //             .inner
-        //             .run(&stmt.statement)
-        //             .await
-        //             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-
-        //         row_desc_from_stmt(&tuples, &Format::UnifiedBinary)
-        //             .map(|fields| DescribeResponse::new(param_types, fields))
-        //     }
-        //     StatementOrPortal::Portal(portal) => {
-        //         debug!("do_describe portal: {}", &portal.statement.statement);
-
-        //         let tuples = self
-        //             .inner
-        //             .run(&portal.statement.statement)
-        //             .await
-        //             .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-        //         row_desc_from_stmt(&tuples, &portal.result_column_format)
-        //             .map(|fields| DescribeResponse::new(None, fields))
-        //     }
         Ok(DescribeResponse::new(None, vec![]))
     }
 
@@ -170,7 +157,7 @@ impl ExtendedQueryHandler for Session {
                     self.inner.run(query).await
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
-
+                debug!("tuples: {:?}", tuples);
                 Ok(Response::Query(encode_tuples(tuples)?))
             }
         }
@@ -359,28 +346,11 @@ async fn quit() -> io::Result<()> {
 }
 
 fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
-    if tuples.is_empty() {
-        return Ok(QueryResponse::new(Arc::new(vec![]), stream::empty()));
-    }
-
+    // if tuples.is_empty() {
+    //     return Ok(QueryResponse::new(Arc::new(vec![]), stream::empty()));
+    // }
+    let schema = Arc::new(row_desc_from_stmt(&tuples, &Format::UnifiedText)?);
     let mut results = Vec::with_capacity(tuples.len());
-    let schema = Arc::new(
-        tuples[0]
-            .columns
-            .iter()
-            .map(|column| {
-                let pg_type = into_pg_type(column.datatype())?;
-
-                Ok(FieldInfo::new(
-                    column.name().into(),
-                    None,
-                    None,
-                    pg_type,
-                    FieldFormat::Text,
-                ))
-            })
-            .collect::<PgWireResult<Vec<FieldInfo>>>()?,
-    );
 
     for tuple in tuples {
         let mut encoder = DataRowEncoder::new(schema.clone());
@@ -407,11 +377,10 @@ fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
 
         results.push(encoder.finish());
     }
-
-    Ok(QueryResponse::new(
-        schema,
-        stream::iter(results.into_iter()),
-    ))
+    debug!("results: {:?}", results);
+    debug!("schema: {:?}", schema);
+    let iter = stream::iter(results.into_iter());
+    Ok(QueryResponse::new(schema, iter))
 }
 fn into_pg_type(data_type: &LogicalType) -> PgWireResult<Type> {
     Ok(match data_type {

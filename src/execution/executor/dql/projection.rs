@@ -22,6 +22,7 @@ impl<T: Transaction> Executor<T> for Projection {
     fn execute(self, _transaction: &mut T) -> Source {
         let Projection { exprs, input } = self;
         let mut tuples = Vec::new();
+        dbg!(exprs.len());
         for tuple in input?.iter() {
             let tuple = tuple;
 

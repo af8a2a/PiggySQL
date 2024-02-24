@@ -1,4 +1,6 @@
+use std::sync::Arc;
 
+use moka::sync::Cache;
 
 use crate::binder::{Binder, BinderContext};
 
@@ -8,17 +10,20 @@ use crate::optimizer::apply_optimization;
 use crate::parser;
 
 use crate::errors::{DatabaseError, Result};
+use crate::planner::LogicalPlan;
 use crate::storage::engine::memory::Memory;
 use crate::storage::{MVCCLayer, Storage, Transaction};
 use crate::types::tuple::Tuple;
 pub struct Database<S: Storage> {
     pub(crate) storage: S,
+    cache: Arc<Cache<String, LogicalPlan>>,
 }
 
 impl Database<MVCCLayer<Memory>> {
     pub fn new_memory() -> Result<Self> {
         Ok(Database {
             storage: MVCCLayer::new_memory(),
+            cache: Arc::new(Cache::new(64)),
         })
     }
 }
@@ -26,17 +31,27 @@ impl Database<MVCCLayer<Memory>> {
 impl<S: Storage> Database<S> {
     /// Create a new Database instance.
     pub fn new(storage: S) -> Result<Self> {
-        Ok(Database { storage })
+        Ok(Database {
+            storage,
+            cache: Arc::new(Cache::new(64)),
+        })
     }
 
     // /// Run SQL queries.
     pub async fn run(&self, sql: &str) -> Result<Vec<Tuple>> {
         let mut transaction = self.storage.transaction().await?;
-        let tuples = Self::_run(sql, &mut transaction)?;
 
+        let tuples = match self.cache.get(sql) {
+            Some(plan) => build(plan, &mut transaction),
+            None => {
+                let (tuples, plan) = Self::_run(sql, &mut transaction)?;
+                self.cache.insert(sql.to_string(), plan);
+                tuples
+            }
+        };
         transaction.commit()?;
 
-        Ok(tuples?)
+        tuples
     }
 
     pub async fn new_transaction(&self) -> Result<DBTransaction<S>> {
@@ -44,11 +59,14 @@ impl<S: Storage> Database<S> {
 
         Ok(DBTransaction {
             inner: transaction,
-            query_list: vec![],
+            cache: self.cache.clone(),
         })
     }
 
-    fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<Source> {
+    fn _run(
+        sql: &str,
+        transaction: &mut <S as Storage>::TransactionType,
+    ) -> Result<(Source, LogicalPlan)> {
         // parse
         let stmts = parser::parse(sql)?;
         if stmts.is_empty() {
@@ -60,20 +78,26 @@ impl<S: Storage> Database<S> {
         let best_plan = apply_optimization(source_plan)?;
         // println!("best_plan plan: {:#?}", best_plan);
 
-        Ok(build(best_plan, transaction))
+        Ok((build(best_plan.clone(), transaction), best_plan))
     }
+
 }
 
 pub struct DBTransaction<S: Storage> {
-    query_list: Vec<String>,
     inner: S::TransactionType,
+    cache: Arc<Cache<String, LogicalPlan>>,
 }
 
 impl<S: Storage> DBTransaction<S> {
     pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>> {
-        self.query_list.push(sql.to_string());
-        Database::<S>::_run(sql, &mut self.inner)?
-        
+        match self.cache.get(sql) {
+            Some(plan) => build(plan, &mut self.inner),
+            None => {
+                let (tuples, plan) = Database::<S>::_run(sql, &mut self.inner)?;
+                self.cache.insert(sql.to_string(), plan);
+                tuples
+            }
+        }
     }
     pub async fn commit(self) -> Result<()> {
         self.inner.commit()?;
@@ -105,9 +129,7 @@ mod test {
             .run("create table halloween (id int primary key,salary int)")
             .await?;
 
-        let tuple=database
-            .run("show tables;")
-            .await?;
+        let tuple = database.run("show tables;").await?;
         println!("tuple: {:#?}", tuple);
         Ok(())
     }

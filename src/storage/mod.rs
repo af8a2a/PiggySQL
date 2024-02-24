@@ -4,6 +4,8 @@ mod table_codec;
 
 use itertools::Itertools;
 use moka::sync::Cache;
+use tracing::{debug, info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
@@ -16,6 +18,7 @@ use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
+use std::fmt::format;
 use std::mem;
 use std::sync::Arc;
 
@@ -443,10 +446,20 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         &mut self,
         table_name: &TableName,
         column: &str,
-        _if_exists: bool,
+        if_exists: bool,
     ) -> Result<()> {
+        dbg!(table_name.to_string(), column);
         if let Some(catalog) = self.table(table_name.clone()) {
-            let column = catalog.get_column_by_name(column).unwrap();
+            let column = match catalog.get_column_by_name(column){
+                Some(col) => col,
+                None => {
+                    if if_exists{
+                        return Ok(());
+                    }else{
+                        return Err(DatabaseError::NotFound("Coloum", format!("{} not found", column)));
+                    }
+                },
+            };
 
             if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
                 let (index_meta_key, _) = TableCodec::encode_index_meta(table_name, index_meta)?;
@@ -497,6 +510,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
         }
+        info!("create_table:table_catalog: {:#?}", table_catalog);
         self.cache.insert(table_name.clone(), table_catalog);
 
         Ok(table_name)
@@ -772,7 +786,7 @@ pub struct MVCCLayer<E: StorageEngine> {
 }
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
-        Self {
+                Self {
             layer: MVCC::new(Arc::new(engine)),
             cache: Arc::new(Cache::new(20)),
         }

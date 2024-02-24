@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use itertools::Itertools;
+use tracing::debug;
 
 use crate::types::index::{IndexId, IndexMeta, IndexMetaRef};
 use crate::types::{ColumnId, LogicalType};
@@ -39,6 +40,7 @@ impl TableCatalog {
 
     pub(crate) fn get_column_by_name(&self, name: &str) -> Option<&ColumnRef> {
         let id = self.column_idxs.get(name)?;
+        debug!("get_column_by_name: {} -> {:?}", name, id);
         self.columns.get(id)
     }
 
@@ -72,7 +74,7 @@ impl TableCatalog {
         col.summary.id = Some(col_id);
         self.column_idxs.insert(col.name().to_string(), col_id);
         self.columns.insert(col_id, Arc::new(col));
-
+        
         Ok(col_id)
     }
 
