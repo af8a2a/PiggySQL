@@ -43,8 +43,8 @@ impl<T: Transaction> Executor<T> for Limit {
 
         let offset_val = offset.unwrap_or(0);
         let limit = limit.unwrap_or(usize::MAX);
-        debug!("offset  {}", offset_val);
-        debug!("limit  {}", limit);
+        // debug!("offset  {}", offset_val);
+        // debug!("limit  {}", limit);
 
         for (i, tuple) in input.iter().skip(offset_val).enumerate() {
             // if i < offset_val {

@@ -553,6 +553,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         match self.cache.get(&table_name) {
             Some(table) => Some(table),
             None => {
+                // debug!("cache:{:?}",self.cache);
                 let columns = match Self::column_collect(table_name.clone(), &self.tx) {
                     Ok(cols) => cols,
                     Err(e) => {
@@ -568,7 +569,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
                     .collect_vec();
                 //todo
                 match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
-                    Ok(table) => Some(table),
+                    Ok(table) => {
+                        self.cache.insert(table_name, table.clone());
+                        Some(table)
+                    },
                     Err(e) => {
                         debug!("cannot fetch table {:#?}", e);
                         None
