@@ -67,3 +67,14 @@ We have referred to the following excellent open-source database projects and ex
 - [skyzh/mini-lsm](https://github.com/skyzh/mini-lsm) refer to the design of Storage Engine
 - [YumingxuanGuo/featherdb](https://github.com/YumingxuanGuo/featherdb) reference serializable snapshot isolation
 
+## Run PiggySQL
+```bash
+cargo run --release --bin piggysql
+```
+then run 
+```bash
+psql 
+```
+to enter the postgres client
+
+also connect to the database with JDBC (experimental)
