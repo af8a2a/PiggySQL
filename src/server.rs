@@ -3,13 +3,13 @@ use std::{io, sync::Arc};
 use async_trait::async_trait;
 use clap::Parser;
 use futures::stream;
-use itertools::Itertools;
+
 use pgwire::{
     api::{
         auth::{noop::NoopStartupHandler, StartupHandler},
         portal::{Format, Portal},
         query::{
-            ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler,
+            ExtendedQueryHandler, SimpleQueryHandler,
             StatementOrPortal,
         },
         results::{DataRowEncoder, DescribeResponse, FieldInfo, QueryResponse, Response, Tag},
@@ -20,7 +20,7 @@ use pgwire::{
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
-use tracing::{debug, info};
+use tracing::{debug};
 
 use crate::{
     db::{DBTransaction, Database},
@@ -146,7 +146,7 @@ impl ExtendedQueryHandler for Session {
         C: ClientInfo + Unpin + Send + Sync,
     {
         let query = &portal.statement.statement;
-        // debug!("query: {}", query);
+         debug!("query: {}", query);
         match query.to_uppercase().as_str() {
             "BEGIN;" | "BEGIN" | "START TRANSACTION;" | "START TRANSACTION" => {
                 let mut guard = self.tx.lock().await;
@@ -163,7 +163,7 @@ impl ExtendedQueryHandler for Session {
                     .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
                 guard.replace(transaction);
 
-                Ok(Response::Execution(Tag::new("OK").into()))
+                Ok(Response::Execution(Tag::new("BEGIN").into()))
             }
             "COMMIT;" | "COMMIT" => {
                 let mut guard = self.tx.lock().await;
@@ -174,7 +174,7 @@ impl ExtendedQueryHandler for Session {
                         .await
                         .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-                    Ok(Response::Execution(Tag::new("OK").into()))
+                    Ok(Response::Execution(Tag::new("COMMIT").into()))
                 } else {
                     Err(PgWireError::ApiError(Box::new(
                         DatabaseError::NoTransactionBegin,
@@ -191,7 +191,7 @@ impl ExtendedQueryHandler for Session {
                 }
                 drop(guard.take());
 
-                Ok(Response::Execution(Tag::new("OK").into()))
+                Ok(Response::Execution(Tag::new("ROLLBACK").into()))
             }
             _ => {
                 let mut guard = self.tx.lock().await;
@@ -258,7 +258,7 @@ impl SimpleQueryHandler for Session {
                     .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
                 guard.replace(transaction);
 
-                Ok(vec![Response::Execution(Tag::new("OK").into())])
+                Ok(vec![Response::Execution(Tag::new("BEGIN").into())])
             }
             "COMMIT;" | "COMMIT" => {
                 let mut guard = self.tx.lock().await;
@@ -269,7 +269,7 @@ impl SimpleQueryHandler for Session {
                         .await
                         .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-                    Ok(vec![Response::Execution(Tag::new("OK").into())])
+                    Ok(vec![Response::Execution(Tag::new("COMMIT").into())])
                 } else {
                     Err(PgWireError::ApiError(Box::new(
                         DatabaseError::NoTransactionBegin,
@@ -286,7 +286,7 @@ impl SimpleQueryHandler for Session {
                 }
                 drop(guard.take());
 
-                Ok(vec![Response::Execution(Tag::new("OK").into())])
+                Ok(vec![Response::Execution(Tag::new("ROLLBACK").into())])
             }
             _ => {
                 let mut guard = self.tx.lock().await;

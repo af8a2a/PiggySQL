@@ -163,7 +163,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                 Key::Version(_, version) => {
                     //被其它活跃事务修改
                     if !self.state.is_visible(version) {
-                        //我们尚未实现可序列化隔离等级,无法处理W-W冲突
+                        //W-W冲突
                         return Err(DatabaseError::Serialization);
                     }
                 }

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use itertools::Itertools;
-use tracing::debug;
+
 
 use crate::types::index::{IndexId, IndexMeta, IndexMetaRef};
 use crate::types::{ColumnId, LogicalType};

@@ -4,9 +4,9 @@ mod table_codec;
 
 use itertools::Itertools;
 use moka::sync::Cache;
-use tracing::{debug, info, Level};
-use tracing_subscriber::field::debug;
-use tracing_subscriber::FmtSubscriber;
+use tracing::{debug};
+
+
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
@@ -19,7 +19,7 @@ use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
-use std::fmt::format;
+
 use std::mem;
 use std::sync::Arc;
 

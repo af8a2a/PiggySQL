@@ -1,5 +1,5 @@
 use crate::{
-    catalog::TableName, types::LogicalType,
+    catalog::TableName,
 };
 
 use self::operator::Operator;

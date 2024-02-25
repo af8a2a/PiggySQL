@@ -8,7 +8,7 @@ use sqlparser::ast::{BinaryOperator as SqlBinaryOperator, UnaryOperator as SqlUn
 
 use self::agg::Aggregate;
 use crate::catalog::{ColumnCatalog, ColumnDesc, ColumnRef};
-use crate::types::tuple::Tuple;
+
 use crate::types::value::ValueRef;
 use crate::types::LogicalType;
 
