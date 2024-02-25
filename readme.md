@@ -78,3 +78,14 @@ psql
 to enter the postgres client
 
 also connect to the database with JDBC (experimental)
+
+## Benchmark  
+clone the benchmark repo
+```bash
+git clone https://github.com/af8a2a/PiggyBenchmark
+```
+run the database
+```bash
+cargo run --release --bin piggysql
+```
+run the benchmark!
