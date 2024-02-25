@@ -1,6 +1,6 @@
 use crate::binder::{lower_case_name, split_name, Binder};
 use crate::catalog::ColumnRef;
-use crate::expression::value_compute::unary_op;
+use crate::errors::*;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::insert::InsertOperator;
 use crate::planner::operator::values::ValuesOperator;
@@ -11,7 +11,6 @@ use crate::types::value::{DataValue, ValueRef};
 use sqlparser::ast::{Expr, Ident, ObjectName};
 use std::slice;
 use std::sync::Arc;
-use crate::errors::*;
 
 impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_insert(
@@ -67,7 +66,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                         ScalarExpression::Unary { expr, op, .. } => {
                             if let ScalarExpression::Constant(value) = expr.as_ref() {
                                 row.push(Arc::new(
-                                    unary_op(value, op)?.cast(columns[i].datatype())?,
+                                    DataValue::unary_op(value, op)?.cast(columns[i].datatype())?,
                                 ))
                             } else {
                                 unreachable!()

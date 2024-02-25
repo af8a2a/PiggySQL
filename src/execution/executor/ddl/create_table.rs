@@ -30,7 +30,7 @@ impl<T: Transaction> Executor<T> for CreateTable {
                 .create_table(table_name.clone(), columns, if_not_exists)?;
         let tuple_builder = TupleBuilder::new_result();
         let tuple = tuple_builder
-            .push_result("CREATE TABLE SUCCESS", format!("{}", table_name).as_str())?;
+            .push_result("CREATE TABLE", format!("{}", table_name).as_str())?;
         Ok(vec![tuple])
     }
 }

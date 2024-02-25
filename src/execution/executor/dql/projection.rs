@@ -1,14 +1,12 @@
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::expression::ScalarExpression;
 use crate::planner::operator::project::ProjectOperator;
 use crate::storage::Transaction;
-use crate::types::tuple::{Tuple};
-
-
+use crate::types::tuple::Tuple;
 
 pub struct Projection {
-    exprs: Vec<ScalarExpression>,
+    pub(crate) exprs: Vec<ScalarExpression>,
     input: Source,
 }
 

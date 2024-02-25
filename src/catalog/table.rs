@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
+
 use crate::types::index::{IndexId, IndexMeta, IndexMetaRef};
 use crate::types::{ColumnId, LogicalType};
 use crate::errors::*;
@@ -72,7 +73,7 @@ impl TableCatalog {
         col.summary.id = Some(col_id);
         self.column_idxs.insert(col.name().to_string(), col_id);
         self.columns.insert(col_id, Arc::new(col));
-
+        
         Ok(col_id)
     }
 

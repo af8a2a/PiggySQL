@@ -33,9 +33,10 @@ sled="0.34.7"
 pgwire = { version = "0.19.2" }
 async-trait = "0.1"
 tokio-postgres = {version="0.7.10",features=["runtime"]}
-moka = {version="0.12.5",features=["sync"] }
-names = "~0.14.0"
+moka = {version="0.12.5",features=["sync","future"] }
+ouroboros = "0.15"
 dashmap = "5.4.0"
+crc32fast = "1.3.2"
 [dev-dependencies]
 cargo-tarpaulin = "0.27.1"
 tokio-test = "0.4.2"

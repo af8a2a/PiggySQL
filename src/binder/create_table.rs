@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use crate::errors::*;
 
-use super::Binder;
+use super::{is_valid_identifier, Binder};
 use crate::binder::{lower_case_name, split_name};
 use crate::catalog::{ColumnCatalog, ColumnDesc};
 use crate::expression::ScalarExpression;
@@ -27,6 +27,12 @@ impl<'a, T: Transaction> Binder<'a, T> {
         let name = lower_case_name(name);
         let (_, name) = split_name(&name)?;
         let table_name = Arc::new(name.to_string());
+        
+        if !is_valid_identifier(&table_name) {
+            return Err(DatabaseError::InvalidTable(
+                "illegal table naming".to_string(),
+            ));
+        }
 
         {
             // check duplicated column names
@@ -36,6 +42,12 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 if !set.insert(col_name.clone()) {
                     return Err(DatabaseError::AmbiguousColumn(col_name.to_string()));
                 }
+                if !is_valid_identifier(col_name) {
+                    return Err(DatabaseError::InvalidColumn(
+                        "illegal column naming".to_string(),
+                    ));
+                }
+
             }
         }
         let mut columns: Vec<ColumnCatalog> = columns
@@ -121,7 +133,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
         }
 
-        Ok(ColumnCatalog::new(column_name, nullable, column_desc, None))
+        Ok(ColumnCatalog::new(column_name, nullable, column_desc,None))
     }
 }
 

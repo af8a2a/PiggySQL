@@ -1,13 +1,12 @@
 use crate::catalog::TableName;
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::delete::DeleteOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
-
+use crate::types::tuple_builder::TupleBuilder;
 
 use itertools::Itertools;
-
 
 pub struct Delete {
     table_name: TableName,
@@ -42,10 +41,9 @@ impl<T: Transaction> Executor<T> for Delete {
                 })
                 .collect_vec()
         });
-
+        let input = input?;
         if let Some(index_metas) = option_index_metas {
-            for tuple in input?.into_iter() {
-
+            for tuple in input.iter() {
                 for (i, index_meta) in index_metas.iter() {
                     let value = &tuple.values[*i];
 
@@ -59,11 +57,13 @@ impl<T: Transaction> Executor<T> for Delete {
                     }
                 }
 
-                if let Some(tuple_id) = tuple.id {
+                if let Some(tuple_id) = tuple.id.clone() {
                     transaction.delete(&table_name, tuple_id)?;
                 }
             }
         }
-        Ok(vec![])
+        let tuple_builder = TupleBuilder::new_result();
+        let tuple = tuple_builder.push_result("DELETE SUCCESS", &format!("{}", input.len()))?;
+        Ok(vec![tuple])
     }
 }

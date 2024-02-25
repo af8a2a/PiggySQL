@@ -8,6 +8,7 @@ use sqlparser::ast::{BinaryOperator as SqlBinaryOperator, UnaryOperator as SqlUn
 
 use self::agg::Aggregate;
 use crate::catalog::{ColumnCatalog, ColumnDesc, ColumnRef};
+
 use crate::types::value::ValueRef;
 use crate::types::LogicalType;
 
@@ -85,25 +86,6 @@ impl ScalarExpression {
         }
     }
 
-    pub fn nullable(&self) -> bool {
-        match self {
-            ScalarExpression::Constant(_) => false,
-            ScalarExpression::ColumnRef(col) => col.nullable,
-            ScalarExpression::Alias { expr, .. } => expr.nullable(),
-            ScalarExpression::TypeCast { expr, .. } => expr.nullable(),
-            ScalarExpression::IsNull { expr, .. } => expr.nullable(),
-            ScalarExpression::Unary { expr, .. } => expr.nullable(),
-            ScalarExpression::Binary {
-                left_expr,
-                right_expr,
-                ..
-            } => left_expr.nullable() && right_expr.nullable(),
-            ScalarExpression::In { expr, args, .. } => {
-                args.iter().all(ScalarExpression::nullable) && expr.nullable()
-            }
-            ScalarExpression::AggCall { args, .. } => args.iter().all(ScalarExpression::nullable),
-        }
-    }
 
     pub fn return_type(&self) -> LogicalType {
         match self {
@@ -123,6 +105,7 @@ impl ScalarExpression {
             } => *return_type,
             Self::IsNull { .. } | Self::In { .. } => LogicalType::Boolean,
             Self::Alias { expr, .. } => expr.return_type(),
+            _=>todo!()
         }
     }
 
@@ -194,6 +177,7 @@ impl ScalarExpression {
             ScalarExpression::In { expr, args, .. } => {
                 expr.has_agg_call() || args.iter().any(|arg| arg.has_agg_call())
             }
+            _=>todo!()
         }
     }
 
@@ -309,6 +293,7 @@ impl ScalarExpression {
                 ColumnDesc::new(*ty, false, false, None),
                 Some(self.clone()),
             )),
+            _=>todo!()
         }
     }
 }

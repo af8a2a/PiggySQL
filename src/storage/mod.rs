@@ -4,6 +4,9 @@ mod table_codec;
 
 use itertools::Itertools;
 use moka::sync::Cache;
+use tracing::{debug};
+
+
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
@@ -15,9 +18,10 @@ use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use std::collections::{Bound,  VecDeque};
+use std::collections::{Bound, VecDeque};
+
 use std::mem;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use self::engine::memory::Memory;
 use self::engine::StorageEngine;
@@ -40,7 +44,12 @@ pub trait Transaction: Sync + Send + 'static {
     /// The bounds is applied to the whole data batches, not per batch.
     ///
     /// The projections is column indices.
-    fn read(&self, table_name: TableName, projection: Projections) -> Result<Self::IterType<'_>>;
+    fn read(
+        &self,
+        table_name: TableName,
+        bound: Bounds,
+        projection: Projections,
+    ) -> Result<Self::IterType<'_>>;
 
     fn read_by_index(
         &self,
@@ -134,11 +143,20 @@ pub(crate) fn tuple_projection(projections: &Projections, tuple: Tuple) -> Resul
 pub struct MVCCIter<'a, E: StorageEngine> {
     projection: Projections,
     all_columns: Vec<ColumnRef>,
+    bound: Bounds,
     scan: Scan<'a, E>,
 }
 
 impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
+        let limit = match self.bound.1 {
+            Some(limit) => limit,
+            None => usize::MAX,
+        };
+        let offset = match self.bound.0 {
+            Some(offset) => offset,
+            None => 0,
+        };
         let tuples = self
             .scan
             .iter()
@@ -149,8 +167,9 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
                     TableCodec::decode_tuple(self.all_columns.clone(), &val),
                 )
             })
+            .skip(offset)
+            .take(limit)
             .collect::<Result<Vec<_>>>()?;
-        // println!("scan collect tuple {}", tuples.len());
         Ok(Some(tuples))
     }
 }
@@ -280,14 +299,19 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
 
 pub struct MVCCTransaction<E: StorageEngine> {
     tx: mvcc::MVCCTransaction<E>,
-    cache:Arc<Cache<TableName,TableCatalog>>,
+    cache: Arc<Cache<TableName, TableCatalog>>,
 }
 impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     type IterType<'a> = MVCCIter<'a, E>;
 
     type IndexIterType<'a> = MVCCIndexIter<'a, E>;
 
-    fn read(&self, table_name: TableName, projection: Projections) -> Result<Self::IterType<'_>> {
+    fn read(
+        &self,
+        table_name: TableName,
+        bound: Bounds,
+        projection: Projections,
+    ) -> Result<Self::IterType<'_>> {
         let all_columns = self
             .table(table_name.clone())
             .ok_or(DatabaseError::TableNotFound)?
@@ -296,6 +320,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         Ok(MVCCIter {
             projection,
             all_columns,
+            bound,
             scan: self.tx.scan(Bound::Included(min), Bound::Included(max))?,
         })
     }
@@ -417,19 +442,27 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         }
     }
 
-    fn drop_column(
-        &mut self,
-        table_name: &TableName,
-        column: &str,
-        _if_exists: bool,
-    ) -> Result<()> {
+    fn drop_column(&mut self, table_name: &TableName, column: &str, if_exists: bool) -> Result<()> {
+        dbg!(table_name.to_string(), column);
         if let Some(catalog) = self.table(table_name.clone()) {
-            let column = catalog.get_column_by_name(column).unwrap();
+            let column = match catalog.get_column_by_name(column) {
+                Some(col) => col,
+                None => {
+                    if if_exists {
+                        return Ok(());
+                    } else {
+                        return Err(DatabaseError::NotFound(
+                            "Coloum",
+                            format!("{} not found", column),
+                        ));
+                    }
+                }
+            };
 
             if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
                 let (index_meta_key, _) = TableCodec::encode_index_meta(table_name, index_meta)?;
                 self.tx.delete(&index_meta_key)?;
-                
+
                 let (index_min, index_max) = TableCodec::index_bound(table_name, &index_meta.id);
                 Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
             }
@@ -475,6 +508,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
         }
+        // info!("create_table:table_catalog: {:#?}", table_catalog);
         self.cache.insert(table_name.clone(), table_catalog);
 
         Ok(table_name)
@@ -515,20 +549,35 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
     fn table(&self, table_name: TableName) -> Option<TableCatalog> {
         // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
-        if self.cache.contains_key(&table_name){
-            return self.cache.get(&table_name);
-        }
-        let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
-        let indexes = Self::index_meta_collect(&table_name, &self.tx)?
-            .into_iter()
-            .map(Arc::new)
-            .collect_vec();
 
-        match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
-            Ok(table) => Some(table),
-            Err(e) => {
-                println!("{:#?}", e);
-                None
+        match self.cache.get(&table_name) {
+            Some(table) => Some(table),
+            None => {
+                // debug!("cache:{:?}",self.cache);
+                let columns = match Self::column_collect(table_name.clone(), &self.tx) {
+                    Ok(cols) => cols,
+                    Err(e) => {
+                        debug!("cannot fetch table {},because:{}", table_name, e);
+                        return None;
+                    }
+                };
+
+                // let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
+                let indexes = Self::index_meta_collect(&table_name, &self.tx)?
+                    .into_iter()
+                    .map(Arc::new)
+                    .collect_vec();
+                //todo
+                match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
+                    Ok(table) => {
+                        self.cache.insert(table_name, table.clone());
+                        Some(table)
+                    },
+                    Err(e) => {
+                        debug!("cannot fetch table {:#?}", e);
+                        None
+                    }
+                }
             }
         }
     }
@@ -575,7 +624,6 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
             let mut table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
             Self::create_index(&mut self.tx, &mut table, Some(index_name.to_string()))?;
             self.cache.remove(&table_name);
-
         }
         Ok(())
     }
@@ -621,7 +669,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 }
 
 impl<E: StorageEngine> MVCCTransaction<E> {
-    fn update_table_meta(tx: &mvcc::MVCCTransaction<E>, table:&TableCatalog) -> Result<()> {
+    fn update_table_meta(tx: &mvcc::MVCCTransaction<E>, table: &TableCatalog) -> Result<()> {
         for column in table.columns.values() {
             let (key, value) = TableCodec::encode_column(&table.name, column)?;
             tx.set(&key, value.to_vec())?;
@@ -747,21 +795,21 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 #[derive(Clone)]
 pub struct MVCCLayer<E: StorageEngine> {
     layer: mvcc::MVCC<E>,
-    cache:Arc<Cache<TableName,TableCatalog>>,
+    cache: Arc<Cache<TableName, TableCatalog>>,
 }
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
         Self {
-            layer: MVCC::new(Arc::new(engine),true),
-            cache: Arc::new(Cache::new(20)),
+            layer: MVCC::new(Arc::new(engine)),
+            cache: Arc::new(Cache::new(40)),
         }
     }
 }
 impl MVCCLayer<Memory> {
     pub fn new_memory() -> Self {
         Self {
-            layer: MVCC::new(Arc::new(Memory::new()),false),
-            cache: Arc::new(Cache::new(20)),
+            layer: MVCC::new(Arc::new(Memory::new())),
+            cache: Arc::new(Cache::new(40)),
         }
     }
 }
@@ -843,6 +891,7 @@ mod test {
         )?;
         let mut iter = transaction.read(
             Arc::new("test".to_string()),
+            (None, None),
             vec![ScalarExpression::ColumnRef(columns[0].clone())],
         )?;
 

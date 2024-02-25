@@ -3,21 +3,29 @@ use std::{io, sync::Arc};
 use async_trait::async_trait;
 use clap::Parser;
 use futures::stream;
+
 use pgwire::{
     api::{
         auth::{noop::NoopStartupHandler, StartupHandler},
-        query::{ExtendedQueryHandler, PlaceholderExtendedQueryHandler, SimpleQueryHandler},
-        results::{DataRowEncoder, FieldFormat, FieldInfo, QueryResponse, Response, Tag},
+        portal::{Format, Portal},
+        query::{
+            ExtendedQueryHandler, SimpleQueryHandler,
+            StatementOrPortal,
+        },
+        results::{DataRowEncoder, DescribeResponse, FieldInfo, QueryResponse, Response, Tag},
+        stmt::NoopQueryParser,
         ClientInfo, MakeHandler, StatelessMakeHandler, Type,
     },
     error::{ErrorInfo, PgWireError, PgWireResult},
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
+use tracing::{debug};
 
 use crate::{
     db::{DBTransaction, Database},
     errors::*,
+    planner::operator::Operator,
     storage::{engine::memory::Memory, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
@@ -50,6 +58,180 @@ impl MakeHandler for Server {
         })
     }
 }
+
+#[async_trait]
+impl ExtendedQueryHandler for Session {
+    type Statement = String;
+
+    type QueryParser = NoopQueryParser;
+
+    fn query_parser(&self) -> Arc<Self::QueryParser> {
+        Arc::new(NoopQueryParser::new())
+    }
+    async fn do_describe<C>(
+        &self,
+        _client: &mut C,
+        target: StatementOrPortal<'_, Self::Statement>,
+    ) -> PgWireResult<DescribeResponse>
+    where
+        C: ClientInfo + Unpin + Send + Sync,
+    {
+        match target {
+            StatementOrPortal::Statement(stmt) => {
+                let plan = self.inner.prepare_sql(&stmt.statement).await.unwrap();
+                // debug!("plan: {:?}", plan);
+                if let Operator::Project(op) = plan.operator {
+                    let filed = op
+                        .ouput_schema()
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, col)| {
+                            let name = col.name();
+                            let data_type = col.datatype();
+                            FieldInfo::new(
+                                name.to_string(),
+                                None,
+                                None,
+                                into_pg_type(data_type).unwrap(),
+                                Format::UnifiedText.format_for(idx),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    // debug!("filed: {:?}", filed);
+                    Ok(DescribeResponse::new(None, filed))
+                } else {
+                    Ok(DescribeResponse::new(None, vec![]))
+                }
+            }
+            StatementOrPortal::Portal(portal) => {
+                let plan = self
+                    .inner
+                    .prepare_sql(&portal.statement.statement)
+                    .await
+                    .unwrap();
+                // debug!("plan: {:?}", plan);
+                if let Operator::Project(op) = plan.operator {
+                    let filed = op
+                        .ouput_schema()
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, col)| {
+                            let name = col.name();
+                            let data_type = col.datatype();
+                            FieldInfo::new(
+                                name.to_string(),
+                                None,
+                                None,
+                                into_pg_type(data_type).unwrap(),
+                                Format::UnifiedText.format_for(idx),
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    // debug!("filed: {:?}", filed);
+                    Ok(DescribeResponse::new(None, filed))
+                } else {
+                    Ok(DescribeResponse::new(None, vec![]))
+                }
+            }
+        }
+    }
+
+    async fn do_query<'a, C>(
+        &self,
+        _client: &mut C,
+        portal: &'a Portal<Self::Statement>,
+        _max_rows: usize,
+    ) -> PgWireResult<Response<'a>>
+    where
+        C: ClientInfo + Unpin + Send + Sync,
+    {
+        let query = &portal.statement.statement;
+         debug!("query: {}", query);
+        match query.to_uppercase().as_str() {
+            "BEGIN;" | "BEGIN" | "START TRANSACTION;" | "START TRANSACTION" => {
+                let mut guard = self.tx.lock().await;
+
+                if guard.is_some() {
+                    return Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::TransactionAlreadyExists,
+                    )));
+                }
+                let transaction = self
+                    .inner
+                    .new_transaction()
+                    .await
+                    .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                guard.replace(transaction);
+
+                Ok(Response::Execution(Tag::new("BEGIN").into()))
+            }
+            "COMMIT;" | "COMMIT" => {
+                let mut guard = self.tx.lock().await;
+
+                if let Some(transaction) = guard.take() {
+                    transaction
+                        .commit()
+                        .await
+                        .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                    Ok(Response::Execution(Tag::new("COMMIT").into()))
+                } else {
+                    Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::NoTransactionBegin,
+                    )))
+                }
+            }
+            "ROLLBACK;" | "ROLLBACK" => {
+                let mut guard = self.tx.lock().await;
+
+                if guard.is_none() {
+                    return Err(PgWireError::ApiError(Box::new(
+                        DatabaseError::NoTransactionBegin,
+                    )));
+                }
+                drop(guard.take());
+
+                Ok(Response::Execution(Tag::new("ROLLBACK").into()))
+            }
+            _ => {
+                let mut guard = self.tx.lock().await;
+
+                let tuples = if let Some(transaction) = guard.as_mut() {
+                    transaction.run(query).await
+                } else {
+                    self.inner.run(query).await
+                }
+                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                // debug!("tuples: {:?}", tuples);
+                Ok(Response::Query(encode_tuples(tuples)?))
+            }
+        }
+    }
+}
+fn row_desc_from_stmt(tuple: &Vec<Tuple>, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
+    let iter = tuple.iter().next().cloned();
+    if let Some(tuple) = iter {
+        return tuple
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(idx, col)| {
+                let datatype = col.datatype();
+                let name = col.name();
+
+                Ok(FieldInfo::new(
+                    name.to_string(),
+                    None,
+                    None,
+                    into_pg_type(&datatype).unwrap(),
+                    format.format_for(idx),
+                ))
+            })
+            .collect();
+    }
+    Ok(vec![])
+}
+
 #[async_trait]
 impl SimpleQueryHandler for Session {
     async fn do_query<'a, 'b: 'a, C>(
@@ -76,7 +258,7 @@ impl SimpleQueryHandler for Session {
                     .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
                 guard.replace(transaction);
 
-                Ok(vec![Response::Execution(Tag::new("OK").into())])
+                Ok(vec![Response::Execution(Tag::new("BEGIN").into())])
             }
             "COMMIT;" | "COMMIT" => {
                 let mut guard = self.tx.lock().await;
@@ -87,7 +269,7 @@ impl SimpleQueryHandler for Session {
                         .await
                         .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-                    Ok(vec![Response::Execution(Tag::new("OK").into())])
+                    Ok(vec![Response::Execution(Tag::new("COMMIT").into())])
                 } else {
                     Err(PgWireError::ApiError(Box::new(
                         DatabaseError::NoTransactionBegin,
@@ -104,26 +286,19 @@ impl SimpleQueryHandler for Session {
                 }
                 drop(guard.take());
 
-                Ok(vec![Response::Execution(Tag::new("OK").into())])
+                Ok(vec![Response::Execution(Tag::new("ROLLBACK").into())])
             }
             _ => {
-                for _ in 0..100 {
-                    let mut guard = self.tx.lock().await;
+                let mut guard = self.tx.lock().await;
 
-                    let tuples = if let Some(transaction) = guard.as_mut() {
-                        transaction.run(query).await
-                    } else {
-                        self.inner.run(query).await
-                    };
-                    match tuples {
-                        Ok(tuple) => return Ok(vec![Response::Query(encode_tuples(tuple)?)]),
-                        Err(DatabaseError::Serialization) => {},
-                        Err(e) => return Err(PgWireError::ApiError(Box::new(e))),
-                    };
-
-                    // .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+                let tuples = if let Some(transaction) = guard.as_mut() {
+                    transaction.run(query).await
+                } else {
+                    self.inner.run(query).await
                 }
-                Err(PgWireError::ApiError(Box::new(DatabaseError::Serialization)))
+                .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
+
+                Ok(vec![Response::Query(encode_tuples(tuples)?)])
             }
         }
     }
@@ -142,16 +317,17 @@ impl Server {
 
         let backend = Server::new().await.unwrap();
         let processor = Arc::new(backend);
+
         // We have not implemented extended query in this server, use placeholder instead
-        let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
-            PlaceholderExtendedQueryHandler,
-        )));
+        // let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
+        //     PlaceholderExtendedQueryHandler,
+        // )));
         let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
         let server_addr = format!("{}:{}", args.ip, args.port);
         let listener = TcpListener::bind(server_addr).await.unwrap();
 
         tokio::select! {
-            res = server_run(processor, placeholder, authenticator, listener) => {
+            res = server_run(processor.clone(), processor.clone(), authenticator, listener) => {
                 if let Err(_err) = res {
                 }
             }
@@ -215,28 +391,11 @@ async fn quit() -> io::Result<()> {
 }
 
 fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
-    if tuples.is_empty() {
-        return Ok(QueryResponse::new(Arc::new(vec![]), stream::empty()));
-    }
-
+    // if tuples.is_empty() {
+    //     return Ok(QueryResponse::new(Arc::new(vec![]), stream::empty()));
+    // }
+    let schema = Arc::new(row_desc_from_stmt(&tuples, &Format::UnifiedText)?);
     let mut results = Vec::with_capacity(tuples.len());
-    let schema = Arc::new(
-        tuples[0]
-            .columns
-            .iter()
-            .map(|column| {
-                let pg_type = into_pg_type(column.datatype())?;
-
-                Ok(FieldInfo::new(
-                    column.name().into(),
-                    None,
-                    None,
-                    pg_type,
-                    FieldFormat::Text,
-                ))
-            })
-            .collect::<PgWireResult<Vec<FieldInfo>>>()?,
-    );
 
     for tuple in tuples {
         let mut encoder = DataRowEncoder::new(schema.clone());
@@ -263,11 +422,10 @@ fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
 
         results.push(encoder.finish());
     }
-
-    Ok(QueryResponse::new(
-        schema,
-        stream::iter(results.into_iter()),
-    ))
+    // debug!("results: {:?}", results);
+    // debug!("schema: {:?}", schema);
+    let iter = stream::iter(results.into_iter());
+    Ok(QueryResponse::new(schema, iter))
 }
 fn into_pg_type(data_type: &LogicalType) -> PgWireResult<Type> {
     Ok(match data_type {

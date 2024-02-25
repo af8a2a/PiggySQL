@@ -24,6 +24,7 @@
   - [x] Join: Inner/Left/Right
   - [x] Alias
   - [x] SubQuery(from)
+  - [x] Show tables
 - DML
   - [x] Insert
   - [x] Update
@@ -38,24 +39,31 @@
     - [x] Rollback
   - [x] Isolation Level
     - [x] Snapshot Isolation
-    - [ ] Serializable Snapshot Isolation
+    - [x] Serializable Snapshot Isolation
   - [x] Multi-Version Concurrency Control  
-    - [x] MVOCC
 - Optimization
   - [x] RBO
     - [x] Predicate Pushdown
     - [x] ConstFolder
     - [x] Combine Filter
     - [x] Coloumn Pruning
+    - [x] Limit Pushdown  
+    - [x] Combine operator  
+
 - Execution
   - [x] Volcano
+- Net
+  - [x] PSQL Client  
+  - [x] Server  
+  - [x] JDBC Driver (only a little)
 
 ## References
 We have referred to the following excellent open-source database projects and express our gratitude for their work
 - [systemxlabs/bustubx](https://github.com/systemxlabs/bustubx)
 - [duckdb/duckdb](https://github.com/duckdb/duckdb)
 - [Fedomn/sqlrs](https://github.com/Fedomn/sqlrs): Main reference materials, Optimizer and Executor all refer to the design of sqlrs
-- [KipData/KipSQL](https://github.com/KipData/KipSQL): Main reference Traits Design,DataType and Expression
+- [KipData/KipSQL](https://github.com/KipData/KipSQL): Main reference materials,refer to a largenumber of SQL layer designs,Excellent Work!
 - [erikgrinaker/ToyDB](https://github.com/erikgrinaker/toydb): Main reference MVCC Design,Encode and Decode,Storage Engine,Transaction, architecture refer the design of toydb
-- [skyzh/mini-lsm](https://github.com/skyzh/mini-lsm)
+- [skyzh/mini-lsm](https://github.com/skyzh/mini-lsm) refer to the design of Storage Engine
+- [YumingxuanGuo/featherdb](https://github.com/YumingxuanGuo/featherdb) reference serializable snapshot isolation
 

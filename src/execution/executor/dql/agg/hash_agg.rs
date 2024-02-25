@@ -24,6 +24,7 @@ impl From<(AggregateOperator, Source)> for HashAggExecutor {
             AggregateOperator {
                 agg_calls,
                 groupby_exprs,
+                ..
             },
             input,
         ): (AggregateOperator, Source),

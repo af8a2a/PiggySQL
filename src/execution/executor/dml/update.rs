@@ -5,6 +5,7 @@ use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
 use crate::types::index::Index;
+use crate::types::tuple_builder::TupleBuilder;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -44,6 +45,7 @@ impl<T: Transaction> Executor<T> for Update {
             columns,
             set_expr,
         } = self;
+        let input=input?;
 
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             //避免halloween问题
@@ -53,7 +55,8 @@ impl<T: Transaction> Executor<T> for Update {
                 update_col.insert(col.id());
             }
             //Seqscan遍历元组
-            for tuple in input?.iter_mut() {
+            for tuple in input.iter().cloned() {
+                let mut tuple=tuple;
                 // eprintln!("tuple:{}", tuple);
                 let is_overwrite = true;
 
@@ -63,7 +66,7 @@ impl<T: Transaction> Executor<T> for Update {
                     .filter(|col| update_col.contains(&col.id()))
                     .enumerate()
                 {
-                    let value = set_expr[i].eval(tuple)?;
+                    let value = set_expr[i].eval(&tuple)?;
 
                     if column.desc.is_primary {
                         //refuse to update primary key
@@ -97,6 +100,9 @@ impl<T: Transaction> Executor<T> for Update {
                 transaction.append(&table_name, tuple.clone(), is_overwrite)?;
             }
         }
-        Ok(vec![])
+        let tuple_builder = TupleBuilder::new_result();
+        let tuple = tuple_builder.push_result("DELETE SUCCESS", &format!("{}", input.len()))?;
+
+        Ok(vec![tuple])
     }
 }
