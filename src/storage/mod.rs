@@ -149,11 +149,11 @@ pub struct MVCCIter<'a, E: StorageEngine> {
 
 impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
-        let limit = match self.bound.0 {
+        let limit = match self.bound.1 {
             Some(limit) => limit,
             None => usize::MAX,
         };
-        let offset = match self.bound.1 {
+        let offset = match self.bound.0 {
             Some(offset) => offset,
             None => 0,
         };
@@ -170,7 +170,6 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
             .skip(offset)
             .take(limit)
             .collect::<Result<Vec<_>>>()?;
-        debug!("tuples: {:?}", tuples);
         Ok(Some(tuples))
     }
 }

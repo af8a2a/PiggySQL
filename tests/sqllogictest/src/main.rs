@@ -5,7 +5,7 @@ use sqllogictest_test::Mock;
 #[tokio::main]
 async fn main() {
     const SLT_PATTERN: &str = "tests/slt/**/*.slt";
-    const TEST: &str = "tests/slt/alter_table.slt";
+    const TEST: &str = "tests/slt/limit.slt";
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     std::env::set_current_dir(path).unwrap();
 

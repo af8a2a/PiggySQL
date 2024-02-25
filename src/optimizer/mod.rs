@@ -39,10 +39,10 @@ pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
             "Limit Pushdown".to_string(),
             HepBatchStrategy::fix_point_topdown(10),
             vec![
-                RuleImpl::PushLimitIntoTableScan,
-                RuleImpl::EliminateLimits,
                 RuleImpl::LimitProjectTranspose,
                 RuleImpl::PushLimitThroughJoin,
+                RuleImpl::PushLimitIntoTableScan,
+                RuleImpl::EliminateLimits,
             ],
         )
         .find_best()

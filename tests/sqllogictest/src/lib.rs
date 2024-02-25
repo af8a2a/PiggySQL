@@ -17,7 +17,7 @@ pub struct Mock<S: StorageEngine> {
 impl Mock<Memory> {
     pub fn new() -> Self {
         Self {
-            db: Database::new(MVCCLayer::new(Memory::new())).unwrap(),
+            db: Database::new_memory().unwrap(),
         }
     }
 }
