@@ -5,6 +5,7 @@ mod table_codec;
 use itertools::Itertools;
 use moka::sync::Cache;
 use tracing::{debug, info, Level};
+use tracing_subscriber::field::debug;
 use tracing_subscriber::FmtSubscriber;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
@@ -169,6 +170,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
             .skip(offset)
             .take(limit)
             .collect::<Result<Vec<_>>>()?;
+        debug!("tuples: {:?}", tuples);
         Ok(Some(tuples))
     }
 }
@@ -441,23 +443,21 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         }
     }
 
-    fn drop_column(
-        &mut self,
-        table_name: &TableName,
-        column: &str,
-        if_exists: bool,
-    ) -> Result<()> {
+    fn drop_column(&mut self, table_name: &TableName, column: &str, if_exists: bool) -> Result<()> {
         dbg!(table_name.to_string(), column);
         if let Some(catalog) = self.table(table_name.clone()) {
-            let column = match catalog.get_column_by_name(column){
+            let column = match catalog.get_column_by_name(column) {
                 Some(col) => col,
                 None => {
-                    if if_exists{
+                    if if_exists {
                         return Ok(());
-                    }else{
-                        return Err(DatabaseError::NotFound("Coloum", format!("{} not found", column)));
+                    } else {
+                        return Err(DatabaseError::NotFound(
+                            "Coloum",
+                            format!("{} not found", column),
+                        ));
                     }
-                },
+                }
             };
 
             if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
@@ -550,20 +550,31 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
     fn table(&self, table_name: TableName) -> Option<TableCatalog> {
         // TODO: unify the data into a `Meta` prefix and use one iteration to collect all data
-        if self.cache.contains_key(&table_name) {
-            return self.cache.get(&table_name);
-        }
-        let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
-        let indexes = Self::index_meta_collect(&table_name, &self.tx)?
-            .into_iter()
-            .map(Arc::new)
-            .collect_vec();
 
-        match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
-            Ok(table) => Some(table),
-            Err(e) => {
-                println!("{:#?}", e);
-                None
+        match self.cache.get(&table_name) {
+            Some(table) => Some(table),
+            None => {
+                let columns = match Self::column_collect(table_name.clone(), &self.tx) {
+                    Ok(cols) => cols,
+                    Err(e) => {
+                        debug!("cannot fetch table {},because:{}", table_name, e);
+                        return None;
+                    }
+                };
+
+                // let columns = Self::column_collect(table_name.clone(), &self.tx).ok()?;
+                let indexes = Self::index_meta_collect(&table_name, &self.tx)?
+                    .into_iter()
+                    .map(Arc::new)
+                    .collect_vec();
+                //todo
+                match TableCatalog::new_with_indexes(table_name.clone(), columns, indexes) {
+                    Ok(table) => Some(table),
+                    Err(e) => {
+                        debug!("cannot fetch table {:#?}", e);
+                        None
+                    }
+                }
             }
         }
     }
@@ -785,9 +796,9 @@ pub struct MVCCLayer<E: StorageEngine> {
 }
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
-                Self {
+        Self {
             layer: MVCC::new(Arc::new(engine)),
-            cache: Arc::new(Cache::new(20)),
+            cache: Arc::new(Cache::new(40)),
         }
     }
 }
@@ -795,7 +806,7 @@ impl MVCCLayer<Memory> {
     pub fn new_memory() -> Self {
         Self {
             layer: MVCC::new(Arc::new(Memory::new())),
-            cache: Arc::new(Cache::new(20)),
+            cache: Arc::new(Cache::new(40)),
         }
     }
 }
