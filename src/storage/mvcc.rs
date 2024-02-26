@@ -24,8 +24,7 @@ fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V> {
 
 pub struct MVCCTransaction<E: StorageEngine> {
     engine: Arc<E>,
-    lock_manager: Option<Arc<LockManager>>,
-
+    pub(crate) lock_manager: Option<Arc<LockManager>>,
     state: TransactionState,
 }
 
@@ -73,6 +72,16 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             state: TransactionState { version, active },
             lock_manager,
         })
+    }
+    pub fn set_serializable(&mut self,serializable:bool){
+        if serializable{
+            self.lock_manager=Some(Arc::new(LockManager::new()));
+            if let Some(ref lock_manager) = self.lock_manager {
+                lock_manager.init_txn(self.state.version);
+            }
+        }else{
+            self.lock_manager=None;
+        }
     }
     pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
         self.write_version(key, Some(value))

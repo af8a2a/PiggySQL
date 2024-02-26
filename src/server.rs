@@ -43,7 +43,10 @@ pub struct Session {
     inner: Arc<Database<MVCCLayer<Memory>>>,
     tx: Mutex<Option<DBTransaction<MVCCLayer<Memory>>>>,
 }
-
+pub struct SessionMemory {
+    inner: Arc<Database<MVCCLayer<Memory>>>,
+    tx: Mutex<Option<DBTransaction<MVCCLayer<Memory>>>>,
+}
 pub struct Server {
     inner: Arc<Database<MVCCLayer<Memory>>>,
 }

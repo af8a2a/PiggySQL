@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use self::engine::memory::Memory;
 use self::engine::StorageEngine;
+use self::mvcc::lock_manager::LockManager;
 use self::mvcc::{Scan, MVCC};
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
@@ -100,6 +101,7 @@ pub trait Transaction: Sync + Send + 'static {
     #[allow(async_fn_in_trait)]
     async fn rollback(self) -> Result<()>;
 
+    fn set_isolation(&mut self, serializable: bool) -> Result<()>;
     fn create_index(
         &mut self,
         table_name: TableName,
@@ -663,6 +665,11 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         Self::update_table_meta(&mut self.tx, &table)?;
         self.cache.remove(&table_name);
 
+        Ok(())
+    }
+    
+    fn set_isolation(&mut self, serializable: bool) -> Result<()> {
+        self.tx.set_serializable(serializable);
         Ok(())
     }
 }

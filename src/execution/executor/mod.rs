@@ -1,8 +1,8 @@
 pub(crate) mod ddl;
 pub(crate) mod dml;
 pub(crate) mod dql;
+pub(crate) mod set;
 pub(crate) mod show;
-
 use crate::{
     planner::{operator::Operator, LogicalPlan},
     storage::Transaction,
@@ -31,6 +31,7 @@ use self::{
         sort::Sort,
         values::Values,
     },
+    set::SetVariable,
     show::ShowTables,
 };
 use crate::errors::*;
@@ -128,5 +129,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
         }
         Operator::DropIndex(op) => DropIndex::from(op).execute(transaction),
         Operator::Show => ShowTables.execute(transaction),
+        Operator::SetVar(op) => SetVariable::from(op).execute(transaction),
     }
 }

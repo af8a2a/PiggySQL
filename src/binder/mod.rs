@@ -12,6 +12,7 @@ mod insert;
 mod select;
 mod show;
 mod update;
+mod set_var;
 use crate::errors::*;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
@@ -193,6 +194,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,
             Statement::ShowTables { .. } => self.bind_show_tables()?,
+            Statement::SetVariable { variable, value,.. }=>{
+                //only support set transaction's  isolation level
+                assert_eq!(value.len(),1);
+                self.bind_set_var(variable.to_string(), value[0].to_string())?
+            }
             _ => return Err(DatabaseError::UnsupportedStmt(stmt.to_string())),
         };
         Ok(plan)

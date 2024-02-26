@@ -1,3 +1,5 @@
+use sqlparser::ast::Statement;
+
 use crate::binder::{Binder, BinderContext};
 use crate::execution::executor::{build, Source};
 use crate::optimizer::apply_optimization;
