@@ -1,5 +1,3 @@
-use sqlparser::ast::Statement;
-
 use crate::binder::{Binder, BinderContext};
 use crate::execution::executor::{build, Source};
 use crate::optimizer::apply_optimization;
@@ -25,9 +23,7 @@ impl Database<MVCCLayer<Memory>> {
 impl<S: Storage> Database<S> {
     /// Create a new Database instance.
     pub fn new(storage: S) -> Result<Self> {
-        Ok(Database {
-            storage,
-        })
+        Ok(Database { storage })
     }
 
     // /// Run SQL queries.
@@ -43,12 +39,10 @@ impl<S: Storage> Database<S> {
     pub async fn new_transaction(&self) -> Result<DBTransaction<S>> {
         let transaction = self.storage.transaction().await?;
 
-        Ok(DBTransaction {
-            inner: transaction,
-        })
+        Ok(DBTransaction { inner: transaction })
     }
     pub async fn prepare_sql(&self, sql: &str) -> Result<LogicalPlan> {
-        let mut txn= self.storage.transaction().await?;
+        let mut txn = self.storage.transaction().await?;
         let stmts = parser::parse(sql)?;
         if stmts.is_empty() {
             return Err(DatabaseError::EmptyStatement);
@@ -56,15 +50,11 @@ impl<S: Storage> Database<S> {
         let mut binder = Binder::new(BinderContext::new(&mut txn));
         let source_plan = binder.bind(&stmts[0])?;
         // println!("source_plan plan: {:#?}", source_plan);
-        let best_plan=apply_optimization(source_plan)?;
+        let best_plan = apply_optimization(source_plan)?;
         txn.rollback().await?;
         Ok(best_plan)
-        
     }
-    fn _run(
-        sql: &str,
-        transaction: &mut <S as Storage>::TransactionType,
-    ) -> Result<Source> {
+    fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<Source> {
         // parse
         let stmts = parser::parse(sql)?;
         if stmts.is_empty() {
@@ -81,7 +71,8 @@ impl<S: Storage> Database<S> {
 }
 
 pub struct DBTransaction<S: Storage> {
-    inner: S::TransactionType,}
+    inner: S::TransactionType,
+}
 
 impl<S: Storage> DBTransaction<S> {
     pub async fn run(&mut self, sql: &str) -> Result<Vec<Tuple>> {
@@ -166,7 +157,6 @@ mod test {
         let tuples_full_fields_t2 = database.run("select * from t2").await?;
         println!("{}", create_table(&tuples_full_fields_t2));
 
-        //todo
         println!("projection_and_filter:");
         let tuples_projection_and_filter = database.run("select a from t1 where b > 1").await?;
         println!("{}", create_table(&tuples_projection_and_filter));

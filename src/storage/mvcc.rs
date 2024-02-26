@@ -11,7 +11,10 @@ pub use keycode::*;
 
 use serde::{Deserialize, Serialize};
 type Version = u64;
-
+use lazy_static::lazy_static;
+lazy_static! {
+    static ref LOCK_MANAGER: Arc<LockManager> = Arc::new(LockManager::new());
+}
 /// Serializes MVCC metadata.
 fn serialize<V: Serialize>(value: &V) -> Result<Vec<u8>> {
     Ok(bincode::serialize(value)?)
@@ -43,10 +46,7 @@ impl TransactionState {
     }
 }
 impl<E: StorageEngine> MVCCTransaction<E> {
-    pub fn begin(
-        engine: Arc<E>,
-        lock_manager: Option<Arc<LockManager>>,
-    ) -> Result<MVCCTransaction<E>> {
+    pub fn begin(engine: Arc<E>) -> Result<MVCCTransaction<E>> {
         let version = match engine.get(&Key::NextVersion.encode()?)? {
             Some(ref v) => deserialize(v)?,
             None => 1,
@@ -63,24 +63,24 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         }
         //设置活跃事务
         engine.set(&Key::TxnActive(version).encode()?, vec![])?;
-        if let Some(ref lock_manager) = lock_manager {
-            lock_manager.init_txn(version);
-        }
+        // if let Some(ref lock_manager) = lock_manager {
+        //     lock_manager.init_txn(version);
+        // }
 
         Ok(Self {
             engine,
             state: TransactionState { version, active },
-            lock_manager,
+            lock_manager: None,
         })
     }
-    pub fn set_serializable(&mut self,serializable:bool){
-        if serializable{
-            self.lock_manager=Some(Arc::new(LockManager::new()));
+    pub fn set_serializable(&mut self, serializable: bool) {
+        if serializable {
+            self.lock_manager = Some(LOCK_MANAGER.clone());
             if let Some(ref lock_manager) = self.lock_manager {
                 lock_manager.init_txn(self.state.version);
             }
-        }else{
-            self.lock_manager=None;
+        } else {
+            self.lock_manager = None;
         }
     }
     pub fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
@@ -141,7 +141,6 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         self.engine
             .delete(&Key::TxnActive(self.state.version).encode()?)
     }
-
 
     fn write_version(&self, key: &[u8], value: Option<Vec<u8>>) -> Result<()> {
         if let Some(lock_manager) = &self.lock_manager {
@@ -302,7 +301,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
     }
 }
 
-struct VersionIterator<'a,> {
+struct VersionIterator<'a> {
     txn: &'a TransactionState,
     inner: KvScan,
 }
@@ -365,28 +364,14 @@ impl<'a> DoubleEndedIterator for VersionIterator<'a> {
 #[derive(Clone)]
 pub struct MVCC<E: StorageEngine> {
     engine: Arc<E>,
-    lock_manager: Option<Arc<LockManager>>,
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
-        Self {
-            engine,
-            lock_manager: Some(Arc::new(LockManager::new())),
-        }
+        Self { engine }
     }
 
-    pub async fn begin(&self, serializable: bool) -> Result<MVCCTransaction<E>> {
-
-        match self.lock_manager {
-            Some(_) => {
-                if serializable {
-                    MVCCTransaction::begin(self.engine.clone(), self.lock_manager.clone())
-                } else {
-                    MVCCTransaction::begin(self.engine.clone(), None)
-                }
-            }
-            None => MVCCTransaction::begin(self.engine.clone(), None),
-        }
+    pub async fn begin(&self) -> Result<MVCCTransaction<E>> {
+        MVCCTransaction::begin(self.engine.clone())
     }
     pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.engine
@@ -572,7 +557,7 @@ pub mod tests {
             }
             // Insert the writes with individual transactions.
             for i in 1..=writes.keys().max().copied().unwrap_or(0) {
-                let txn = self.begin(false).await?;
+                let txn = self.begin().await?;
                 for (key, value) in writes.get(&i).unwrap_or(&Vec::new()) {
                     if let Some(value) = value {
                         txn.set(key, value.clone())?;
@@ -619,7 +604,7 @@ pub mod tests {
     async fn begin() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         assert_eq!(
             t1.state,
             TransactionState {
@@ -629,7 +614,7 @@ pub mod tests {
             }
         );
 
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         assert_eq!(
             t2.state,
             TransactionState {
@@ -638,7 +623,7 @@ pub mod tests {
             }
         );
 
-        let t3 = mvcc.begin(false).await?;
+        let t3 = mvcc.begin().await?;
         assert_eq!(
             t3.state,
             TransactionState {
@@ -650,7 +635,7 @@ pub mod tests {
 
         t2.commit()?; // commit to remove from active set
 
-        let t4 = mvcc.begin(false).await?;
+        let t4 = mvcc.begin().await?;
         assert_eq!(
             t4.state,
             TransactionState {
@@ -666,7 +651,7 @@ pub mod tests {
     /// Get should return the correct latest value.
     async fn get() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"key", vec![1])?;
         t1.set(b"updated", vec![1])?;
         t1.set(b"updated", vec![2])?;
@@ -676,7 +661,8 @@ pub mod tests {
         t1.write_version(b"tombstone", None)?;
         t1.commit()?;
 
-        let t1 = mvcc.begin(true).await?;
+        let mut t1 = mvcc.begin().await?;
+        t1.set_serializable(true);
         assert_eq!(t1.get(b"key")?, Some(vec![1]));
         assert_eq!(t1.get(b"updated")?, Some(vec![2]));
         assert_eq!(t1.get(b"deleted")?, None);
@@ -689,21 +675,21 @@ pub mod tests {
     async fn get_isolation() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"a", vec![1])?;
         t1.set(b"b", vec![1])?;
         t1.set(b"d", vec![1])?;
         t1.set(b"e", vec![1])?;
         t1.commit()?;
 
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         t2.set(b"a", vec![2])?;
         t2.delete(b"b")?;
         t2.set(b"c", vec![2])?;
 
-        let t3 = mvcc.begin(false).await?;
+        let t3 = mvcc.begin().await?;
 
-        let t4 = mvcc.begin(false).await?;
+        let t4 = mvcc.begin().await?;
         t4.set(b"d", vec![3])?;
         t4.delete(b"e")?;
         t4.set(b"f", vec![3])?;
@@ -725,8 +711,8 @@ pub mod tests {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
         mvcc.setup(vec![(b"key", 1, Some(&[0]))]).await?;
         //todo change test
-        let t1 = mvcc.begin(false).await?;
-        let t2 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
+        let t2 = mvcc.begin().await?;
 
         assert_eq!(t2.get(b"key")?, Some(vec![0]));
         t1.set(b"key", b"t1".to_vec())?;
@@ -744,8 +730,8 @@ pub mod tests {
         mvcc.setup(vec![(b"a", 1, Some(&[0])), (b"b", 1, Some(&[0]))])
             .await?;
 
-        let t1 = mvcc.begin(false).await?;
-        let t2 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
+        let t2 = mvcc.begin().await?;
 
         assert_eq!(t1.get(b"a")?, Some(vec![0]));
         t2.set(b"a", vec![2])?;
@@ -766,9 +752,10 @@ pub mod tests {
         mvcc.setup(vec![(b"a", 1, Some(&[1])), (b"b", 1, Some(&[2]))])
             .await?;
 
-        let t1 = mvcc.begin(true).await?;
-        let t2 = mvcc.begin(true).await?;
-
+        let mut t1 = mvcc.begin().await?;
+        let mut t2 = mvcc.begin().await?;
+        t1.set_serializable(true);
+        t2.set_serializable(true);
         assert_eq!(t1.get(b"a")?, Some(vec![1]));
         assert_eq!(t2.get(b"b")?, Some(vec![2]));
 
@@ -798,21 +785,21 @@ pub mod tests {
     async fn scan_isolation() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"a", vec![1])?;
         t1.set(b"b", vec![1])?;
         t1.set(b"d", vec![1])?;
         t1.set(b"e", vec![1])?;
         t1.commit()?;
 
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         t2.set(b"a", vec![2])?;
         t2.delete(b"b")?;
         t2.set(b"c", vec![2])?;
 
-        let t3 = mvcc.begin(true).await?;
-
-        let t4 = mvcc.begin(false).await?;
+        let mut t3 = mvcc.begin().await?;
+        t3.set_serializable(true);
+        let t4 = mvcc.begin().await?;
         t4.set(b"d", vec![3])?;
         t4.delete(b"e")?;
         t4.set(b"f", vec![3])?;
@@ -840,20 +827,21 @@ pub mod tests {
     async fn scan_key_version_encoding() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(&[0], vec![1])?;
         t1.commit()?;
 
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         t2.set(&[0], vec![2])?;
         t2.set(&[0, 0, 0, 0, 0, 0, 0, 0, 2], vec![2])?;
         t2.commit()?;
 
-        let t3 = mvcc.begin(false).await?;
+        let t3 = mvcc.begin().await?;
         t3.set(&[0], vec![3])?;
         t3.commit()?;
 
-        let t4 = mvcc.begin(true).await?;
+        let mut t4 = mvcc.begin().await?;
+        t4.set_serializable(true);
         assert_scan!(t4.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"\x00" => [3],
             b"\x00\x00\x00\x00\x00\x00\x00\x00\x02" => [2],
@@ -868,7 +856,7 @@ pub mod tests {
         mvcc.setup(vec![(b"key", 1, Some(&[1])), (b"tombstone", 1, None)])
             .await?;
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"key", vec![2])?; // update
         t1.set(b"tombstone", vec![2])?; // update tombstone
         t1.set(b"new", vec![1])?; // new write
@@ -885,10 +873,10 @@ pub mod tests {
     async fn set_conflict() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
-        let t2 = mvcc.begin(false).await?;
-        let t3 = mvcc.begin(false).await?;
-        let t4 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
+        let t2 = mvcc.begin().await?;
+        let t3 = mvcc.begin().await?;
+        let t4 = mvcc.begin().await?;
 
         t1.set(b"a", vec![1])?;
         t3.set(b"c", vec![3])?;
@@ -926,9 +914,9 @@ pub mod tests {
         .await?;
 
         // t2 will be rolled back. t1 and t3 are concurrent transactions.
-        let t1 = mvcc.begin(false).await?;
-        let t2 = mvcc.begin(false).await?;
-        let t3 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
+        let t2 = mvcc.begin().await?;
+        let t3 = mvcc.begin().await?;
 
         t1.set(b"a", vec![1])?;
         t2.set(b"b", vec![2])?;
@@ -949,7 +937,8 @@ pub mod tests {
         // and t3 can perform their writes and successfully commit.
         t2.rollback()?;
 
-        let t4 = mvcc.begin(true).await?;
+        let mut t4 = mvcc.begin().await?;
+        t4.set_serializable(true);
         assert_scan!(t4.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"a" => [0],
             b"b" => [0],
@@ -962,7 +951,8 @@ pub mod tests {
         t1.commit()?;
         t3.commit()?;
 
-        let t5 = mvcc.begin(true).await?;
+        let mut t5 = mvcc.begin().await?;
+        t5.set_serializable(true);
         assert_scan!(t5.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"a" => [1],
             b"b" => [1],
@@ -978,10 +968,10 @@ pub mod tests {
     async fn anomaly_dirty_write() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"key", vec![1])?;
 
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         assert!(matches!(
             t2.set(b"key", vec![2]),
             Err(DatabaseError::Serialization)
@@ -996,10 +986,10 @@ pub mod tests {
     async fn anomaly_dirty_read() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"key", vec![1])?;
 
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         assert_eq!(t2.get(b"key")?, None);
 
         Ok(())
@@ -1011,9 +1001,10 @@ pub mod tests {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
         mvcc.setup(vec![(b"key", 1, Some(&[0]))]).await?;
 
-        let t1 = mvcc.begin(true).await?;
-        let t2 = mvcc.begin(true).await?;
-
+        let mut t1 = mvcc.begin().await?;
+        let mut t2 = mvcc.begin().await?;
+        t1.set_serializable(true);
+        t2.set_serializable(true);
         t1.get(b"key")?;
         t2.get(b"key")?;
 
@@ -1053,8 +1044,8 @@ pub mod tests {
         ])
         .await?;
 
-        let t1 = mvcc.begin(false).await?;
-        let t2 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
+        let t2 = mvcc.begin().await?;
 
         assert_scan!(t1.scan_prefix(b"b")? => {
             b"ba" => [0],
@@ -1080,7 +1071,7 @@ pub mod tests {
         // Interleave versioned and unversioned writes.
         mvcc.set_unversioned(b"a", vec![0])?;
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"a", vec![1])?;
         t1.set(b"b", vec![1])?;
         t1.set(b"c", vec![1])?;
@@ -1090,7 +1081,8 @@ pub mod tests {
         mvcc.set_unversioned(b"d", vec![0])?;
 
         // Scans should not see the unversioned writes.
-        let t2 = mvcc.begin(true).await?;
+        let mut t2 = mvcc.begin().await?;
+        t2.set_serializable(true);
         assert_scan!(t2.scan(Bound::Unbounded,Bound::Unbounded)? => {
             b"a" => [1],
             b"b" => [1],
@@ -1115,14 +1107,14 @@ pub mod tests {
     async fn gc() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
-        let t1 = mvcc.begin(false).await?;
+        let t1 = mvcc.begin().await?;
         t1.set(b"a", vec![1])?;
         t1.commit()?;
-        let t2 = mvcc.begin(false).await?;
+        let t2 = mvcc.begin().await?;
         t2.set(b"a", vec![2])?;
         t2.commit()?;
 
-        let t3 = mvcc.begin(false).await?;
+        let t3 = mvcc.begin().await?;
         t3.set(b"a", vec![3])?;
         t3.commit()?;
         let scan = mvcc
@@ -1136,7 +1128,7 @@ pub mod tests {
             .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
             .collect::<Result<Vec<_>>>()?;
         assert_eq!(scan.len(), 1);
-        let t4 = mvcc.begin(false).await?;
+        let t4 = mvcc.begin().await?;
         let kv = t4.get(b"a")?.unwrap();
         assert_eq!(kv, vec![3]);
 

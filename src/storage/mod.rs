@@ -4,9 +4,7 @@ mod table_codec;
 
 use itertools::Itertools;
 use moka::sync::Cache;
-use tracing::{debug};
-
-
+use tracing::debug;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
@@ -25,7 +23,7 @@ use std::sync::Arc;
 
 use self::engine::memory::Memory;
 use self::engine::StorageEngine;
-use self::mvcc::lock_manager::LockManager;
+
 use self::mvcc::{Scan, MVCC};
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
@@ -573,7 +571,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
                     Ok(table) => {
                         self.cache.insert(table_name, table.clone());
                         Some(table)
-                    },
+                    }
                     Err(e) => {
                         debug!("cannot fetch table {:#?}", e);
                         None
@@ -650,7 +648,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         //更新索引元数据
         //todo
         //这是一个相当愚蠢的更新方法，受限于tablecodec的设计,我们必须先获取表的全部索引元信息,全部删除后再添加
-        //这会造成相当大无意义的IO写入
+        //这会造成相当大的IO写入
         let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(&table_name);
         Self::_drop_data(&mut self.tx, &index_meta_min, &index_meta_max)?;
         for meta in indexs.iter() {
@@ -667,7 +665,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
         Ok(())
     }
-    
+
     fn set_isolation(&mut self, serializable: bool) -> Result<()> {
         self.tx.set_serializable(serializable);
         Ok(())
@@ -824,7 +822,7 @@ impl<E: StorageEngine> Storage for MVCCLayer<E> {
 
     async fn transaction(&self) -> Result<Self::TransactionType> {
         Ok(MVCCTransaction {
-            tx: self.layer.begin(false).await?,
+            tx: self.layer.begin().await?,
             cache: Arc::clone(&self.cache),
         })
     }

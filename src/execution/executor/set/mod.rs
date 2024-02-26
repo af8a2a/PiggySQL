@@ -1,8 +1,4 @@
-use crate::{
-    planner::operator::set_var::SetVarOperator,
-    storage::Transaction,
-    types::{tuple::Tuple, value::DataValue},
-};
+use crate::{planner::operator::set_var::SetVarOperator, storage::Transaction};
 
 use super::{Executor, Source};
 
