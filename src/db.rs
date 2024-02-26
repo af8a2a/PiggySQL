@@ -33,7 +33,7 @@ impl<S: Storage> Database<S> {
         let mut transaction = self.storage.transaction().await?;
         let tuples = Self::_run(sql, &mut transaction)?;
 
-        transaction.commit()?;
+        transaction.commit().await?;
 
         Ok(tuples?)
     }
@@ -55,7 +55,7 @@ impl<S: Storage> Database<S> {
         let source_plan = binder.bind(&stmts[0])?;
         // println!("source_plan plan: {:#?}", source_plan);
         let best_plan=apply_optimization(source_plan)?;
-        txn.rollback()?;
+        txn.rollback().await?;
         Ok(best_plan)
         
     }
@@ -87,12 +87,12 @@ impl<S: Storage> DBTransaction<S> {
         tuples
     }
     pub async fn commit(self) -> Result<()> {
-        self.inner.commit()?;
+        self.inner.commit().await?;
 
         Ok(())
     }
     pub async fn rollback(self) -> Result<()> {
-        self.inner.rollback()?;
+        self.inner.rollback().await?;
 
         Ok(())
     }

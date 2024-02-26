@@ -277,7 +277,7 @@ pub mod test {
             false,
         )?;
 
-        transaction.commit()?;
+        transaction.commit().await?;
 
         Ok(storage)
     }

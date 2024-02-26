@@ -96,10 +96,9 @@ pub trait Transaction: Sync + Send + 'static {
     fn show_tables(&self) -> Result<Vec<String>>;
 
     #[allow(async_fn_in_trait)]
-    fn commit(self) -> Result<()>;
-
+    async fn commit(self) -> Result<()>;
     #[allow(async_fn_in_trait)]
-    fn rollback(self) -> Result<()>;
+    async fn rollback(self) -> Result<()>;
 
     fn create_index(
         &mut self,
@@ -596,13 +595,13 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         Ok(metas)
     }
 
-    fn commit(self) -> Result<()> {
+    async fn commit(self) -> Result<()> {
         self.tx.commit()?;
 
         Ok(())
     }
 
-    fn rollback(self) -> Result<()> {
+    async fn rollback(self) -> Result<()> {
         self.tx.rollback()?;
 
         Ok(())
