@@ -371,7 +371,7 @@ impl Log {
 
         Ok((pos, len))
     }
-
+    #[allow(dead_code)]
     #[cfg(test)]
     /// Prints the entire log file to the given writer in human-readable form.
     fn print<W: Write>(&mut self, w: &mut W) -> Result<()> {

@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use clap::Parser;
@@ -20,13 +20,13 @@ use pgwire::{
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
-use tracing::{debug};
+
 
 use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{engine::memory::Memory, MVCCLayer},
+    storage::{engine::{lsm::BitCask}, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
 
@@ -40,11 +40,11 @@ pub struct Args {
 }
 
 pub struct Session {
-    inner: Arc<Database<MVCCLayer<Memory>>>,
-    tx: Mutex<Option<DBTransaction<MVCCLayer<Memory>>>>,
+    inner: Arc<Database<MVCCLayer<BitCask>>>,
+    tx: Mutex<Option<DBTransaction<MVCCLayer<BitCask>>>>,
 }
 pub struct Server {
-    inner: Arc<Database<MVCCLayer<Memory>>>,
+    inner: Arc<Database<MVCCLayer<BitCask>>>,
 }
 
 impl MakeHandler for Server {
@@ -145,7 +145,7 @@ impl ExtendedQueryHandler for Session {
         C: ClientInfo + Unpin + Send + Sync,
     {
         let query = &portal.statement.statement;
-         debug!("query: {}", query);
+        //  debug!("query: {}", query);
         match query.to_uppercase().as_str() {
             "BEGIN;" | "BEGIN" | "START TRANSACTION;" | "START TRANSACTION" => {
                 let mut guard = self.tx.lock().await;
@@ -305,7 +305,7 @@ impl SimpleQueryHandler for Session {
 
 impl Server {
     async fn new() -> Result<Server> {
-        let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        let database = Database::new(MVCCLayer::new(BitCask::new(PathBuf::from("test.db"))?))?;
 
         Ok(Server {
             inner: Arc::new(database),

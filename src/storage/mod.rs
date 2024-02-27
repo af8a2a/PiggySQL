@@ -113,7 +113,7 @@ pub trait Transaction: Sync + Send + 'static {
         if_not_exists: bool,
     ) -> Result<()>;
 }
-
+#[allow(dead_code)]
 enum IndexValue {
     PrimaryKey(Tuple),
     Normal(TupleId),

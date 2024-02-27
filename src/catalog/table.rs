@@ -42,7 +42,7 @@ impl TableCatalog {
         let id = self.column_idxs.get(name)?;
         self.columns.get(id)
     }
-
+    #[allow(dead_code)]
     pub(crate) fn types(&self) -> Vec<LogicalType> {
         self.columns
             .iter()
@@ -97,6 +97,7 @@ impl TableCatalog {
 
         &self.indexes[index_id]
     }
+    #[allow(dead_code)]
     pub(crate) fn get_index_by_name(
         &mut self,
         name: IndexName,

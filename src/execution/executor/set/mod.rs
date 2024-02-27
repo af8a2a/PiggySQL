@@ -14,7 +14,7 @@ impl From<SetVarOperator> for SetVariable {
 
 impl<T: Transaction> Executor<T> for SetVariable {
     fn execute(self, transaction: &mut T) -> Source {
-        if self.op.variable == "serializable" {
+        if self.op.value == "serializable" {
             transaction.set_isolation(true)?;
         } else {
             transaction.set_isolation(false)?;
