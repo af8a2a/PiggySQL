@@ -1,6 +1,4 @@
-use crate::{
-    catalog::TableName,
-};
+use crate::catalog::TableName;
 
 use self::operator::Operator;
 
@@ -34,7 +32,6 @@ impl LogicalPlan {
     pub fn explain(&self, indentation: usize) -> String {
         let mut result = format!("{:indent$}{}", "", self.operator, indent = indentation);
 
-
         for child in &self.childrens {
             result.push('\n');
             result.push_str(&child.explain(indentation + 2));
@@ -42,5 +39,4 @@ impl LogicalPlan {
 
         result
     }
-
 }

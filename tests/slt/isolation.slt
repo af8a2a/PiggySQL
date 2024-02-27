@@ -1,0 +1,6 @@
+statement ok
+set isolation_level = serializable;
+
+statement ok
+set isolation_level = snapshot;
+

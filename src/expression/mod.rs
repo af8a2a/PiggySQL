@@ -105,7 +105,7 @@ impl ScalarExpression {
             } => *return_type,
             Self::IsNull { .. } | Self::In { .. } => LogicalType::Boolean,
             Self::Alias { expr, .. } => expr.return_type(),
-            _=>todo!()
+            
         }
     }
 
@@ -177,7 +177,6 @@ impl ScalarExpression {
             ScalarExpression::In { expr, args, .. } => {
                 expr.has_agg_call() || args.iter().any(|arg| arg.has_agg_call())
             }
-            _=>todo!()
         }
     }
 
@@ -293,7 +292,6 @@ impl ScalarExpression {
                 ColumnDesc::new(*ty, false, false, None),
                 Some(self.clone()),
             )),
-            _=>todo!()
         }
     }
 }

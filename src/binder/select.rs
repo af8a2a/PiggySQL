@@ -57,8 +57,6 @@ impl<'a, T: Transaction> Binder<'a, T> {
     fn bind_select(&mut self, select: &Select, orderby: &[OrderByExpr]) -> Result<LogicalPlan> {
         let mut plan = self.bind_table_ref(&select.from)?;
 
-        // Resolve scalar function call.
-        // TODO support SRF(Set-Returning Function).
 
         let mut select_list = self.normalize_select_item(&select.projection)?;
 

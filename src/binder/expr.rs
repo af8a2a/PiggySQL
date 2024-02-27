@@ -42,6 +42,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             } => self.bind_is_in(expr, list, *negated),
             Expr::Cast { expr, data_type } => self.bind_cast(expr, data_type),
             _ => {
+                println!("expr: {:#?} not support", expr);
                 todo!()
             }
         }

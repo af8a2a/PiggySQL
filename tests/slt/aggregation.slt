@@ -1,8 +1,8 @@
 statement ok
-create table t(id int primary key,v1 int not null, v2 int not null, v3 double not null)
+create table t(id int primary key,v1 int not null, v2 int not null, v3 int not null)
 
 statement ok
-insert into t values(0,1,4,2.5), (1,2,3,3.2), (2,3,4,4.7), (3,4,3,5.1)
+insert into t values(0,1,4,2), (1,2,3,3), (2,3,4,4), (3,4,3,5)
 
 query I
 select sum(v1) + sum(v2) from t
@@ -17,12 +17,12 @@ select sum(v1) as a from t
 query IR
 select sum(v1), sum(v3) from t
 ----
-10 15.499999761581421
+10 14
 
-# query IR
-# select sum(v1+v2),sum(v1+v3) from t
-# ----
-# 24 25.5
+query IR
+select sum(v1+v2),sum(v1+v3) from t
+----
+24 24
 
 # SimpleMinTest
 

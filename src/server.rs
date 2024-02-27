@@ -43,7 +43,6 @@ pub struct Session {
     inner: Arc<Database<MVCCLayer<BitCask>>>,
     tx: Mutex<Option<DBTransaction<MVCCLayer<BitCask>>>>,
 }
-
 pub struct Server {
     inner: Arc<Database<MVCCLayer<BitCask>>>,
 }

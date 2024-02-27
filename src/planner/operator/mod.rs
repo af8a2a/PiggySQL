@@ -1,7 +1,23 @@
 use itertools::Itertools;
 
 use self::{
-    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_index::DropIndexOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
+    aggregate::AggregateOperator,
+    alter_table::{AddColumnOperator, DropColumnOperator},
+    create_index::CreateIndexOperator,
+    create_table::CreateTableOperator,
+    delete::DeleteOperator,
+    drop_index::DropIndexOperator,
+    drop_table::DropTableOperator,
+    filter::FilterOperator,
+    insert::InsertOperator,
+    join::{JoinCondition, JoinOperator},
+    limit::LimitOperator,
+    project::ProjectOperator,
+    scan::ScanOperator,
+    set_var::SetVarOperator,
+    sort::SortOperator,
+    update::UpdateOperator,
+    values::ValuesOperator,
 };
 use crate::catalog::ColumnRef;
 use std::fmt;
@@ -20,6 +36,7 @@ pub mod join;
 pub mod limit;
 pub mod project;
 pub mod scan;
+pub mod set_var;
 pub mod sort;
 pub mod update;
 pub mod values;
@@ -37,6 +54,7 @@ pub enum Operator {
     Values(ValuesOperator),
     Explain,
     Show,
+    SetVar(SetVarOperator),
 
     // DML
     Insert(InsertOperator),
@@ -120,6 +138,7 @@ impl fmt::Display for Operator {
             Operator::CreateIndex(op) => write!(f, "{}", op),
             Operator::DropIndex(op) => write!(f, "{}", op),
             Operator::Show => write!(f, "Show Tables"),
+            Operator::SetVar(op) => write!(f, "{}", op),
         }
     }
 }
