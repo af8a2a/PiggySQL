@@ -367,12 +367,37 @@ pub struct MVCC<E: StorageEngine> {
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
-        Self { engine }
+        let mvcc = MVCC { engine };
+        mvcc.do_recovery().unwrap();
+        mvcc
     }
 
     pub async fn begin(&self) -> Result<MVCCTransaction<E>> {
         MVCCTransaction::begin(self.engine.clone())
     }
+    pub fn do_recovery(&self) -> Result<()> {
+        self.gc()?;
+
+        let active_set = self
+            .engine
+            .scan_prefix(&KeyPrefix::TxnActive.encode()?)?
+            .collect::<Result<Vec<_>>>()?;
+        let write_set = self
+            .engine
+            .scan(&KeyPrefix::TxnWrite(0).encode()?..&KeyPrefix::TxnWrite(u64::MAX).encode()?)?
+            .collect::<Result<Vec<_>>>()?;
+        for (write_key, _) in write_set {
+            let key = Key::decode(&write_key)?;
+            if let Key::TxnWrite(_, key) = key {
+                self.engine.delete(&key)?;
+            }
+        }
+        for (active_key, _) in active_set {
+            self.engine.delete(&active_key)?;
+        }
+        Ok(())
+    }
+
     pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         self.engine
             .get(&Key::Unversioned(key.to_vec()).encode()?)
