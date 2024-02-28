@@ -3,7 +3,6 @@ use crate::execution::executor::{Executor, Source};
 use crate::expression::ScalarExpression;
 use crate::planner::operator::project::ProjectOperator;
 use crate::storage::Transaction;
-use crate::types::tuple::Tuple;
 
 pub struct Projection {
     pub(crate) exprs: Vec<ScalarExpression>,
@@ -20,8 +19,8 @@ impl<T: Transaction> Executor<T> for Projection {
     fn execute(self, _transaction: &mut T) -> Source {
         let Projection { exprs, input } = self;
         let mut tuples = Vec::new();
-        for tuple in input?.iter() {
-            let tuple = tuple;
+        for tuple in input?.iter_mut() {
+            // let tuple = tuple;
 
             let mut columns = Vec::with_capacity(exprs.len());
             let mut values = Vec::with_capacity(exprs.len());
@@ -30,11 +29,10 @@ impl<T: Transaction> Executor<T> for Projection {
                 values.push(expr.eval(&tuple)?);
                 columns.push(expr.output_columns());
             }
-            tuples.push(Tuple {
-                id: None,
-                columns,
-                values,
-            });
+            tuple.columns = columns;
+            tuple.values = values;
+
+            tuples.push(tuple.clone());
         }
         Ok(tuples)
     }

@@ -1,19 +1,21 @@
 use crate::planner::operator::join::JoinType;
 
 use crate::catalog::{ColumnCatalog, ColumnRef};
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
+use crate::errors::*;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::join::{JoinCondition, JoinOperator};
 use crate::storage::Transaction;
-use crate::errors::*;
 use crate::types::tuple::Tuple;
 use crate::types::value::DataValue;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt, RandomState};
 
 use itertools::Itertools;
 use std::sync::Arc;
-
+///如果分别来自 R 和 S 中的两个 tuples 满足 Join 的条件  
+///它们的 Join Attributes 必然相等，那么它们的 Join Attributes 经过某个 hash function 得到的值也必然相等  
+///因此 Join 的时候，我们只需要对两个 tables 中 hash 到同样值的 tuples 分别执行 Join 操作即可。  
 pub struct HashJoin {
     on: JoinCondition,
     ty: JoinType,
@@ -23,11 +25,7 @@ pub struct HashJoin {
 
 impl From<(JoinOperator, Source, Source)> for HashJoin {
     fn from(
-        (JoinOperator { on, join_type }, left_input, right_input): (
-            JoinOperator,
-            Source,
-            Source,
-        ),
+        (JoinOperator { on, join_type }, left_input, right_input): (JoinOperator, Source, Source),
     ) -> Self {
         HashJoin {
             on,
@@ -71,13 +69,12 @@ impl HashJoin {
 
         let hash_random_state = RandomState::with_seeds(0, 0, 0, 0);
         let (left_force_nullable, right_force_nullable) = joins_nullable(&ty);
-
+        //对Outer Table构造哈希表
         // build phase:
         // 1.construct hashtable, one hash key may contains multiple rows indices.
         // 2.merged all left tuples.
         let mut left_init_flag = false;
-        for tuple in left_input?.iter() {
-            let tuple: Tuple = tuple.clone();
+        for tuple in left_input?.iter().cloned() {
             let hash = Self::hash_row(&on_left_keys, &hash_random_state, &tuple)?;
 
             if !left_init_flag {
@@ -90,11 +87,10 @@ impl HashJoin {
 
         // probe phase
         let mut right_init_flag = false;
-        for tuple in right_input?.iter() {
-            let tuple: Tuple = tuple.clone();
+        for tuple in right_input?.iter().cloned() {
             let right_cols_len = tuple.columns.len();
             let hash = Self::hash_row(&on_right_keys, &hash_random_state, &tuple)?;
-
+            //构造join columns
             if !right_init_flag {
                 Self::columns_filling(&tuple, &mut join_columns, right_force_nullable);
                 right_init_flag = true;
@@ -181,7 +177,6 @@ impl HashJoin {
 
             for tuple in join_tuples {
                 tuples.push(tuple);
-                // yield tuple
             }
         }
 
@@ -208,11 +203,6 @@ impl HashJoin {
                         columns: join_columns.clone(),
                         values,
                     });
-                    // yield Tuple {
-                    //     id: None,
-                    //     columns: join_columns.clone(),
-                    //     values,
-                    // }
                 }
             }
         }

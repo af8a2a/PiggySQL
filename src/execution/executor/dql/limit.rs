@@ -1,14 +1,7 @@
-
-
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::limit::LimitOperator;
-use crate::storage::{Transaction};
-
-
-
-
-
+use crate::storage::Transaction;
 
 pub struct Limit {
     offset: Option<usize>,
@@ -35,10 +28,10 @@ impl<T: Transaction> Executor<T> for Limit {
             input,
         } = self;
 
-        if limit.is_some() && limit.unwrap() == 0 {
+        if limit.is_some() && limit.unwrap_or(0) == 0 {
             return Ok(tuples);
         }
-        let input=input?;
+        let input = input?;
         // println!("limit input tuple {}", input.len());
 
         let offset_val = offset.unwrap_or(0);
@@ -47,10 +40,7 @@ impl<T: Transaction> Executor<T> for Limit {
         // debug!("limit  {}", limit);
 
         for (i, tuple) in input.iter().skip(offset_val).enumerate() {
-            // if i < offset_val {
-            //     continue;
-            // }
-              if i >= limit {
+            if i >= limit {
                 break;
             }
             tuples.push(tuple.clone());
