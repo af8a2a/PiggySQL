@@ -7,6 +7,19 @@ insert into halloween values (1,1000), (2,2000), (3,3000), (4,4000);
 4
 
 query
+update halloween set id = id + 1;
+----
+4
+
+query rowsort
+select id from halloween;
+----
+2
+3
+4
+5
+
+query
 update halloween set salary = salary + 1000 where salary < 3000;
 ----
 2

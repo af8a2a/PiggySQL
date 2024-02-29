@@ -1,6 +1,6 @@
 use crate::catalog::{ColumnCatalog, TableName};
-use crate::execution::executor::{Source, Executor};
 use crate::errors::*;
+use crate::execution::executor::{Executor, Source};
 use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
 use crate::storage::Transaction;
@@ -45,22 +45,26 @@ impl<T: Transaction> Executor<T> for Update {
             columns,
             set_expr,
         } = self;
-        let input=input?;
+        let input = input?;
 
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             //避免halloween问题
             let mut update_col = HashSet::new();
+            let mut update_batch = vec![];
+            let mut index_update_batch = vec![];
 
             for col in columns.iter() {
                 update_col.insert(col.id());
             }
+
             //Seqscan遍历元组
             for tuple in input.iter().cloned() {
-                let mut tuple=tuple;
-                // eprintln!("tuple:{}", tuple);
-                let is_overwrite = true;
+                let mut is_overwrite = true;
 
-                for (i,column) in tuple
+                let mut tuple = tuple;
+                // eprintln!("tuple:{}", tuple);
+
+                for (i, column) in tuple
                     .columns
                     .iter()
                     .filter(|col| update_col.contains(&col.id()))
@@ -70,10 +74,14 @@ impl<T: Transaction> Executor<T> for Update {
 
                     if column.desc.is_primary {
                         //refuse to update primary key
-                        return Err(DatabaseError::InternalError("Update Primary key".into()));
+                        let old_key = tuple.id.replace(value.clone()).unwrap();
+                        transaction.delete(&table_name, old_key)?;
+                        is_overwrite = false;
+                        // return Err(DatabaseError::InternalError("Update Primary key".into()));
                     }
                     //更新索引
-                    if column.desc.is_unique && value != tuple.values[column.id().unwrap() as usize] {
+                    if column.desc.is_unique && value != tuple.values[column.id().unwrap() as usize]
+                    {
                         if let Some(index_meta) =
                             table_catalog.get_unique_index(&column.id().unwrap())
                         {
@@ -85,19 +93,31 @@ impl<T: Transaction> Executor<T> for Update {
 
                             if !value.is_null() {
                                 index.column_values[0] = value.clone();
-                                transaction.add_index(
-                                    &table_name,
+                                // transaction.add_index(
+                                //     &table_name,
+                                //     index,
+                                //     vec![tuple.id.clone().unwrap()],
+                                //     true,
+                                // )?;
+                                index_update_batch.push((
                                     index,
                                     vec![tuple.id.clone().unwrap()],
                                     true,
-                                )?;
+                                ));
                             }
                         }
                     }
-                    transaction.delete(&table_name, tuple.id.clone().unwrap())?;
+                    // transaction.delete(&table_name, tuple.id.clone().unwrap())?;
                     tuple.values[column.id().unwrap() as usize] = value.clone();
                 }
-                transaction.append(&table_name, tuple.clone(), is_overwrite)?;
+                update_batch.push((tuple, is_overwrite));
+                // transaction.append(&table_name, tuple.clone(), is_overwrite)?;
+            }
+            for index_item in index_update_batch {
+                transaction.add_index(&table_name, index_item.0, index_item.1, index_item.2)?;
+            }
+            for tuple in update_batch {
+                transaction.append(&table_name, tuple.0, tuple.1)?;
             }
         }
         let tuple_builder = TupleBuilder::new_result();
