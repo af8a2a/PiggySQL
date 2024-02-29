@@ -1,17 +1,27 @@
 mod keycode;
 pub mod lock_manager;
-use std::{collections::HashSet, ops::Bound, sync::Arc, vec};
+use std::{
+    collections::HashSet,
+    ops::{Bound, Sub},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    vec,
+};
 
 use self::lock_manager::LockManager;
 
 use super::engine::{KvScan, StorageEngine};
 use crate::errors::*;
 
+use futures::executor::block_on;
 pub use keycode::*;
 
 use serde::{Deserialize, Serialize};
 type Version = u64;
 use lazy_static::lazy_static;
+use tracing::debug;
 lazy_static! {
     static ref LOCK_MANAGER: Arc<LockManager> = Arc::new(LockManager::new());
 }
@@ -105,7 +115,6 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         for key in remove {
             self.engine.delete(&key)?;
         }
-
         self.engine
             .delete(&Key::TxnActive(self.state.version).encode()?)
     }
@@ -364,19 +373,42 @@ impl<'a> DoubleEndedIterator for VersionIterator<'a> {
 #[derive(Clone)]
 pub struct MVCC<E: StorageEngine> {
     engine: Arc<E>,
+    last_gc: Arc<AtomicU64>,
+    watermark: Arc<AtomicU64>,
+    threshold: u64,
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
-        let mvcc = MVCC { engine };
-        mvcc.do_recovery().unwrap();
+        let mvcc = MVCC {
+            engine,
+            watermark: Arc::new(AtomicU64::new(1)),
+            last_gc: Arc::new(AtomicU64::new(0)),
+            threshold: 1024*16,
+        };
+        block_on(mvcc.do_recovery()).unwrap();
+        // mvcc.do_recovery().unwrap();
         mvcc
     }
 
     pub async fn begin(&self) -> Result<MVCCTransaction<E>> {
+        self.watermark.fetch_add(1, Ordering::SeqCst);
+        if self
+            .watermark
+            .load(Ordering::SeqCst)
+            .sub(self.last_gc.load(Ordering::SeqCst))
+            .gt(&self.threshold)
+        {
+            let watermark = self.watermark.load(Ordering::SeqCst);
+            self.last_gc.store(watermark, Ordering::SeqCst);
+
+            debug!("GC watermark: {}", watermark);
+            // self.gc()?;
+            self.gc().await?;
+        }
         MVCCTransaction::begin(self.engine.clone())
     }
-    pub fn do_recovery(&self) -> Result<()> {
-        self.gc()?;
+    pub async fn do_recovery(&self) -> Result<()> {
+        self.gc().await?;
 
         let active_set = self
             .engine
@@ -398,15 +430,18 @@ impl<E: StorageEngine> MVCC<E> {
         Ok(())
     }
 
-    pub fn gc(&self) -> Result<()> {
+    pub async fn gc(&self) -> Result<()> {
         let mut scan = self.engine.scan(..)?.rev();
         let mut hashset = HashSet::new();
+        debug!("start MVCC GC!");
+        let mut gc_count = 0;
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
                 Key::Version(key, version) => {
                     //删除过时的键值对
                     if hashset.contains(&key) {
                         self.engine.delete(&Key::Version(key, version).encode()?)?;
+                        gc_count += 1;
                     } else {
                         hashset.insert(key.clone());
                     }
@@ -416,6 +451,7 @@ impl<E: StorageEngine> MVCC<E> {
                 }
             }
         }
+        debug!("clean {} keys", gc_count);
         Ok(())
     }
 }
@@ -1099,7 +1135,7 @@ pub mod tests {
             .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
             .collect_vec();
         assert_eq!(scan.len(), 3);
-        mvcc.gc()?;
+        mvcc.gc().await?;
         let scan = mvcc
             .engine
             .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
