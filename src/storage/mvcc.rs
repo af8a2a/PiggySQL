@@ -398,16 +398,6 @@ impl<E: StorageEngine> MVCC<E> {
         Ok(())
     }
 
-    pub fn get_unversioned(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.engine
-            .get(&Key::Unversioned(key.to_vec()).encode()?)
-            .map_err(|e| DatabaseError::from(e))
-    }
-    pub fn set_unversioned(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
-        self.engine
-            .set(&Key::Unversioned(key.into()).encode()?, value)
-            .map_err(|e| DatabaseError::from(e))
-    }
     pub fn gc(&self) -> Result<()> {
         let mut scan = self.engine.scan(..)?.rev();
         let mut hashset = HashSet::new();
@@ -1085,44 +1075,6 @@ pub mod tests {
             b"ba" => [0],
             b"bb" => [0],
         });
-
-        Ok(())
-    }
-    #[tokio::test]
-    /// Tests unversioned key/value pairs, via set/get_unversioned().
-    async fn unversioned() -> Result<()> {
-        let mvcc = MVCC::new(Arc::new(Memory::new()));
-
-        // Interleave versioned and unversioned writes.
-        mvcc.set_unversioned(b"a", vec![0])?;
-
-        let t1 = mvcc.begin().await?;
-        t1.set(b"a", vec![1])?;
-        t1.set(b"b", vec![1])?;
-        t1.set(b"c", vec![1])?;
-        t1.commit()?;
-
-        mvcc.set_unversioned(b"b", vec![0])?;
-        mvcc.set_unversioned(b"d", vec![0])?;
-
-        // Scans should not see the unversioned writes.
-        let mut t2 = mvcc.begin().await?;
-        t2.set_serializable(true);
-        assert_scan!(t2.scan(Bound::Unbounded,Bound::Unbounded)? => {
-            b"a" => [1],
-            b"b" => [1],
-            b"c" => [1],
-        });
-
-        // Unversioned gets should not see MVCC writes.
-        assert_eq!(mvcc.get_unversioned(b"a")?, Some(vec![0]));
-        assert_eq!(mvcc.get_unversioned(b"b")?, Some(vec![0]));
-        assert_eq!(mvcc.get_unversioned(b"c")?, None);
-        assert_eq!(mvcc.get_unversioned(b"d")?, Some(vec![0]));
-
-        // Replacing an unversioned key should be fine.
-        mvcc.set_unversioned(b"a", vec![1])?;
-        assert_eq!(mvcc.get_unversioned(b"a")?, Some(vec![1]));
 
         Ok(())
     }

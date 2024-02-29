@@ -33,7 +33,7 @@ pub enum Key {
     TxnWrite(Version, Vec<u8>),
     /// A versioned key/value pair.
     Version(Vec<u8>, Version),
-    /// Unversioned non-transactional key/value pairs. These exist separately
+/// Unversioned non-transactional key/value pairs. These exist separately
     /// from versioned keys, i.e. the unversioned key "foo" is entirely
     /// independent of the versioned key "foo@7". These are mostly used
     /// for metadata.
@@ -48,7 +48,7 @@ pub enum KeyPrefix {
     TxnActiveSnapshot,
     TxnWrite(Version),
     Version(Vec<u8>),
-    Unversioned,
+Unversioned,
 }
 
 
@@ -61,7 +61,7 @@ impl KeyPrefix {
             KeyPrefix::TxnActiveSnapshot => Ok(vec![0x03]),
             KeyPrefix::TxnWrite(version) => Ok([&[0x04][..], &encode_u64(*version)].concat()),
             KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
-            KeyPrefix::Unversioned => Ok(vec![0x06]),
+KeyPrefix::Unversioned => Ok(vec![0x06]),
         }
     }
 }
@@ -75,7 +75,7 @@ impl Key {
             0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
             0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?.into()),
             0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
-            0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
+0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
             _ => {
                 return Err(DatabaseError::InternalError(format!(
                     "Invalid key prefix {:?}",
@@ -96,7 +96,7 @@ impl Key {
             Key::Version(key, version) => {
                 Ok([&[0x05][..], &encode_bytes(&key), &encode_u64(*version)].concat())
             }
-            Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
+Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
         }
     }
 }

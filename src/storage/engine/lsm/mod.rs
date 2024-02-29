@@ -41,7 +41,6 @@ use super::{KvScan, StorageEngine};
 ///   expected to be small, so the hint files would be nearly as large as
 ///   the compacted log files themselves.
 ///
-/// - Log entries don't contain timestamps or checksums.
 ///
 /// The structure of a log entry is:
 ///
@@ -49,12 +48,13 @@ use super::{KvScan, StorageEngine};
 /// - Value length as big-endian i32, or -1 for tombstones.
 /// - Key as raw bytes (max 2 GB).
 /// - Value as raw bytes (max 2 GB).
+/// - CRC32 checksum of the key metadata.
 pub struct BitCask {
     /// The active append-only log file.
     log: Log,
     /// Maps keys to a value position and length in the log file.
     keydir: KeyDir,
-}
+    }
 
 /// Maps keys to a value position and length in the log file.
 type KeyDir = SkipMap<Vec<u8>, (u64, u32)>;
@@ -283,7 +283,7 @@ impl Log {
     fn build_keydir(&self) -> Result<KeyDir> {
         let mut file = self.file.lock();
         let mut len_buf = [0u8; 4];
-        let mut checksum_buf= [0u8; 4];
+        let mut checksum_buf = [0u8; 4];
         let keydir = KeyDir::new();
         let file_len = file.metadata()?.len();
         let mut r = BufReader::new(file.deref_mut());
@@ -293,7 +293,7 @@ impl Log {
             // Read the next entry from the file, returning the key, value
             // position, and value length or None for tombstones.
             let result = || -> std::result::Result<(Vec<u8>, u64, Option<u32>), std::io::Error> {
-                let mut hasher=crc32fast::Hasher::new();
+                let mut hasher = crc32fast::Hasher::new();
                 r.read_exact(&mut len_buf)?;
                 let key_len = u32::from_be_bytes(len_buf);
                 r.read_exact(&mut len_buf)?;
@@ -312,12 +312,11 @@ impl Log {
                 r.read_exact(&mut checksum_buf)?;
                 let checksum = u32::from_be_bytes(checksum_buf);
                 let expect_checksum = hasher.finalize();
-                if expect_checksum!=checksum{
+                if expect_checksum != checksum {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::UnexpectedEof,
                         "checksum mismatchh",
                     ));
-
                 }
                 if let Some(value_len) = value_len_or_tombstone {
                     if value_pos + value_len as u64 > file_len {
@@ -374,7 +373,7 @@ impl Log {
         let value_len = value.map_or(0, |v| v.len() as u32);
         let value_len_or_tombstone = value.map_or(-1, |v| v.len() as i32);
         let len = 4 + 4 + key_len + value_len;
-        let mut hasher=crc32fast::Hasher::new();
+        let mut hasher = crc32fast::Hasher::new();
         hasher.write_u32(key_len);
         hasher.write_i32(value_len_or_tombstone);
         hasher.write(key);
@@ -443,14 +442,14 @@ impl Log {
     }
 }
 #[cfg(test)]
-mod test{
-    use crate::storage::engine::tests::test_engine;
+mod test {
     use super::*;
+    use crate::storage::engine::tests::test_engine;
     test_engine!({
         let path = tempdir::TempDir::new("piggydb")
-        .unwrap()
-        .path()
-        .join("piggydb");
+            .unwrap()
+            .path()
+            .join("piggydb");
         BitCask::new(path)?
     });
 }
