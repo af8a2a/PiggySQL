@@ -307,7 +307,7 @@ impl Log {
                     _ => None, // -1 for tombstones
                 };
 
-                let value_pos = pos + 4 + 4 + key_len as u64;
+                let value_pos = pos +4+ 4 + 4 + key_len as u64;
 
                 let mut key = vec![0; key_len as usize];
                 r.read_exact(&mut key)?;
