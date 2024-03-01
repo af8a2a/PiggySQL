@@ -305,7 +305,7 @@ impl SimpleQueryHandler for Session {
 
 impl Server {
     async fn new() -> Result<Server> {
-        let database = Database::new(MVCCLayer::new(BitCask::new(PathBuf::from("test.db"))?))?;
+        let database = Database::new(MVCCLayer::new(BitCask::new_compact(PathBuf::from("test.db"),0.2)?))?;
 
         Ok(Server {
             inner: Arc::new(database),

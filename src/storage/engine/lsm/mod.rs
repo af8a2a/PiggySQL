@@ -55,7 +55,7 @@ pub struct BitCask {
     log: Log,
     /// Maps keys to a value position and length in the log file.
     keydir: KeyDir,
-    }
+}
 
 /// Maps keys to a value position and length in the log file.
 type KeyDir = SkipMap<Vec<u8>, (u64, u32)>;
@@ -70,26 +70,33 @@ impl BitCask {
 
     // /// Opens a BitCask database, and automatically compacts it if the amount
     // /// of garbage exceeds the given ratio when opened.
-    pub fn new_compact(path: PathBuf, _garbage_ratio_threshold: f64) -> Result<Self> {
+    pub fn new_compact(path: PathBuf, garbage_ratio_threshold: f64) -> Result<Self> {
         let mut s = Self::new(path)?;
+        let size = s.keydir.iter().fold(0, |size, entry| {
+            size + entry.key().len() as u64 + entry.value().1 as u64
+        });
+        let keys = s.keydir.len() as u64;
 
-        // let status = s.status()?;
-        // let garbage_ratio = status.garbage_disk_size as f64 / status.total_disk_size as f64;
-        // if status.garbage_disk_size > 0 && garbage_ratio >= garbage_ratio_threshold {
-        //     log::info!(
-        //         "Compacting {} to remove {:.3}MB garbage ({:.0}% of {:.3}MB)",
-        //         s.log.path.display(),
-        //         status.garbage_disk_size / 1024 / 1024,
-        //         garbage_ratio * 100.0,
-        //         status.total_disk_size / 1024 / 1024
-        //     );
+        let total_disk_size = s.log.file.lock().metadata()?.len();
+        let live_disk_size = size + 12 * keys; // account for length prefixes
+        let garbage_disk_size = total_disk_size - live_disk_size;
+
+        let garbage_ratio = garbage_disk_size as f64 / total_disk_size as f64;
+        if garbage_disk_size > 0 && garbage_ratio >= garbage_ratio_threshold {
+        debug!(
+            "Compacting {} to remove {:.3}MB garbage ({:.0}% of {:.3}MB)",
+            s.log.path.display(),
+            garbage_disk_size / 1024 / 1024,
+            garbage_ratio * 100.0,
+            total_disk_size / 1024 / 1024
+        );
         s.compact()?;
-        //     log::info!(
-        //         "Compacted {} to size {:.3}MB",
-        //         s.log.path.display(),
-        //         (status.total_disk_size - status.garbage_disk_size) / 1024 / 1024
-        //     );
-        // }
+        debug!(
+            "Compacted {} to size {:.3}MB",
+            s.log.path.display(),
+            (total_disk_size - garbage_disk_size) / 1024 / 1024
+        );
+        }
 
         Ok(s)
     }
@@ -208,7 +215,7 @@ impl BitCask {
         let mut tmp_path = self.log.path.clone();
         tmp_path.set_extension("new");
         let (mut new_log, new_keydir) = self.write_log(tmp_path)?;
-
+        std::fs::remove_file(&self.log.path)?;
         std::fs::rename(&new_log.path, &self.log.path)?;
         new_log.path = self.log.path.clone();
         self.log = new_log;
@@ -307,7 +314,7 @@ impl Log {
                     _ => None, // -1 for tombstones
                 };
 
-                let value_pos = pos +4+ 4 + 4 + key_len as u64;
+                let value_pos = pos + 4 + 4 + 4 + key_len as u64;
 
                 let mut key = vec![0; key_len as usize];
                 r.read_exact(&mut key)?;
