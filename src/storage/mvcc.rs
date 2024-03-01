@@ -383,7 +383,7 @@ impl<E: StorageEngine> MVCC<E> {
             engine,
             watermark: Arc::new(AtomicU64::new(1)),
             last_gc: Arc::new(AtomicU64::new(0)),
-            threshold: 1024*16,
+            threshold: 1024 * 16,
         };
         block_on(mvcc.do_recovery()).unwrap();
         // mvcc.do_recovery().unwrap();
@@ -435,11 +435,17 @@ impl<E: StorageEngine> MVCC<E> {
         let mut hashset = HashSet::new();
         debug!("start MVCC GC!");
         let mut gc_count = 0;
+        let oldest_version = MVCCTransaction::scan_active(&self.engine)?
+        .iter()
+        .min()
+        .unwrap_or(&u64::MAX).clone();
+
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {
                 Key::Version(key, version) => {
                     //删除过时的键值对
-                    if hashset.contains(&key) {
+                    //注意:现存最早的事务能看到的记录不能被删除
+                    if hashset.contains(&key) && oldest_version > version {
                         self.engine.delete(&Key::Version(key, version).encode()?)?;
                         gc_count += 1;
                     } else {
