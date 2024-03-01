@@ -1,6 +1,7 @@
 use crossbeam_skiplist::SkipMap;
 
 use parking_lot::Mutex;
+use tracing::debug;
 
 use crate::errors::Result;
 
@@ -283,7 +284,7 @@ impl Log {
     fn build_keydir(&self) -> Result<KeyDir> {
         let mut file = self.file.lock();
         let mut len_buf = [0u8; 4];
-        let mut checksum_buf= [0u8; 4];
+        let mut checksum_buf = [0u8; 4];
         let keydir = KeyDir::new();
         let file_len = file.metadata()?.len();
         let mut r = BufReader::new(file.deref_mut());
@@ -293,31 +294,34 @@ impl Log {
             // Read the next entry from the file, returning the key, value
             // position, and value length or None for tombstones.
             let result = || -> std::result::Result<(Vec<u8>, u64, Option<u32>), std::io::Error> {
-                let mut hasher=crc32fast::Hasher::new();
+                let mut hasher = crc32fast::Hasher::new();
+                r.read_exact(&mut checksum_buf)?;
+                let checksum = u32::from_be_bytes(checksum_buf);
+
                 r.read_exact(&mut len_buf)?;
                 let key_len = u32::from_be_bytes(len_buf);
                 r.read_exact(&mut len_buf)?;
-                hasher.write_u32(key_len);
-                hasher.write_i32(i32::from_be_bytes(len_buf));
-
-                let value_len_or_tombstone = match i32::from_be_bytes(len_buf) {
+                let value_len = i32::from_be_bytes(len_buf);
+                let value_len_or_tombstone = match value_len {
                     l if l >= 0 => Some(l as u32),
                     _ => None, // -1 for tombstones
                 };
+
                 let value_pos = pos + 4 + 4 + key_len as u64;
 
                 let mut key = vec![0; key_len as usize];
                 r.read_exact(&mut key)?;
+                hasher.write_u32(key_len);
+                hasher.write_i32(value_len);
                 hasher.write(&key);
-                r.read_exact(&mut checksum_buf)?;
-                let checksum = u32::from_be_bytes(checksum_buf);
+
                 let expect_checksum = hasher.finalize();
-                if expect_checksum!=checksum{
+                if expect_checksum != checksum {
+                    debug!("checksum mismatch: {} != {}", expect_checksum, checksum);
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::UnexpectedEof,
                         "checksum mismatchh",
                     ));
-
                 }
                 if let Some(value_len) = value_len_or_tombstone {
                     if value_pos + value_len as u64 > file_len {
@@ -373,22 +377,22 @@ impl Log {
         let key_len = key.len() as u32;
         let value_len = value.map_or(0, |v| v.len() as u32);
         let value_len_or_tombstone = value.map_or(-1, |v| v.len() as i32);
-        let len = 4 + 4 + key_len + value_len;
-        let mut hasher=crc32fast::Hasher::new();
+        let len = 4 + 4 + key_len + value_len + 4;
+        let mut hasher = crc32fast::Hasher::new();
         hasher.write_u32(key_len);
         hasher.write_i32(value_len_or_tombstone);
         hasher.write(key);
 
         let pos = file.seek(SeekFrom::End(0))?;
         let mut w = BufWriter::with_capacity(len as usize, file.deref_mut());
+        w.write_all(&hasher.finalize().to_be_bytes())?;
         w.write_all(&key_len.to_be_bytes())?;
         w.write_all(&value_len_or_tombstone.to_be_bytes())?;
         w.write_all(key)?;
         if let Some(value) = value {
-            hasher.write(&value);
             w.write_all(value)?;
-            w.write_all(&hasher.finalize().to_be_bytes())?;
         }
+
         w.flush()?;
 
         Ok((pos, len))
@@ -443,14 +447,14 @@ impl Log {
     }
 }
 #[cfg(test)]
-mod test{
-    use crate::storage::engine::tests::test_engine;
+mod test {
     use super::*;
+    use crate::storage::engine::tests::test_engine;
     test_engine!({
         let path = tempdir::TempDir::new("piggydb")
-        .unwrap()
-        .path()
-        .join("piggydb");
+            .unwrap()
+            .path()
+            .join("piggydb");
         BitCask::new(path)?
     });
 }
