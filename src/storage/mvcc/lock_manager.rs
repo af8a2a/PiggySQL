@@ -111,6 +111,7 @@ impl LockManager {
     pub(super) fn check_read_locks(&self, key: Vec<u8>, txn_id: u64) -> Result<()> {
         if let Some(entry) = self.read_locks.get(&key) {
             for owner_id in entry.value().to_owned().into_iter() {
+                //检查读写冲突
                 if owner_id == txn_id {
                     continue;
                 }
@@ -204,7 +205,7 @@ impl LockManager {
             )))?
             .value()
             .clone();
-        match *&status.in_conflict && *&status.out_conflict {
+        match status.in_conflict && status.out_conflict {
             true => Err(DatabaseError::Serialization),
             false => Ok(()),
         }
