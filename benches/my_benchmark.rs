@@ -128,7 +128,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     let engine = rt.block_on(async { data_source().await.unwrap() });
     let bitcask = rt.block_on(async { data_source_bitcask().await.unwrap() });
-    let sled = rt.block_on(async { data_source_sled().await.unwrap() });
 
     let sled=rt.block_on(async { data_source_sled().await.unwrap() });
     c.bench_function("select rows with primary key", |b| {
