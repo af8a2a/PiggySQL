@@ -2,7 +2,7 @@ use itertools::Itertools;
 use crate::errors::*;
 pub mod memory;
 pub mod sled_store;
-pub mod lsm;
+pub mod bitcask;
 pub type KvScan = Box<dyn DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
 
 pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {

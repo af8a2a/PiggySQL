@@ -3,7 +3,7 @@ use piggysql::{
     db::Database,
     errors::*,
     storage::{
-        engine::{lsm::BitCask, memory::Memory, sled_store::SledStore},
+        engine::{bitcask::BitCask, memory::Memory, sled_store::SledStore},
         MVCCLayer,
     },
 };

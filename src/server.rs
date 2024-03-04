@@ -26,7 +26,7 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{engine::{lsm::BitCask}, MVCCLayer},
+    storage::{engine::{bitcask::BitCask}, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
 
