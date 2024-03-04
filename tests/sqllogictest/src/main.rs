@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{fs::File, io, path::Path};
 
 use sqllogictest::Runner;
 use sqllogictest_test::Mock;
@@ -10,6 +10,7 @@ async fn main() {
     std::env::set_current_dir(path).unwrap();
 
     println!("PiggySQL Test Start!\n");
+
     for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
         // for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
         let filepath = slt_file

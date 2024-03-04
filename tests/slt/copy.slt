@@ -12,3 +12,16 @@ SELECT * FROM test_copy
 ----
 0 1.5 one
 1 2.5 two
+
+statement ok
+create table test_csv (a int primary key, b int, c int)
+
+query I
+COPY test_csv FROM 'tests/data/row_20000.csv' ( DELIMITER '|' );
+----
+import 20000 rows
+
+query I
+SELECT count(*) FROM test_csv
+----
+20000
