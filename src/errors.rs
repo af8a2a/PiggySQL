@@ -167,4 +167,11 @@ pub enum DatabaseError {
         #[source]
         tokio_postgres::Error,
     ),
+    #[error("csv error: {0}")]
+    Csv(
+        #[from]
+        #[source]
+        csv::Error,
+    ),
+
 }

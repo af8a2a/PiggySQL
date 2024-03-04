@@ -1,5 +1,6 @@
 pub mod aggregate;
 mod alter_table;
+pub(crate) mod copy;
 mod create_index;
 mod create_table;
 mod delete;
@@ -10,9 +11,9 @@ mod explain;
 pub mod expr;
 mod insert;
 mod select;
+mod set_var;
 mod show;
 mod update;
-mod set_var;
 use crate::errors::*;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
@@ -194,11 +195,19 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
             // Statement::Truncate { table_name, .. } => self.bind_truncate(table_name)?,
             Statement::ShowTables { .. } => self.bind_show_tables()?,
-            Statement::SetVariable { variable, value,.. }=>{
+            Statement::SetVariable {
+                variable, value, ..
+            } => {
                 //only support set transaction's  isolation level
-                assert_eq!(value.len(),1);
+                assert_eq!(value.len(), 1);
                 self.bind_set_var(variable.to_string(), value[0].to_string())?
             }
+            Statement::Copy {
+                source,
+                target,
+                options,
+                ..
+            } => self.bind_copy(source.clone(), target.clone(), options)?,
             _ => return Err(DatabaseError::UnsupportedStmt(stmt.to_string())),
         };
         Ok(plan)
@@ -252,13 +261,13 @@ pub mod test {
                     "c1".to_string(),
                     false,
                     ColumnDesc::new(Integer, true, false, None),
-                    None
+                    None,
                 ),
                 ColumnCatalog::new(
                     "c2".to_string(),
                     false,
                     ColumnDesc::new(Integer, false, true, None),
-                    None
+                    None,
                 ),
             ],
             false,

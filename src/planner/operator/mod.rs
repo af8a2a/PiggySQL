@@ -1,23 +1,7 @@
 use itertools::Itertools;
 
 use self::{
-    aggregate::AggregateOperator,
-    alter_table::{AddColumnOperator, DropColumnOperator},
-    create_index::CreateIndexOperator,
-    create_table::CreateTableOperator,
-    delete::DeleteOperator,
-    drop_index::DropIndexOperator,
-    drop_table::DropTableOperator,
-    filter::FilterOperator,
-    insert::InsertOperator,
-    join::{JoinCondition, JoinOperator},
-    limit::LimitOperator,
-    project::ProjectOperator,
-    scan::ScanOperator,
-    set_var::SetVarOperator,
-    sort::SortOperator,
-    update::UpdateOperator,
-    values::ValuesOperator,
+    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, copy_from_file::CopyFromFileOperator, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_index::DropIndexOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, set_var::SetVarOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
 };
 use crate::catalog::ColumnRef;
 use std::fmt;
@@ -40,6 +24,8 @@ pub mod set_var;
 pub mod sort;
 pub mod update;
 pub mod values;
+pub mod copy_from_file;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
     // DQL
@@ -67,6 +53,8 @@ pub enum Operator {
     DropTable(DropTableOperator),
     CreateIndex(CreateIndexOperator),
     DropIndex(DropIndexOperator),
+    CopyFromFile(CopyFromFileOperator),
+
 }
 impl Operator {
     pub fn referenced_columns(&self, only_column_ref: bool) -> Vec<ColumnRef> {
@@ -139,6 +127,7 @@ impl fmt::Display for Operator {
             Operator::DropIndex(op) => write!(f, "{}", op),
             Operator::Show => write!(f, "Show Tables"),
             Operator::SetVar(op) => write!(f, "{}", op),
+            Operator::CopyFromFile(op) => write!(f, "{}", op),
         }
     }
 }

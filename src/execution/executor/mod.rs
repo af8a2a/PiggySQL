@@ -17,7 +17,7 @@ use self::{
         drop_index::DropIndex,
         drop_table::DropTable,
     },
-    dml::{delete::Delete, insert::Insert, update::Update},
+    dml::{copy::CopyFromFile, delete::Delete, insert::Insert, update::Update},
     dql::{
         agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor},
         dummy::Dummy,
@@ -130,5 +130,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
         Operator::DropIndex(op) => DropIndex::from(op).execute(transaction),
         Operator::Show => ShowTables.execute(transaction),
         Operator::SetVar(op) => SetVariable::from(op).execute(transaction),
+        Operator::CopyFromFile(op) => CopyFromFile::from(op).execute(transaction),
     }
 }
