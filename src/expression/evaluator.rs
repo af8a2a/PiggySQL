@@ -16,9 +16,9 @@ impl ScalarExpression {
     ///给定元组，返回表达式的值
     pub fn eval(&self, tuple: &Tuple, schema: &[ColumnRef]) -> Result<ValueRef> {
         // //具名元组的表达式求值
-        // if let Some(value) = Self::eval_with_name(tuple, self.output_columns().name(), schema) {
-        //     return Ok(value.clone());
-        // }
+        if let Some(value) = Self::eval_with_name(tuple, self.output_columns().name(), schema) {
+            return Ok(value.clone());
+        }
 
         match &self {
             ScalarExpression::Constant(val) => Ok(val.clone()),
