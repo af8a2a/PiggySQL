@@ -6,7 +6,7 @@ use itertools::Itertools;
 use moka::sync::Cache;
 use tracing::debug;
 
-use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
+use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, SchemaRef, TableCatalog, TableName};
 
 use crate::errors::*;
 use crate::expression::simplify::ConstantBinary;
@@ -123,18 +123,18 @@ pub trait Iter: Sync + Send {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>>;
 }
 
-pub(crate) fn tuple_projection(projections: &Projections, tuple: Tuple) -> Result<Tuple> {
+pub(crate) fn tuple_projection(
+    projections: &Projections,
+    schema: &Vec<ColumnRef>,
+    tuple: Tuple,
+) -> Result<Tuple> {
     let projection_len = projections.len();
-    let mut columns = Vec::with_capacity(projection_len);
     let mut values = Vec::with_capacity(projection_len);
-
     for expr in projections.iter() {
-        values.push(expr.eval(&tuple)?);
-        columns.push(expr.output_columns());
+        values.push(expr.eval(&tuple, schema)?);
     }
     Ok(Tuple {
         id: tuple.id,
-        columns,
         values,
     })
 }
@@ -163,7 +163,8 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
             .map(|(_, val)| {
                 tuple_projection(
                     &self.projection,
-                    TableCodec::decode_tuple(self.all_columns.clone(), &val),
+                    &self.all_columns,
+                    TableCodec::decode_tuple(&self.all_columns, &val),
                 )
             })
             .skip(offset)
@@ -195,13 +196,13 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
     }
     fn get_tuple_by_id(&self, tuple_id: &TupleId) -> Result<Option<Tuple>> {
         let key = TableCodec::encode_tuple_key(&self.table.name, &tuple_id)?;
-
+        let schema = self.table.all_columns();
         self.tx
             .get(&key)?
             .map(|bytes| {
-                let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
+                let tuple = TableCodec::decode_tuple(&schema, &bytes);
 
-                tuple_projection(&self.projection, tuple)
+                tuple_projection(&self.projection, &schema, tuple)
             })
             .transpose()
     }
@@ -210,7 +211,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
 impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
         let mut tuples = Vec::new();
-
+        let schema=self.table.all_columns();
         for binary in self.binaries.iter().cloned() {
             match binary {
                 ConstantBinary::Scope { min, max } => {
@@ -247,7 +248,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                             .iter()
                             .filter_map(|res| res.ok())
                             .map(|(_, v)| -> Tuple {
-                                TableCodec::decode_tuple(self.table.all_columns(), &v)
+                                TableCodec::decode_tuple(&schema, &v)
                             })
                             .collect_vec();
                         tuples.extend(collect);
@@ -281,7 +282,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                                 }
                             }
                         } else if self.index_meta.is_primary {
-                            let tuple = TableCodec::decode_tuple(self.table.all_columns(), &bytes);
+                            let tuple = TableCodec::decode_tuple(&schema, &bytes);
                             tuples.push(tuple);
                         } else {
                             todo!()
@@ -873,7 +874,6 @@ mod test {
             &"test".to_string(),
             Tuple {
                 id: Some(Arc::new(DataValue::Int32(Some(1)))),
-                columns: columns.clone(),
                 values: vec![
                     Arc::new(DataValue::Int32(Some(1))),
                     Arc::new(DataValue::Boolean(Some(true))),
@@ -885,7 +885,6 @@ mod test {
             &"test".to_string(),
             Tuple {
                 id: Some(Arc::new(DataValue::Int32(Some(2)))),
-                columns: columns.clone(),
                 values: vec![
                     Arc::new(DataValue::Int32(Some(2))),
                     Arc::new(DataValue::Boolean(Some(false))),

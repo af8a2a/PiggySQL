@@ -1,7 +1,8 @@
 use crate::catalog::TableName;
 use crate::errors::*;
-use crate::execution::executor::{Executor, Source};
+use crate::execution::executor::{build, Executor, Source};
 use crate::planner::operator::insert::InsertOperator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 use crate::types::tuple::Tuple;
@@ -13,11 +14,11 @@ use std::sync::Arc;
 
 pub struct Insert {
     table_name: TableName,
-    input: Source,
+    input: LogicalPlan,
     is_overwrite: bool,
 }
 
-impl From<(InsertOperator, Source)> for Insert {
+impl From<(InsertOperator, LogicalPlan)> for Insert {
     fn from(
         (
             InsertOperator {
@@ -25,7 +26,7 @@ impl From<(InsertOperator, Source)> for Insert {
                 is_overwrite,
             },
             input,
-        ): (InsertOperator, Source),
+        ): (InsertOperator, LogicalPlan),
     ) -> Self {
         Insert {
             table_name,
@@ -39,27 +40,26 @@ impl<T: Transaction> Executor<T> for Insert {
     fn execute(self, transaction: &mut T) -> Source {
         let Insert {
             table_name,
-            input,
+            mut input,
             is_overwrite,
         } = self;
+        let schema = input.output_schema().clone();
+        let input = build(input, transaction)?;
         let mut primary_key_index = None;
         let mut unique_values = HashMap::new();
-        let input = input?;
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             for tuple in input.iter() {
-                let Tuple {
-                    columns, values, ..
-                } = tuple;
+                let Tuple { values, .. } = tuple;
                 let mut tuple_map = HashMap::new();
                 for (i, value) in values.into_iter().enumerate() {
-                    let col = &columns[i];
+                    let col = &schema[i];
 
                     if let Some(col_id) = col.id() {
                         tuple_map.insert(col_id, value.clone());
                     }
                 }
                 let primary_col_id = primary_key_index.get_or_insert_with(|| {
-                    columns
+                    schema
                         .iter()
                         .find(|col| col.desc.is_primary)
                         .map(|col| col.id().unwrap())
@@ -69,7 +69,6 @@ impl<T: Transaction> Executor<T> for Insert {
                 let tuple_id = tuple_map.get(primary_col_id).cloned().unwrap();
                 let mut tuple = Tuple {
                     id: Some(tuple_id.clone()),
-                    columns: Vec::with_capacity(all_columns.len()),
                     values: Vec::with_capacity(all_columns.len()),
                 };
                 for (col_id, col) in all_columns {
@@ -91,7 +90,6 @@ impl<T: Transaction> Executor<T> for Insert {
                         )));
                     }
 
-                    tuple.columns.push(col.clone());
                     tuple.values.push(value)
                 }
 

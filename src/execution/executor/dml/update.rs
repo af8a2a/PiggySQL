@@ -1,8 +1,9 @@
 use crate::catalog::{ColumnCatalog, TableName};
 use crate::errors::*;
-use crate::execution::executor::{Executor, Source};
+use crate::execution::executor::{build, Executor, Source};
 use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 use crate::types::tuple_builder::TupleBuilder;
@@ -12,12 +13,12 @@ use std::sync::Arc;
 
 pub struct Update {
     table_name: TableName,
-    input: Source, //select source for update
+    input: LogicalPlan, //select source for update
     columns: Vec<Arc<ColumnCatalog>>,
     set_expr: Vec<ScalarExpression>,
 }
 
-impl From<(UpdateOperator, Source)> for Update {
+impl From<(UpdateOperator, LogicalPlan)> for Update {
     fn from(
         (
             UpdateOperator {
@@ -26,7 +27,7 @@ impl From<(UpdateOperator, Source)> for Update {
                 table_name,
             },
             input,
-        ): (UpdateOperator, Source),
+        ): (UpdateOperator, LogicalPlan),
     ) -> Self {
         Update {
             table_name,
@@ -41,11 +42,13 @@ impl<T: Transaction> Executor<T> for Update {
     fn execute(self, transaction: &mut T) -> Source {
         let Update {
             table_name,
-            input,
+            mut input,
             columns,
             set_expr,
         } = self;
-        let input = input?;
+        let schema = input.output_schema().clone();
+        let input = build(input, transaction)?;
+        let  input_len=input.len();
 
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             //避免halloween问题
@@ -58,19 +61,18 @@ impl<T: Transaction> Executor<T> for Update {
             }
 
             //Seqscan遍历元组
-            for tuple in input.iter().cloned() {
+            for tuple in input {
                 let mut is_overwrite = true;
 
                 let mut tuple = tuple;
                 // eprintln!("tuple:{}", tuple);
 
-                for (i, column) in tuple
-                    .columns
+                for (i, column) in schema
                     .iter()
                     .filter(|col| update_col.contains(&col.id()))
                     .enumerate()
                 {
-                    let value = set_expr[i].eval(&tuple)?;
+                    let value = set_expr[i].eval(&tuple,&schema)?;
 
                     if column.desc.is_primary {
                         //refuse to update primary key
@@ -121,7 +123,7 @@ impl<T: Transaction> Executor<T> for Update {
             }
         }
         let tuple_builder = TupleBuilder::new_result();
-        let tuple = tuple_builder.push_result("DELETE SUCCESS", &format!("{}", input.len()))?;
+        let tuple = tuple_builder.push_result("DELETE SUCCESS", &format!("{}", input_len))?;
 
         Ok(vec![tuple])
     }

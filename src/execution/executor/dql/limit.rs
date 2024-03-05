@@ -1,16 +1,17 @@
-use crate::execution::executor::{Executor, Source};
+use crate::execution::executor::{build, Executor, Source};
 
 use crate::planner::operator::limit::LimitOperator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 
 pub struct Limit {
     offset: Option<usize>,
     limit: Option<usize>,
-    input: Source,
+    input: LogicalPlan,
 }
 
-impl From<(LimitOperator, Source)> for Limit {
-    fn from((LimitOperator { offset, limit }, input): (LimitOperator, Source)) -> Self {
+impl From<(LimitOperator, LogicalPlan)> for Limit {
+    fn from((LimitOperator { offset, limit }, input): (LimitOperator, LogicalPlan)) -> Self {
         Limit {
             offset,
             limit,
@@ -20,18 +21,17 @@ impl From<(LimitOperator, Source)> for Limit {
 }
 
 impl<T: Transaction> Executor<T> for Limit {
-    fn execute(self, _transaction: &mut T) -> Source {
+    fn execute(self, transaction: &mut T) -> Source {
         let mut tuples = Vec::new();
         let Limit {
             offset,
             limit,
-            input,
+            mut input,
         } = self;
-
+        let input = build(input, transaction)?;
         if limit.is_some() && limit.unwrap_or(0) == 0 {
             return Ok(tuples);
         }
-        let input = input?;
         // println!("limit input tuple {}", input.len());
 
         let offset_val = offset.unwrap_or(0);

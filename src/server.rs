@@ -20,6 +20,7 @@ use pgwire::{
 use tokio::{net::TcpListener, sync::Mutex};
 
 use crate::{
+    catalog::SchemaRef,
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
@@ -192,40 +193,35 @@ impl ExtendedQueryHandler for Session {
             _ => {
                 let mut guard = self.tx.lock().await;
 
-                let tuples = if let Some(transaction) = guard.as_mut() {
+                let (schema, tuples) = if let Some(transaction) = guard.as_mut() {
                     transaction.run(query).await
                 } else {
                     self.inner.run(query).await
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
                 // debug!("tuples: {:?}", tuples);
-                Ok(Response::Query(encode_tuples(tuples)?))
+                Ok(Response::Query(encode_tuples(schema,tuples)?))
             }
         }
     }
 }
-fn row_desc_from_stmt(tuple: &Vec<Tuple>, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
-    let iter = tuple.iter().next().cloned();
-    if let Some(tuple) = iter {
-        return tuple
-            .columns
-            .iter()
-            .enumerate()
-            .map(|(idx, col)| {
-                let datatype = col.datatype();
-                let name = col.name();
+fn row_desc_from_stmt(schema: SchemaRef, format: &Format) -> PgWireResult<Vec<FieldInfo>> {
+    return schema
+        .iter()
+        .enumerate()
+        .map(|(idx, col)| {
+            let datatype = col.datatype();
+            let name = col.name();
 
-                Ok(FieldInfo::new(
-                    name.to_string(),
-                    None,
-                    None,
-                    into_pg_type(&datatype).unwrap(),
-                    format.format_for(idx),
-                ))
-            })
-            .collect();
-    }
-    Ok(vec![])
+            Ok(FieldInfo::new(
+                name.to_string(),
+                None,
+                None,
+                into_pg_type(&datatype).unwrap(),
+                format.format_for(idx),
+            ))
+        })
+        .collect();
 }
 
 #[async_trait]
@@ -287,14 +283,14 @@ impl SimpleQueryHandler for Session {
             _ => {
                 let mut guard = self.tx.lock().await;
 
-                let tuples = if let Some(transaction) = guard.as_mut() {
+                let (schema,tuples) = if let Some(transaction) = guard.as_mut() {
                     transaction.run(query).await
                 } else {
                     self.inner.run(query).await
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-                Ok(vec![Response::Query(encode_tuples(tuples)?)])
+                Ok(vec![Response::Query(encode_tuples(schema,tuples)?)])
             }
         }
     }
@@ -389,11 +385,11 @@ async fn quit() -> io::Result<()> {
     }
 }
 
-fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
+fn encode_tuples<'a>(schema: SchemaRef, tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
     // if tuples.is_empty() {
     //     return Ok(QueryResponse::new(Arc::new(vec![]), stream::empty()));
     // }
-    let schema = Arc::new(row_desc_from_stmt(&tuples, &Format::UnifiedText)?);
+    let schema = Arc::new(row_desc_from_stmt(schema, &Format::UnifiedText)?);
     let mut results = Vec::with_capacity(tuples.len());
 
     for tuple in tuples {

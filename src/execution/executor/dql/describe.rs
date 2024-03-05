@@ -59,7 +59,7 @@ impl<T: Transaction> Executor<T> for Describe {
                     .default_value()
                     .unwrap_or_else(|| Arc::new(DataValue::none(column.datatype()))),
             ];
-            tuples.push(Tuple { id: None,columns:schema.clone(), values });
+            tuples.push(Tuple { id: None, values });
         }
         Ok(tuples)
     }

@@ -10,7 +10,6 @@ impl<T: Transaction> Executor<T> for Dummy {
     fn execute(self, _transaction: &mut T) -> Source {
         Ok(vec![Tuple {
             id: None,
-            columns: vec![],
             values: vec![],
         }])
     }

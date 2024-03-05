@@ -141,7 +141,7 @@ impl TableCodec {
         Ok(key_prefix)
     }
 
-    pub fn decode_tuple(columns: Vec<ColumnRef>, bytes: &[u8]) -> Tuple {
+    pub fn decode_tuple(columns: &Vec<ColumnRef>, bytes: &[u8]) -> Tuple {
         Tuple::deserialize_from(columns, bytes)
     }
 
@@ -273,7 +273,6 @@ mod tests {
 
         let tuple = Tuple {
             id: Some(Arc::new(DataValue::Int32(Some(0)))),
-            columns: table_catalog.all_columns(),
             values: vec![
                 Arc::new(DataValue::Int32(Some(0))),
             ],
@@ -281,7 +280,7 @@ mod tests {
         let (_, bytes) = TableCodec::encode_tuple(&table_catalog.name, &tuple)?;
 
         assert_eq!(
-            TableCodec::decode_tuple(table_catalog.all_columns(), &bytes),
+            TableCodec::decode_tuple(&table_catalog.all_columns(), &bytes),
             tuple
         );
 

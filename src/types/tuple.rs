@@ -1,4 +1,4 @@
-use crate::catalog::ColumnRef;
+use crate::catalog::{ColumnRef, Schema, SchemaRef};
 use crate::types::value::{DataValue, ValueRef};
 use comfy_table::{Cell, Table};
 use integer_encoding::FixedInt;
@@ -13,7 +13,6 @@ pub type TupleId = ValueRef;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tuple {
     pub id: Option<TupleId>,
-    pub columns: Vec<ColumnRef>,
     pub values: Vec<ValueRef>,
 }
 
@@ -32,7 +31,7 @@ impl Display for Tuple {
 }
 
 impl Tuple {
-    pub fn deserialize_from(columns: Vec<ColumnRef>, bytes: &[u8]) -> Self {
+    pub fn deserialize_from(columns: &Vec<ColumnRef>, bytes: &[u8]) -> Self {
         fn is_none(bits: u8, i: usize) -> bool {
             bits & (1 << (7 - i)) > 0
         }
@@ -74,7 +73,6 @@ impl Tuple {
 
         Tuple {
             id: id_option,
-            columns,
             values,
         }
     }
@@ -107,7 +105,9 @@ impl Tuple {
     }
 }
 
-pub fn create_table(tuples: &[Tuple]) -> Table {
+pub fn create_table(tuples: &(SchemaRef, Vec<Tuple>)) -> Table {
+    let schema= &tuples.0;
+    let tuples= &tuples.1;
     let mut table = Table::new();
 
     if tuples.is_empty() {
@@ -115,7 +115,7 @@ pub fn create_table(tuples: &[Tuple]) -> Table {
     }
 
     let mut header = Vec::new();
-    for col in &tuples[0].columns {
+    for col in schema.iter() {
         header.push(Cell::new(col.name().to_string()));
     }
     table.set_header(header);
@@ -216,13 +216,11 @@ mod tests {
                 ColumnDesc::new(LogicalType::Date, false, false, None),
                 None,
             )),
-
         ];
 
         let tuples = vec![
             Tuple {
                 id: Some(Arc::new(DataValue::Int32(Some(0)))),
-                columns: columns.clone(),
                 values: vec![
                     Arc::new(DataValue::Int32(Some(0))),
                     Arc::new(DataValue::UInt32(Some(1))),
@@ -240,7 +238,6 @@ mod tests {
             },
             Tuple {
                 id: Some(Arc::new(DataValue::Int32(Some(1)))),
-                columns: columns.clone(),
                 values: vec![
                     Arc::new(DataValue::Int32(Some(1))),
                     Arc::new(DataValue::UInt32(None)),
@@ -258,8 +255,8 @@ mod tests {
             },
         ];
 
-        let tuple_0 = Tuple::deserialize_from(columns.clone(), &tuples[0].serialize_to());
-        let tuple_1 = Tuple::deserialize_from(columns.clone(), &tuples[1].serialize_to());
+        let tuple_0 = Tuple::deserialize_from(&columns, &tuples[0].serialize_to());
+        let tuple_1 = Tuple::deserialize_from(&columns, &tuples[1].serialize_to());
 
         assert_eq!(tuples[0], tuple_0);
         assert_eq!(tuples[1], tuple_1);

@@ -1,7 +1,8 @@
 use crate::catalog::TableName;
-use crate::execution::executor::{Executor, Source};
+use crate::execution::executor::{build, Executor, Source};
 
 use crate::planner::operator::delete::DeleteOperator;
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::index::Index;
 use crate::types::tuple_builder::TupleBuilder;
@@ -10,11 +11,11 @@ use itertools::Itertools;
 
 pub struct Delete {
     table_name: TableName,
-    input: Source,
+    input: LogicalPlan,
 }
 
-impl From<(DeleteOperator, Source)> for Delete {
-    fn from((DeleteOperator { table_name }, input): (DeleteOperator, Source)) -> Self {
+impl From<(DeleteOperator, LogicalPlan)> for Delete {
+    fn from((DeleteOperator { table_name }, input): (DeleteOperator, LogicalPlan)) -> Self {
         Delete { table_name, input }
     }
 }
@@ -22,6 +23,7 @@ impl From<(DeleteOperator, Source)> for Delete {
 impl<T: Transaction> Executor<T> for Delete {
     fn execute(self, transaction: &mut T) -> Source {
         let Delete { table_name, input } = self;
+        let input = build(input, transaction)?;
         let option_index_metas = transaction.table(table_name.clone()).map(|table_catalog| {
             table_catalog
                 .all_columns()
@@ -41,7 +43,6 @@ impl<T: Transaction> Executor<T> for Delete {
                 })
                 .collect_vec()
         });
-        let input = input?;
         if let Some(index_metas) = option_index_metas {
             for tuple in input.iter() {
                 for (i, index_meta) in index_metas.iter() {

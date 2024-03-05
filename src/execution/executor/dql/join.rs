@@ -1,11 +1,12 @@
 use crate::planner::operator::join::JoinType;
 
-use crate::catalog::{ColumnCatalog, ColumnRef};
-use crate::execution::executor::{Executor, Source};
+use crate::catalog::{ColumnCatalog, ColumnRef, SchemaRef};
+use crate::execution::executor::{build, Executor, Source};
 
 use crate::errors::*;
 use crate::expression::ScalarExpression;
 use crate::planner::operator::join::{JoinCondition, JoinOperator};
+use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 use crate::types::value::DataValue;
@@ -19,13 +20,17 @@ use std::sync::Arc;
 pub struct HashJoin {
     on: JoinCondition,
     ty: JoinType,
-    left_input: Source,
-    right_input: Source,
+    left_input: LogicalPlan,
+    right_input: LogicalPlan,
 }
 
-impl From<(JoinOperator, Source, Source)> for HashJoin {
+impl From<(JoinOperator, LogicalPlan, LogicalPlan)> for HashJoin {
     fn from(
-        (JoinOperator { on, join_type }, left_input, right_input): (JoinOperator, Source, Source),
+        (JoinOperator { on, join_type }, left_input, right_input): (
+            JoinOperator,
+            LogicalPlan,
+            LogicalPlan,
+        ),
     ) -> Self {
         HashJoin {
             on,
@@ -37,21 +42,18 @@ impl From<(JoinOperator, Source, Source)> for HashJoin {
 }
 
 impl<T: Transaction> Executor<T> for HashJoin {
-    fn execute(self, _transaction: &mut T) -> Source {
-        self._execute()
-    }
-}
-
-impl HashJoin {
-    pub fn _execute(self) -> Source {
+    fn execute(self, transaction: &mut T) -> Source {
         let mut tuples = Vec::new();
         let HashJoin {
             on,
             ty,
-            left_input,
-            right_input,
+            mut left_input,
+            mut right_input,
         } = self;
-
+        let left_schema = left_input.output_schema().clone();
+        let right_schema = right_input.output_schema().clone();
+        let left_input = build(left_input, transaction)?;
+        let right_input = build(right_input, transaction)?;
         if ty == JoinType::Cross {
             unreachable!("Cross join should not be in HashJoinExecutor");
         }
@@ -74,11 +76,11 @@ impl HashJoin {
         // 1.construct hashtable, one hash key may contains multiple rows indices.
         // 2.merged all left tuples.
         let mut left_init_flag = false;
-        for tuple in left_input?.iter().cloned() {
-            let hash = Self::hash_row(&on_left_keys, &hash_random_state, &tuple)?;
+        for tuple in left_input {
+            let hash = Self::hash_row(&on_left_keys,&left_schema, &hash_random_state, &tuple)?;
 
             if !left_init_flag {
-                Self::columns_filling(&tuple, &mut join_columns, left_force_nullable);
+                Self::columns_filling(&left_schema, &mut join_columns, left_force_nullable);
                 left_init_flag = true;
             }
 
@@ -87,12 +89,12 @@ impl HashJoin {
 
         // probe phase
         let mut right_init_flag = false;
-        for tuple in right_input?.iter().cloned() {
-            let right_cols_len = tuple.columns.len();
-            let hash = Self::hash_row(&on_right_keys, &hash_random_state, &tuple)?;
+        for tuple in right_input {
+            let right_cols_len = right_schema.len();
+            let hash = Self::hash_row(&on_right_keys,&right_schema, &hash_random_state, &tuple)?;
             //构造join columns
             if !right_init_flag {
-                Self::columns_filling(&tuple, &mut join_columns, right_force_nullable);
+                Self::columns_filling(&right_schema, &mut join_columns, right_force_nullable);
                 right_init_flag = true;
             }
 
@@ -110,7 +112,6 @@ impl HashJoin {
 
                         Tuple {
                             id: None,
-                            columns: join_columns.clone(),
                             values: full_values,
                         }
                     })
@@ -123,11 +124,7 @@ impl HashJoin {
                     .chain(tuple.values)
                     .collect_vec();
 
-                vec![Tuple {
-                    id: None,
-                    columns: join_columns.clone(),
-                    values,
-                }]
+                vec![Tuple { id: None, values }]
             } else {
                 vec![]
             };
@@ -140,15 +137,15 @@ impl HashJoin {
                 let mut filter_tuples = Vec::with_capacity(join_tuples.len());
 
                 for mut tuple in join_tuples {
-                    if let DataValue::Boolean(option) = expr.eval(&tuple)?.as_ref() {
+                    if let DataValue::Boolean(option) = expr.eval(&tuple, &right_schema)?.as_ref() {
                         if let Some(false) | None = option {
-                            let full_cols_len = tuple.columns.len();
+                            let full_cols_len = right_schema.len();
                             let left_cols_len = full_cols_len - right_cols_len;
 
                             match ty {
                                 JoinType::Left => {
                                     for i in left_cols_len..full_cols_len {
-                                        let value_type = tuple.columns[i].datatype();
+                                        let value_type = right_schema[i].datatype();
 
                                         tuple.values[i] = Arc::new(DataValue::none(value_type))
                                     }
@@ -156,7 +153,7 @@ impl HashJoin {
                                 }
                                 JoinType::Right => {
                                     for i in 0..left_cols_len {
-                                        let value_type = tuple.columns[i].datatype();
+                                        let value_type = right_schema[i].datatype();
 
                                         tuple.values[i] = Arc::new(DataValue::none(value_type))
                                     }
@@ -186,32 +183,28 @@ impl HashJoin {
                     continue;
                 }
 
-                for Tuple {
-                    mut values,
-                    columns,
-                    ..
-                } in tuple
-                {
-                    let mut right_empties = join_columns[columns.len()..]
+                for Tuple { mut values, .. } in tuple {
+                    let mut right_empties = join_columns[left_schema.len()..]
                         .iter()
                         .map(|col| Arc::new(DataValue::none(col.datatype())))
                         .collect_vec();
 
                     values.append(&mut right_empties);
-                    tuples.push(Tuple {
-                        id: None,
-                        columns: join_columns.clone(),
-                        values,
-                    });
+                    tuples.push(Tuple { id: None, values });
                 }
             }
         }
         Ok(tuples)
     }
+}
 
-    fn columns_filling(tuple: &Tuple, join_columns: &mut Vec<ColumnRef>, force_nullable: bool) {
-        let mut new_columns = tuple
-            .columns
+impl HashJoin {
+    pub(super) fn columns_filling(
+        schema: &SchemaRef,
+        join_columns: &mut Vec<ColumnRef>,
+        force_nullable: bool,
+    ) {
+        let mut new_columns = schema
             .iter()
             .cloned()
             .map(|col| {
@@ -225,15 +218,16 @@ impl HashJoin {
         join_columns.append(&mut new_columns);
     }
 
-    fn hash_row(
+    pub(super) fn hash_row(
         on_keys: &[ScalarExpression],
+        schema: &SchemaRef,
         hash_random_state: &RandomState,
         tuple: &Tuple,
     ) -> Result<u64> {
         let mut values = Vec::with_capacity(on_keys.len());
 
         for expr in on_keys {
-            values.push(expr.eval(tuple)?);
+            values.push(expr.eval(tuple,schema)?);
         }
 
         Ok(hash_random_state.hash_one(values))

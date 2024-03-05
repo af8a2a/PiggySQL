@@ -22,7 +22,6 @@ impl<T: Transaction> Executor<T> for Explain {
         let values = vec![Arc::new(DataValue::Utf8(Some(self.plan.explain(0))))];
         Ok(vec![Tuple {
             id: None,
-            columns,
             values,
         }])
     }

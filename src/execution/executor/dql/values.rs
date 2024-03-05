@@ -26,7 +26,6 @@ impl<T: Transaction> Executor<T> for Values {
             .iter()
             .map(|val| Tuple {
                 id: None,
-                columns: columns.clone(),
                 values: val.clone(),
             })
             .collect_vec())

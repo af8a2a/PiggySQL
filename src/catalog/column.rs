@@ -8,6 +8,7 @@ use crate::types::{ColumnId, LogicalType};
 
 pub type ColumnRef = Arc<ColumnCatalog>;
 pub type SchemaRef=Arc<Vec<ColumnRef>>;
+pub type Schema=Vec<ColumnRef>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct ColumnCatalog {

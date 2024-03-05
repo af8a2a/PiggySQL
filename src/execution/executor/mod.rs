@@ -52,7 +52,8 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
     match operator {
         Operator::Dummy => Dummy {}.execute(transaction),
         Operator::Aggregate(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
+            // let input = build(childrens.remove(0), transaction);
 
             if op.groupby_exprs.is_empty() {
                 SimpleAggExecutor::from((op, input)).execute(transaction)
@@ -61,18 +62,21 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
             }
         }
         Operator::Filter(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
+
+            // let input = build(childrens.remove(0), transaction);
 
             Filter::from((op, input)).execute(transaction)
         }
         Operator::Join(op) => {
-            let left_input = build(childrens.remove(0), transaction);
-            let right_input = build(childrens.remove(0), transaction);
+            let left_input = childrens.pop().unwrap();
+            let right_input = childrens.pop().unwrap();
 
             HashJoin::from((op, left_input, right_input)).execute(transaction)
         }
         Operator::Project(op) => {
-            let input = build(childrens.remove(0), transaction);
+            // let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
 
             Projection::from((op, input)).execute(transaction)
         }
@@ -87,45 +91,44 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
             }
         }
         Operator::Sort(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
 
             Sort::from((op, input)).execute(transaction)
         }
         Operator::Limit(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
 
             Limit::from((op, input)).execute(transaction)
         }
         Operator::Insert(op) => {
-            let input = build(childrens.remove(0), transaction);
-
+            let input = childrens.pop().unwrap();
             Insert::from((op, input)).execute(transaction)
         }
         Operator::Update(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
             // let values = build(childrens.remove(0), transaction);
 
             Update::from((op, input)).execute(transaction)
         }
         Operator::Delete(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
 
             Delete::from((op, input)).execute(transaction)
         }
         Operator::Values(op) => Values::from(op).execute(transaction),
         Operator::AddColumn(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
             AddColumn::from((op, input)).execute(transaction)
         }
         Operator::DropColumn(op) => {
-            let input = build(childrens.remove(0), transaction);
+            let input = childrens.pop().unwrap();
             DropColumn::from((op, input)).execute(transaction)
         }
         Operator::CreateTable(op) => CreateTable::from(op).execute(transaction),
         Operator::DropTable(op) => DropTable::from(op).execute(transaction),
         Operator::CreateIndex(op) => CreateIndex::from(op).execute(transaction),
         Operator::Explain => {
-            let input = childrens.remove(0);
+            let input = childrens.pop().unwrap();
 
             Explain::from(input).execute(transaction)
         }
