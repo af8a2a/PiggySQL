@@ -1,4 +1,5 @@
 pub(crate) mod agg;
+pub(crate) mod describe;
 pub(crate) mod dummy;
 pub(crate) mod explain;
 pub(crate) mod filter;

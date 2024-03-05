@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use self::{
-    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, copy_from_file::CopyFromFileOperator, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, drop_index::DropIndexOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, set_var::SetVarOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
+    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, copy_from_file::CopyFromFileOperator, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, describe::DescribeOperator, drop_index::DropIndexOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, set_var::SetVarOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
 };
 use crate::catalog::ColumnRef;
 use std::fmt;
@@ -25,6 +25,7 @@ pub mod sort;
 pub mod update;
 pub mod values;
 pub mod copy_from_file;
+pub mod describe;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
@@ -41,7 +42,7 @@ pub enum Operator {
     Explain,
     Show,
     SetVar(SetVarOperator),
-
+    Describe(DescribeOperator),
     // DML
     Insert(InsertOperator),
     Update(UpdateOperator),
@@ -128,6 +129,7 @@ impl fmt::Display for Operator {
             Operator::Show => write!(f, "Show Tables"),
             Operator::SetVar(op) => write!(f, "{}", op),
             Operator::CopyFromFile(op) => write!(f, "{}", op),
+            Operator::Describe(op) => write!(f, "{}", op),
         }
     }
 }

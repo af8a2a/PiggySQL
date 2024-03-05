@@ -12,7 +12,6 @@ async fn main() {
     println!("PiggySQL Test Start!\n");
 
     for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
-        // for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
         let filepath = slt_file
             .expect("failed to read slt file")
             .to_str()
@@ -29,3 +28,4 @@ async fn main() {
         println!("-> Pass!\n\n")
     }
 }
+

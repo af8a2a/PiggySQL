@@ -14,6 +14,8 @@ mod select;
 mod set_var;
 mod show;
 mod update;
+mod describe;
+
 use crate::errors::*;
 
 use sqlparser::ast::{Ident, ObjectName, ObjectType, SetExpr, Statement};
@@ -208,6 +210,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 options,
                 ..
             } => self.bind_copy(source.clone(), target.clone(), options)?,
+            Statement::ExplainTable {
+                describe_alias: true,
+                table_name,
+            } => self.bind_describe(table_name)?,
+
             _ => return Err(DatabaseError::UnsupportedStmt(stmt.to_string())),
         };
         Ok(plan)

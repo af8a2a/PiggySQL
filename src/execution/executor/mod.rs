@@ -19,17 +19,7 @@ use self::{
     },
     dml::{copy::CopyFromFile, delete::Delete, insert::Insert, update::Update},
     dql::{
-        agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor},
-        dummy::Dummy,
-        explain::Explain,
-        filter::Filter,
-        index_scan::IndexScan,
-        join::HashJoin,
-        limit::Limit,
-        projection::Projection,
-        seq_scan::SeqScan,
-        sort::Sort,
-        values::Values,
+        agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor}, describe::Describe, dummy::Dummy, explain::Explain, filter::Filter, index_scan::IndexScan, join::HashJoin, limit::Limit, projection::Projection, seq_scan::SeqScan, sort::Sort, values::Values
     },
     set::SetVariable,
     show::ShowTables,
@@ -131,5 +121,6 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
         Operator::Show => ShowTables.execute(transaction),
         Operator::SetVar(op) => SetVariable::from(op).execute(transaction),
         Operator::CopyFromFile(op) => CopyFromFile::from(op).execute(transaction),
+        Operator::Describe(op) => Describe::from(op).execute(transaction),
     }
 }
