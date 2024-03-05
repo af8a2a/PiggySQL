@@ -54,8 +54,8 @@ impl<T: Transaction> Executor<T> for HashJoin {
         let right_schema = right_input.output_schema().clone();
         let left_input = build(left_input, transaction)?;
         let right_input = build(right_input, transaction)?;
-        println!("right_input len: {}", right_input.len());
-        println!("type: {}", ty);
+        // println!("right_input len: {}", right_input.len());
+        // println!("type: {}", ty);
         if ty == JoinType::Cross {
             unreachable!("Cross join should not be in HashJoinExecutor");
         }
@@ -84,9 +84,9 @@ impl<T: Transaction> Executor<T> for HashJoin {
             if !left_init_flag {
                 Self::columns_filling(&left_schema, &mut join_columns, left_force_nullable);
                 left_init_flag = true;
-                for iter in join_columns.iter() {
-                    println!("left join_columns: {}", iter);
-                }
+                // for iter in join_columns.iter() {
+                //     println!("left join_columns: {}", iter);
+                // }
             }
 
             left_map.entry(hash).or_insert(Vec::new()).push(tuple);
@@ -94,9 +94,9 @@ impl<T: Transaction> Executor<T> for HashJoin {
         // println!("left_map: {:#?}", left_map);
         // probe phase
         Self::columns_filling(&right_schema, &mut join_columns, right_force_nullable);
-        for iter in join_columns.iter() {
-            println!("right join_columns: {}", iter);
-        }
+        // for iter in join_columns.iter() {
+        //     println!("right join_columns: {}", iter);
+        // }
 
         for tuple in right_input {
             let right_cols_len = right_schema.len();
@@ -184,7 +184,7 @@ impl<T: Transaction> Executor<T> for HashJoin {
         }
 
         if matches!(ty, JoinType::Left | JoinType::Full) {
-            println!("reach");
+            // println!("reach");
 
             for (hash, tuple) in left_map {
                 if used_set.contains(&hash) {
@@ -202,9 +202,9 @@ impl<T: Transaction> Executor<T> for HashJoin {
                 }
             }
         }
-        for iter in tuples.iter() {
-            println!("tuples: {}", iter);
-        }
+        // for iter in tuples.iter() {
+        //     println!("tuples: {}", iter);
+        // }
         Ok(tuples)
     }
 }
