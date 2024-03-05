@@ -1,5 +1,6 @@
 use crate::expression::ScalarExpression;
 use serde::{Deserialize, Serialize};
+use std::fmt::{write, Display};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -16,6 +17,12 @@ pub struct ColumnCatalog {
     pub nullable: bool,
     pub desc: ColumnDesc,
     pub ref_expr: Option<ScalarExpression>,
+}
+
+impl Display for ColumnCatalog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "col name:{},type:{}", self.summary.name,self.desc.column_datatype)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]

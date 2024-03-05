@@ -67,14 +67,17 @@ impl LogicalPlan {
                     Arc::new(out_columns)
                 }
                 Operator::Join(op) => {
-                    if matches!(op.join_type, JoinType::Left) {
-                        return self.childrens[0].output_schema().clone();
-                    }
+                    // if matches!(op.join_type, JoinType::Left) {
+                    //     return self.childrens[0].output_schema().clone();
+                    // }
                     let out_columns = self
                         .childrens
                         .iter_mut()
                         .flat_map(|children| Vec::clone(children.output_schema()))
                         .collect_vec();
+                    // for iter in out_columns.iter(){
+                    //     println!("out_columns: {}", iter);
+                    // }
                     Arc::new(out_columns)
                 }
                 Operator::Project(op) => {

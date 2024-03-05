@@ -69,8 +69,8 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
             Filter::from((op, input)).execute(transaction)
         }
         Operator::Join(op) => {
-            let left_input = childrens.pop().unwrap();
             let right_input = childrens.pop().unwrap();
+            let left_input = childrens.pop().unwrap();
 
             HashJoin::from((op, left_input, right_input)).execute(transaction)
         }

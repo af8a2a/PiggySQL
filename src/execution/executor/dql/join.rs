@@ -54,6 +54,8 @@ impl<T: Transaction> Executor<T> for HashJoin {
         let right_schema = right_input.output_schema().clone();
         let left_input = build(left_input, transaction)?;
         let right_input = build(right_input, transaction)?;
+        println!("right_input len: {}", right_input.len());
+        println!("type: {}", ty);
         if ty == JoinType::Cross {
             unreachable!("Cross join should not be in HashJoinExecutor");
         }
@@ -77,26 +79,30 @@ impl<T: Transaction> Executor<T> for HashJoin {
         // 2.merged all left tuples.
         let mut left_init_flag = false;
         for tuple in left_input {
-            let hash = Self::hash_row(&on_left_keys,&left_schema, &hash_random_state, &tuple)?;
+            let hash = Self::hash_row(&on_left_keys, &left_schema, &hash_random_state, &tuple)?;
 
             if !left_init_flag {
                 Self::columns_filling(&left_schema, &mut join_columns, left_force_nullable);
                 left_init_flag = true;
+                for iter in join_columns.iter() {
+                    println!("left join_columns: {}", iter);
+                }
             }
 
             left_map.entry(hash).or_insert(Vec::new()).push(tuple);
         }
-
+        // println!("left_map: {:#?}", left_map);
         // probe phase
-        let mut right_init_flag = false;
+        Self::columns_filling(&right_schema, &mut join_columns, right_force_nullable);
+        for iter in join_columns.iter() {
+            println!("right join_columns: {}", iter);
+        }
+
         for tuple in right_input {
             let right_cols_len = right_schema.len();
-            let hash = Self::hash_row(&on_right_keys,&right_schema, &hash_random_state, &tuple)?;
+            //构造hash
+            let hash = Self::hash_row(&on_right_keys, &right_schema, &hash_random_state, &tuple)?;
             //构造join columns
-            if !right_init_flag {
-                Self::columns_filling(&right_schema, &mut join_columns, right_force_nullable);
-                right_init_flag = true;
-            }
 
             let mut join_tuples = if let Some(tuples) = left_map.get(&hash) {
                 let _ = used_set.insert(hash);
@@ -137,15 +143,15 @@ impl<T: Transaction> Executor<T> for HashJoin {
                 let mut filter_tuples = Vec::with_capacity(join_tuples.len());
 
                 for mut tuple in join_tuples {
-                    if let DataValue::Boolean(option) = expr.eval(&tuple, &right_schema)?.as_ref() {
+                    if let DataValue::Boolean(option) = expr.eval(&tuple, &join_columns)?.as_ref() {
                         if let Some(false) | None = option {
-                            let full_cols_len = right_schema.len();
+                            let full_cols_len = join_columns.len();
                             let left_cols_len = full_cols_len - right_cols_len;
 
                             match ty {
                                 JoinType::Left => {
                                     for i in left_cols_len..full_cols_len {
-                                        let value_type = right_schema[i].datatype();
+                                        let value_type = join_columns[i].datatype();
 
                                         tuple.values[i] = Arc::new(DataValue::none(value_type))
                                     }
@@ -153,7 +159,7 @@ impl<T: Transaction> Executor<T> for HashJoin {
                                 }
                                 JoinType::Right => {
                                     for i in 0..left_cols_len {
-                                        let value_type = right_schema[i].datatype();
+                                        let value_type = left_schema[i].datatype();
 
                                         tuple.values[i] = Arc::new(DataValue::none(value_type))
                                     }
@@ -178,6 +184,8 @@ impl<T: Transaction> Executor<T> for HashJoin {
         }
 
         if matches!(ty, JoinType::Left | JoinType::Full) {
+            println!("reach");
+
             for (hash, tuple) in left_map {
                 if used_set.contains(&hash) {
                     continue;
@@ -193,6 +201,9 @@ impl<T: Transaction> Executor<T> for HashJoin {
                     tuples.push(Tuple { id: None, values });
                 }
             }
+        }
+        for iter in tuples.iter() {
+            println!("tuples: {}", iter);
         }
         Ok(tuples)
     }
@@ -227,7 +238,7 @@ impl HashJoin {
         let mut values = Vec::with_capacity(on_keys.len());
 
         for expr in on_keys {
-            values.push(expr.eval(tuple,schema)?);
+            values.push(expr.eval(tuple, schema)?);
         }
 
         Ok(hash_random_state.hash_one(values))
