@@ -11,10 +11,10 @@ pub struct FilterOperator {
 
 impl FilterOperator {
     pub fn build(predicate: ScalarExpression, children: LogicalPlan, having: bool) -> LogicalPlan {
-        LogicalPlan {
-            operator: Operator::Filter(FilterOperator { predicate, having }),
-            childrens: vec![children],
-        }
+        LogicalPlan::new(
+            Operator::Filter(FilterOperator { predicate, having }),
+            vec![children],
+        )
     }
 }
 

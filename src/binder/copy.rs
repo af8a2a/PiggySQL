@@ -68,18 +68,16 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 },
                 format: FileFormat::from_options(options),
             };
+            // COPY <dest_table> FROM <source_file>
 
-            {
-                // COPY <dest_table> FROM <source_file>
-                Ok(LogicalPlan {
-                    operator: Operator::CopyFromFile(CopyFromFileOperator {
-                        source: ext_source,
-                        schema_ref,
-                        table: table_name.to_string(),
-                    }),
-                    childrens: vec![],
-                })
-            }
+            Ok(LogicalPlan::new(
+                Operator::CopyFromFile(CopyFromFileOperator {
+                    source: ext_source,
+                    schema_ref,
+                    table: table_name.to_string(),
+                }),
+                vec![],
+            ))
         } else {
             Err(DatabaseError::InvalidTable(format!(
                 "not found table {}",

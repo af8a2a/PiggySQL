@@ -1,11 +1,11 @@
 use crate::binder::{lower_case_name, split_name, Binder};
+use crate::errors::*;
 use crate::planner::operator::drop_table::DropTableOperator;
 use crate::planner::operator::Operator;
 use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
 use sqlparser::ast::ObjectName;
 use std::sync::Arc;
-use crate::errors::*;
 
 impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_drop_table(
@@ -17,13 +17,14 @@ impl<'a, T: Transaction> Binder<'a, T> {
         let (_, name) = split_name(&name)?;
         let table_name = Arc::new(name.to_string());
 
-        let plan = LogicalPlan {
-            operator: Operator::DropTable(DropTableOperator {
+        let plan = LogicalPlan::new(
+            Operator::DropTable(DropTableOperator {
                 table_name,
                 if_exists: *if_exists,
             }),
-            childrens: vec![],
-        };
+            vec![],
+        );
+
         Ok(plan)
     }
 }

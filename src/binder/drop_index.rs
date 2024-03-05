@@ -27,14 +27,15 @@ impl<'a, T: Transaction> Binder<'a, T> {
         let index_name = Arc::new(index_name);
 
         //now only support unique index
-        let plan = LogicalPlan {
-            operator: Operator::DropIndex(DropIndexOperator {
+
+        let plan = LogicalPlan::new(
+            Operator::DropIndex(DropIndexOperator {
                 table_name,
                 index_name,
                 if_exists: *if_exists,
             }),
-            childrens: vec![],
-        };
+            vec![],
+        );
         Ok(plan)
     }
 }

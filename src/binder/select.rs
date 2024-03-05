@@ -57,7 +57,6 @@ impl<'a, T: Transaction> Binder<'a, T> {
     fn bind_select(&mut self, select: &Select, orderby: &[OrderByExpr]) -> Result<LogicalPlan> {
         let mut plan = self.bind_table_ref(&select.from)?;
 
-
         let mut select_list = self.normalize_select_item(&select.projection)?;
 
         self.extract_select_join(&mut select_list);
@@ -107,10 +106,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
     pub(crate) fn bind_table_ref(&mut self, from: &[TableWithJoins]) -> Result<LogicalPlan> {
         assert!(from.len() < 2, "not support yet.");
         if from.is_empty() {
-            return Ok(LogicalPlan {
-                operator: Operator::Dummy,
-                childrens: vec![],
-            });
+            return Ok(LogicalPlan::new(Operator::Dummy, vec![]));
         }
 
         let TableWithJoins { relation, joins } = &from[0];
@@ -325,20 +321,14 @@ impl<'a, T: Transaction> Binder<'a, T> {
         children: LogicalPlan,
         select_list: Vec<ScalarExpression>,
     ) -> LogicalPlan {
-        LogicalPlan {
-            operator: Operator::Project(ProjectOperator { exprs: select_list }),
-            childrens: vec![children],
-        }
+        LogicalPlan::new(Operator::Project(ProjectOperator { exprs: select_list }), vec![children])
     }
 
     fn bind_sort(&mut self, children: LogicalPlan, sort_fields: Vec<SortField>) -> LogicalPlan {
-        LogicalPlan {
-            operator: Operator::Sort(SortOperator {
-                sort_fields,
-                limit: None,
-            }),
-            childrens: vec![children],
-        }
+        LogicalPlan::new(Operator::Sort(SortOperator {
+            sort_fields,
+            limit: None,
+        }),vec![children])
     }
 
     fn bind_limit(

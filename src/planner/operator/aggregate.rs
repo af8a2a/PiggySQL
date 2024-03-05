@@ -20,14 +20,14 @@ impl AggregateOperator {
         groupby_exprs: Vec<ScalarExpression>,
         is_distinct: bool,
     ) -> LogicalPlan {
-        LogicalPlan {
-            operator: Operator::Aggregate(Self {
+        LogicalPlan::new(
+            Operator::Aggregate(Self {
                 groupby_exprs,
                 agg_calls,
                 is_distinct,
             }),
-            childrens: vec![children],
-        }
+            vec![children],
+        )
     }
 }
 

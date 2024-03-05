@@ -31,9 +31,8 @@ impl ScanOperator {
             .into_iter()
             .map(ScalarExpression::ColumnRef)
             .collect_vec();
-
-        LogicalPlan {
-            operator: Operator::Scan(ScanOperator {
+        LogicalPlan::new(
+            Operator::Scan(ScanOperator {
                 index_metas: table_catalog.indexes.clone(),
                 table_name,
                 columns,
@@ -41,8 +40,8 @@ impl ScanOperator {
                 limit: (None, None),
                 index_by: None,
             }),
-            childrens: vec![],
-        }
+            vec![],
+        )
     }
 }
 impl fmt::Display for ScanOperator {

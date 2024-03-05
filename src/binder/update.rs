@@ -52,15 +52,14 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 }
             }
             // let values_plan = self.bind_values(vec![], columns);
-
-            Ok(LogicalPlan {
-                operator: Operator::Update(UpdateOperator {
+            Ok(LogicalPlan::new(
+                Operator::Update(UpdateOperator {
                     columns,
                     set_expr,
                     table_name,
                 }),
-                childrens: vec![plan],
-            })
+                vec![plan],
+            ))
         } else {
             unreachable!("only table")
         }

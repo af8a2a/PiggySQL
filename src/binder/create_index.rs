@@ -37,14 +37,13 @@ impl<'a, T: Transaction> Binder<'a, T> {
         //now only support unique index
         assert_eq!(col_ident.len(), 1);
         let col_name = col_ident[0].clone();
-        let plan = LogicalPlan {
-            operator: Operator::CreateIndex(CreateIndexOperator {
+        Ok(LogicalPlan::new(
+            Operator::CreateIndex(CreateIndexOperator {
                 table_name,
                 index_name,
                 col_name,
             }),
-            childrens: vec![],
-        };
-        Ok(plan)
+            vec![],
+        ))
     }
 }

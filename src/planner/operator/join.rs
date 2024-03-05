@@ -38,10 +38,10 @@ impl JoinOperator {
         on: JoinCondition,
         join_type: JoinType,
     ) -> LogicalPlan {
-        LogicalPlan {
-            operator: Operator::Join(JoinOperator { on, join_type }),
-            childrens: vec![left, right],
-        }
+        LogicalPlan::new(
+            Operator::Join(JoinOperator { on, join_type }),
+            vec![left, right],
+        )
     }
 }
 

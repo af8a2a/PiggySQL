@@ -12,10 +12,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             variable: var,
             value: val
         };
-        let plan = LogicalPlan {
-            operator: Operator::SetVar(op),
-            childrens: vec![],
-        };
+        let plan = LogicalPlan::new(Operator::SetVar(op), vec![]);
         Ok(plan)
     }
 }

@@ -80,13 +80,13 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
             let values_plan = self.bind_values(rows, columns);
 
-            Ok(LogicalPlan {
-                operator: Operator::Insert(InsertOperator {
+            Ok(LogicalPlan::new(
+                Operator::Insert(InsertOperator {
                     table_name,
                     is_overwrite,
                 }),
-                childrens: vec![values_plan],
-            })
+                vec![values_plan],
+            ))
         } else {
             Err(DatabaseError::InvalidTable(format!(
                 "not found table {}",
@@ -100,9 +100,10 @@ impl<'a, T: Transaction> Binder<'a, T> {
         rows: Vec<Vec<ValueRef>>,
         columns: Vec<ColumnRef>,
     ) -> LogicalPlan {
-        LogicalPlan {
-            operator: Operator::Values(ValuesOperator { rows, columns }),
-            childrens: vec![],
-        }
+        LogicalPlan::new(
+            Operator::Values(ValuesOperator { rows, columns }),
+            vec![],
+        )
+
     }
 }

@@ -22,10 +22,10 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 plan = self.bind_where(plan, predicate)?;
             }
 
-            Ok(LogicalPlan {
-                operator: Operator::Delete(DeleteOperator { table_name }),
-                childrens: vec![plan],
-            })
+            Ok(LogicalPlan::new(
+                Operator::Delete(DeleteOperator { table_name }),
+                vec![plan],
+            ))
         } else {
             unreachable!("only table")
         }
