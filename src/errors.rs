@@ -8,7 +8,7 @@ use std::{
 use chrono::ParseError;
 use sqlparser::parser::ParserError;
 pub type Result<T> = std::result::Result<T, DatabaseError>;
-use crate::types::{value::DataValue, LogicalType};
+use crate::{expression::BinaryOperator, types::{value::DataValue, LogicalType}};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DatabaseError {
@@ -74,6 +74,13 @@ pub enum DatabaseError {
         #[from]
         FromUtf8Error,
     ),
+    #[error("try from decimal")]
+    TryFromDecimal(
+        #[source]
+        #[from]
+        rust_decimal::Error,
+    ),
+
     #[error("{0} and {1} do not match")]
     MisMatch(String, String),
     #[error("io: {0}")]
@@ -173,5 +180,7 @@ pub enum DatabaseError {
         #[source]
         csv::Error,
     ),
+    #[error("the {0} cannot support {1} for calculations")]
+    UnsupportedBinaryOperator(LogicalType, BinaryOperator),
 
 }

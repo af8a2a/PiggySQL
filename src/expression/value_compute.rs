@@ -816,6 +816,131 @@ impl DataValue{
                     _ => todo!("unsupported operator"),
                 }
             }
+            LogicalType::Decimal(_, _) => {
+                let left_value = left.clone().cast(&unified_type)?;
+                let right_value = right.clone().cast(&unified_type)?;
+
+                match op {
+                    BinaryOperator::Plus => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 + v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Decimal(value)
+                    }
+                    BinaryOperator::Minus => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 - v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Decimal(value)
+                    }
+                    BinaryOperator::Multiply => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 * v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Decimal(value)
+                    }
+                    BinaryOperator::Divide => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 / v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Decimal(value)
+                    }
+
+                    BinaryOperator::Gt => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 > v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Boolean(value)
+                    }
+                    BinaryOperator::Lt => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 < v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Boolean(value)
+                    }
+                    BinaryOperator::GtEq => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 >= v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Boolean(value)
+                    }
+                    BinaryOperator::LtEq => {
+                        let value =
+                            if let (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) =
+                                (left_value, right_value)
+                            {
+                                Some(v1 <= v2)
+                            } else {
+                                None
+                            };
+
+                        DataValue::Boolean(value)
+                    }
+                    BinaryOperator::Eq => {
+                        let value = match (left_value, right_value) {
+                            (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) => {
+                                Some(v1 == v2)
+                            }
+                            (_, _) => None,
+                        };
+
+                        DataValue::Boolean(value)
+                    }
+                    BinaryOperator::NotEq => {
+                        let value = match (left_value, right_value) {
+                            (DataValue::Decimal(Some(v1)), DataValue::Decimal(Some(v2))) => {
+                                Some(v1 != v2)
+                            }
+                            (_, _) => None,
+                        };
+
+                        DataValue::Boolean(value)
+                    }
+                    _ => return Err(DatabaseError::UnsupportedBinaryOperator(unified_type, *op)),
+                }
+            }
             LogicalType::Varchar(None) => {
                 let left_value = unpack_utf8(left.clone().cast(&unified_type)?);
                 let right_value = unpack_utf8(right.clone().cast(&unified_type)?);

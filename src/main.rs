@@ -11,7 +11,6 @@ async fn main() {
         // completes the builder.
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-
     Server::run().await;
 
 }

@@ -4,11 +4,11 @@ pub mod tuple_builder;
 pub mod value;
 
 use chrono::{NaiveDate, NaiveDateTime};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use sqlparser::ast::ExactNumberInfo;
 use std::any::TypeId;
 use strum_macros::AsRefStr;
-
-
 
 use crate::errors::{DatabaseError, Result};
 
@@ -36,6 +36,8 @@ pub enum LogicalType {
     Varchar(Option<u32>),
     Date,
     DateTime,
+    // decimal (precision, scale)
+    Decimal(Option<u8>, Option<u8>),
 }
 
 impl LogicalType {
@@ -66,7 +68,9 @@ impl LogicalType {
             Some(LogicalType::Date)
         } else if type_id == TypeId::of::<NaiveDateTime>() {
             Some(LogicalType::DateTime)
-        }else if type_id == TypeId::of::<String>() {
+        } else if type_id == TypeId::of::<Decimal>() {
+            Some(LogicalType::Decimal(None, None))
+        } else if type_id == TypeId::of::<String>() {
             Some(LogicalType::Varchar(None))
         } else {
             None
@@ -92,6 +96,7 @@ impl LogicalType {
             LogicalType::Varchar(_) => None,
             LogicalType::Date => Some(4),
             LogicalType::DateTime => Some(8),
+            LogicalType::Decimal(_, _) => Some(16),
         }
     }
 
@@ -277,6 +282,7 @@ impl LogicalType {
             LogicalType::Varchar(_) => false,
             LogicalType::Date => matches!(to, LogicalType::DateTime | LogicalType::Varchar(_)),
             LogicalType::DateTime => matches!(to, LogicalType::Date | LogicalType::Varchar(_)),
+            LogicalType::Decimal(_, _) => false,
         }
     }
 }
@@ -306,6 +312,15 @@ impl TryFrom<sqlparser::ast::DataType> for LogicalType {
             sqlparser::ast::DataType::Boolean => Ok(LogicalType::Boolean),
             sqlparser::ast::DataType::Datetime(_) => Ok(LogicalType::DateTime),
             sqlparser::ast::DataType::Date => Ok(LogicalType::Date),
+            sqlparser::ast::DataType::Decimal(info) | sqlparser::ast::DataType::Dec(info) => {
+                match info {
+                    ExactNumberInfo::None => Ok(Self::Decimal(None, None)),
+                    ExactNumberInfo::Precision(p) => Ok(Self::Decimal(Some(p as u8), None)),
+                    ExactNumberInfo::PrecisionAndScale(p, s) => {
+                        Ok(Self::Decimal(Some(p as u8), Some(s as u8)))
+                    }
+                }
+            }
             other => Err(DatabaseError::NotImplementedSqlparserDataType(
                 other.to_string(),
             )),
