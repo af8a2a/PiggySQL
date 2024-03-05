@@ -20,8 +20,8 @@ impl<'a, T: Transaction> Binder<'a, T> {
         if_exists: &bool,
     ) -> Result<LogicalPlan> {
         let object_name = &names.0;
-        let table_name = object_name[0].value.to_owned().to_lowercase();
-        let index_name = object_name[1].value.to_owned().to_lowercase();
+        let table_name = object_name[0].value.to_string();
+        let index_name = object_name[1].value.to_string();
 
         let table_name = Arc::new(table_name);
         let index_name = Arc::new(index_name);

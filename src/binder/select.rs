@@ -142,7 +142,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 let obj_name = name
                     .0
                     .iter()
-                    .map(|ident| Ident::new(ident.value.to_lowercase()))
+                    .map(|ident| Ident::new(ident.value.to_string()))
                     .collect_vec();
 
                 let (_database, _schema, table): (&str, &str, &str) = match obj_name.as_slice() {

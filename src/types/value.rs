@@ -82,6 +82,7 @@ generate_get_option!(DataValue,
     u32 : UInt32(Option<u32>),
     u64 : UInt64(Option<u64>),
     utf8 : Utf8(Option<String>)
+
 );
 
 impl PartialEq for DataValue {
@@ -245,6 +246,13 @@ impl DataValue {
     pub fn datetime(&self) -> Option<NaiveDateTime> {
         if let DataValue::Date64(Some(val)) = self {
             NaiveDateTime::from_timestamp_opt(*val, 0)
+        } else {
+            None
+        }
+    }
+    pub fn decimal(&self) -> Option<Decimal> {
+        if let DataValue::Decimal(Some(val)) = self {
+            Some(val.clone())
         } else {
             None
         }

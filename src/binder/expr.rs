@@ -76,7 +76,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
     ) -> Result<ScalarExpression> {
         let idents = idents
             .iter()
-            .map(|ident| Ident::new(ident.value.to_lowercase()))
+            .map(|ident| Ident::new(ident.value.to_string()))
             .collect_vec();
         let (_schema_name, table_name, column_name) = match idents.as_slice() {
             [column] => (None, None, &column.value),
@@ -198,11 +198,8 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 _ => todo!(),
             }
         }
-        debug!(
-            "function: {:?}",
-            func.name.to_string().to_lowercase().as_str()
-        );
-        Ok(match func.name.to_string().to_lowercase().as_str() {
+
+        Ok(match func.name.to_string().as_str() {
             "count" => ScalarExpression::AggCall {
                 distinct: func.distinct,
                 kind: Aggregate::Count,

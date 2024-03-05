@@ -573,7 +573,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
                         Some(table)
                     }
                     Err(e) => {
-                        debug!("cannot fetch table {:#?}", e);
+                        debug!("cannot fetch table {},because:{}", table_name, e);
                         None
                     }
                 }

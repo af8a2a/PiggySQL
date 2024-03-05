@@ -3,15 +3,13 @@ use std::{io, path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use clap::Parser;
 use futures::stream;
+use rust_decimal::prelude::ToPrimitive;
 
 use pgwire::{
     api::{
         auth::{noop::NoopStartupHandler, StartupHandler},
         portal::{Format, Portal},
-        query::{
-            ExtendedQueryHandler, SimpleQueryHandler,
-            StatementOrPortal,
-        },
+        query::{ExtendedQueryHandler, SimpleQueryHandler, StatementOrPortal},
         results::{DataRowEncoder, DescribeResponse, FieldInfo, QueryResponse, Response, Tag},
         stmt::NoopQueryParser,
         ClientInfo, MakeHandler, StatelessMakeHandler, Type,
@@ -21,12 +19,11 @@ use pgwire::{
 };
 use tokio::{net::TcpListener, sync::Mutex};
 
-
 use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{engine::{bitcask::BitCask}, MVCCLayer},
+    storage::{engine::bitcask::BitCask, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
 
@@ -305,7 +302,10 @@ impl SimpleQueryHandler for Session {
 
 impl Server {
     async fn new() -> Result<Server> {
-        let database = Database::new(MVCCLayer::new(BitCask::new_compact(PathBuf::from("test.db"),0.2)?))?;
+        let database = Database::new(MVCCLayer::new(BitCask::new_compact(
+            PathBuf::from("test.db"),
+            0.2,
+        )?))?;
 
         Ok(Server {
             inner: Arc::new(database),
@@ -415,6 +415,9 @@ fn encode_tuples<'a>(tuples: Vec<Tuple>) -> PgWireResult<QueryResponse<'a>> {
                 LogicalType::Varchar(_) => encoder.encode_field(&value.utf8()),
                 LogicalType::Date => encoder.encode_field(&value.date()),
                 LogicalType::DateTime => encoder.encode_field(&value.datetime()),
+                LogicalType::Decimal(_, _) => {
+                    encoder.encode_field(&value.decimal().map(|v| v.to_f64()))
+                } //todo
                 _ => unreachable!(),
             }?;
         }
@@ -438,6 +441,7 @@ fn into_pg_type(data_type: &LogicalType) -> PgWireResult<Type> {
         LogicalType::Double => Type::FLOAT8,
         LogicalType::Varchar(_) => Type::VARCHAR,
         LogicalType::Date | LogicalType::DateTime => Type::DATE,
+        LogicalType::Decimal(_, _) => Type::NUMERIC,
         _ => {
             return Err(PgWireError::UserError(Box::new(ErrorInfo::new(
                 "ERROR".to_owned(),

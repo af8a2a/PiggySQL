@@ -22,8 +22,8 @@ impl<'a, T: Transaction> Binder<'a, T> {
         table_name: &ObjectName,
         columns: &Vec<OrderByExpr>,
     ) -> Result<LogicalPlan> {
-        let table_name = lower_case_name(table_name);
-        let index_name = lower_case_name(index_name);
+        // let table_name = lower_case_name(table_name);
+        // let index_name = lower_case_name(index_name);
         let table_name = Arc::new(table_name.to_string());
         let index_name = Arc::new(index_name.to_string());
 

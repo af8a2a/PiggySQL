@@ -18,7 +18,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         name: &ObjectName,
         operation: &AlterTableOperation,
     ) -> Result<LogicalPlan> {
-        let table_name: Arc<String> = Arc::new(split_name(&lower_case_name(name))?.1.to_string());
+        let table_name: Arc<String> = Arc::new(split_name(name)?.1.to_string());
 
         if let Some(table) = self.context.table(table_name.clone()) {
             let plan = match operation {

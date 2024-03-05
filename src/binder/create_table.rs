@@ -24,7 +24,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         constraints: &[TableConstraint],
         if_not_exists: bool,
     ) -> Result<LogicalPlan> {
-        let name = lower_case_name(name);
+        // let name = lower_case_name(name);
         let (_, name) = split_name(&name)?;
         let table_name = Arc::new(name.to_string());
         

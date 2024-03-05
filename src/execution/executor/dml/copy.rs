@@ -5,6 +5,7 @@ use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 use crate::types::tuple_builder::TupleBuilder;
 use itertools::Itertools;
+use tracing::debug;
 use std::fs::File;
 use std::io::BufReader;
 use crate::errors::*;
@@ -68,6 +69,7 @@ impl CopyFromFile {
             .iter()
             .map(|column| column.datatype().clone())
             .collect_vec();
+        debug!("column count: {}", column_count);
         let tuple_builder = TupleBuilder::new(types, self.op.schema_ref.clone());
         let mut tuples=vec![];
         for record in reader.records() {
