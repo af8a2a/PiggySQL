@@ -1,5 +1,5 @@
 use crate::catalog::{ColumnCatalog, ColumnRef};
-use crate::errors::{DatabaseError, Result};
+use crate::errors::{Result};
 
 use crate::types::index::{Index, IndexId, IndexMeta};
 use crate::types::tuple::{Tuple, TupleId};
@@ -7,7 +7,6 @@ use crate::types::value::DataValue;
 use crate::types::LogicalType;
 use bytes::Bytes;
 use lazy_static::lazy_static;
-use uuid::Uuid;
 const BOUND_MIN_TAG: u8 = 0;
 const BOUND_MAX_TAG: u8 = 1;
 lazy_static! {

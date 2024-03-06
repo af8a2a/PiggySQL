@@ -87,7 +87,7 @@ impl<T: Transaction> Executor<T> for HashAggExecutor {
                 acc.update_value(value)?;
             }
         }
-        if let Some(group_and_agg_columns) = group_and_agg_columns_option {
+        if let Some(_group_and_agg_columns) = group_and_agg_columns_option {
             for (group_keys, accs) in group_hash_accs {
                 // Tips: Accumulator First
                 let values: Vec<ValueRef> = accs

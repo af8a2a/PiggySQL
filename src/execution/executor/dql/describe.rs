@@ -5,7 +5,7 @@ use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 use crate::types::value::{DataValue, ValueRef};
 use lazy_static::lazy_static;
-use tracing::debug;
+
 use std::sync::Arc;
 
 lazy_static! {

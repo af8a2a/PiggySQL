@@ -7,7 +7,7 @@ use piggysql::{
         MVCCLayer,
     },
 };
-use tempfile::{tempdir, tempdir_in};
+
 
 async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
     let db = Database::new(MVCCLayer::new(Memory::new()))?;

@@ -7,7 +7,7 @@ use sqlparser::ast::{
 };
 use std::slice;
 use std::sync::Arc;
-use tracing::debug;
+
 
 use super::Binder;
 use crate::expression::ScalarExpression;
@@ -76,7 +76,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
     ) -> Result<ScalarExpression> {
         let idents = idents
             .iter()
-            .map(|ident| Ident::new(ident.value.to_string()))
+            .map(|ident| Ident::new(ident.value.to_lowercase()))
             .collect_vec();
         let (_schema_name, table_name, column_name) = match idents.as_slice() {
             [column] => (None, None, &column.value),

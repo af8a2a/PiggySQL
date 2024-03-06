@@ -1,10 +1,10 @@
-use tracing::debug;
 
-use crate::catalog::{ColumnCatalog, ColumnRef};
+
+use crate::catalog::{ColumnRef};
 use crate::errors::*;
 use crate::types::value::{DataValue, ValueRef};
 use crate::types::LogicalType;
-use std::collections::HashMap;
+
 use std::sync::Arc;
 
 use super::tuple::Tuple;
@@ -32,7 +32,7 @@ impl TupleBuilder {
         }
     }
 
-    pub fn push_result(self, header: &str, message: &str) -> Result<Tuple> {
+    pub fn push_result(self, _header: &str, message: &str) -> Result<Tuple> {
         let values: Vec<ValueRef> = vec![Arc::new(DataValue::Utf8(Some(String::from(message))))];
         let t = Tuple {
             id: None,

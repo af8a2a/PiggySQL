@@ -24,7 +24,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         constraints: &[TableConstraint],
         if_not_exists: bool,
     ) -> Result<LogicalPlan> {
-        // let name = lower_case_name(name);
+        let name = lower_case_name(name);
         let (_, name) = split_name(&name)?;
         let table_name = Arc::new(name.to_string());
 
@@ -40,7 +40,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             for col in columns.iter() {
                 let col_name = &col.name.value;
                 if !set.insert(col_name.clone()) {
-                    return Err(DatabaseError::AmbiguousColumn(col_name.to_string()));
+                    return Err(DatabaseError::AmbiguousColumn(col_name.to_lowercase()));
                 }
                 if !is_valid_identifier(col_name) {
                     return Err(DatabaseError::InvalidColumn(

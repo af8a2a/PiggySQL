@@ -1,5 +1,5 @@
 use crate::catalog::{ColumnCatalog, TableName};
-use crate::errors::*;
+
 use crate::execution::executor::{build, Executor, Source};
 use crate::expression::ScalarExpression;
 use crate::planner::operator::update::UpdateOperator;

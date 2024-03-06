@@ -56,7 +56,7 @@ impl<T: Transaction> Executor<T> for SimpleAggExecutor {
                 acc.update_value(value)?;
             }
         }
-        if let Some(columns) = columns_option {
+        if let Some(_columns) = columns_option {
             let values: Vec<ValueRef> = accs.into_iter().map(|acc| acc.evaluate()).try_collect()?;
             tuples.push(Tuple { id: None, values });
         }

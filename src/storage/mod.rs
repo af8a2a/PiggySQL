@@ -6,7 +6,7 @@ use itertools::Itertools;
 use moka::sync::Cache;
 use tracing::debug;
 
-use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, SchemaRef, TableCatalog, TableName};
+use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
 use crate::errors::*;
 use crate::expression::simplify::ConstantBinary;

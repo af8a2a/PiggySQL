@@ -19,7 +19,7 @@ impl From<ValuesOperator> for Values {
 
 impl<T: Transaction> Executor<T> for Values {
     fn execute(self, _transaction: &mut T) -> Source {
-        let ValuesOperator { columns, rows } = self.op;
+        let ValuesOperator { columns: _, rows } = self.op;
         // eprintln!("values executor result :{:#?}",columns);
         
         Ok(rows

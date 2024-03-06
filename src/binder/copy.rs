@@ -59,7 +59,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
         };
 
-        if let Some(table) = self.context.table(Arc::new(table_name.to_string())) {
+        if let Some(table) = self.context.table(Arc::new(table_name.to_string().to_lowercase())) {
             let schema_ref = table.all_columns();
             let ext_source = ExtSource {
                 path: match target {
@@ -74,7 +74,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 Operator::CopyFromFile(CopyFromFileOperator {
                     source: ext_source,
                     schema_ref,
-                    table: table_name.to_string(),
+                    table: table_name.to_string().to_lowercase(),
                 }),
                 vec![],
             ))

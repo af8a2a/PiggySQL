@@ -1,4 +1,4 @@
-use crate::catalog::{ColumnRef, Schema, SchemaRef};
+use crate::catalog::{ColumnRef, SchemaRef};
 use crate::types::value::{DataValue, ValueRef};
 use comfy_table::{Cell, Table};
 use integer_encoding::FixedInt;

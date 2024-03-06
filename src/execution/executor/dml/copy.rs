@@ -51,7 +51,7 @@ impl CopyFromFile {
         let mut buf_reader = BufReader::new(file);
         let mut reader = match self.op.source.format {
             FileFormat::Csv {
-                delimiter,
+                delimiter: _,
                 quote,
                 escape,
                 header,

@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 use crate::catalog::{ColumnCatalog, SchemaRef, TableName};
 
-use self::operator::{join::JoinType, values::ValuesOperator, Operator};
+use self::operator::{values::ValuesOperator, Operator};
 
 pub mod operator;
 
@@ -66,7 +66,7 @@ impl LogicalPlan {
                         .collect_vec();
                     Arc::new(out_columns)
                 }
-                Operator::Join(op) => {
+                Operator::Join(_op) => {
                     // if matches!(op.join_type, JoinType::Left) {
                     //     return self.childrens[0].output_schema().clone();
                     // }

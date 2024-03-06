@@ -26,7 +26,7 @@ impl<T: Transaction> Executor<T> for Limit {
         let Limit {
             offset,
             limit,
-            mut input,
+            input,
         } = self;
         let input = build(input, transaction)?;
         if limit.is_some() && limit.unwrap_or(0) == 0 {
