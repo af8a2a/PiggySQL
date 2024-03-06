@@ -42,13 +42,13 @@ impl<T: Transaction> Executor<T> for Describe {
             }
         };
         let mut tuples = vec![];
-        let schema=vec![
-            Arc::new(ColumnCatalog::new_dummy("FIELD".to_string())),
-            Arc::new(ColumnCatalog::new_dummy("TYPE".to_string())),
-            Arc::new(ColumnCatalog::new_dummy("NULL".to_string())),
-            Arc::new(ColumnCatalog::new_dummy("Key".to_string())),
-            Arc::new(ColumnCatalog::new_dummy("DEFAULT".to_string())),
-        ];
+        // let schema=vec![
+        //     Arc::new(ColumnCatalog::new_dummy("FIELD".to_string())),
+        //     Arc::new(ColumnCatalog::new_dummy("TYPE".to_string())),
+        //     Arc::new(ColumnCatalog::new_dummy("NULL".to_string())),
+        //     Arc::new(ColumnCatalog::new_dummy("Key".to_string())),
+        //     Arc::new(ColumnCatalog::new_dummy("DEFAULT".to_string())),
+        // ];
         for column in table.all_columns() {
             let values = vec![
                 Arc::new(DataValue::Utf8(Some(column.name().to_string()))),

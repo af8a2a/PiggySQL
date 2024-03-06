@@ -4,6 +4,7 @@ use crate::planner::operator::copy_from_file::CopyFromFileOperator;
 use crate::storage::Transaction;
 use crate::types::tuple::Tuple;
 use crate::types::tuple_builder::TupleBuilder;
+use csv::Terminator;
 use itertools::Itertools;
 use tracing::debug;
 use std::fs::File;
@@ -55,10 +56,11 @@ impl CopyFromFile {
                 escape,
                 header,
             } => csv::ReaderBuilder::new()
-                .delimiter(delimiter as u8)
+                .delimiter(b'|')
                 .quote(quote as u8)
                 .escape(escape.map(|c| c as u8))
                 .has_headers(header)
+                .terminator(Terminator::CRLF)
                 .from_reader(&mut buf_reader),
         };
 
@@ -76,6 +78,7 @@ impl CopyFromFile {
             // read records and push raw str rows into data chunk builder
             let record = record?;
 
+    
             if !(record.len() == column_count
                 || record.len() == column_count + 1 && record.get(column_count) == Some(""))
             {
@@ -86,9 +89,7 @@ impl CopyFromFile {
             }
 
             self.size += 1;
-            tuples.push(tuple_builder.build_with_row(record.iter())?);
-            // tx.blocking_send(tuple_builder.build_with_row(record.iter())?)
-            //     .map_err(|_| DatabaseError::InternalError(format!("ChannelClose")))?;
+            tuples.push(tuple_builder.build_with_row(record.iter().take(column_count))?);
         }
         Ok(tuples)
     }

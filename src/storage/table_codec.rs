@@ -126,10 +126,23 @@ impl TableCodec {
     /// Key: {TableName}{TUPLE_TAG}{BOUND_MIN_TAG}{RowID}(Sorted)
     /// Value: Tuple
     pub fn encode_tuple(table_name: &str, tuple: &Tuple) -> Result<(Bytes, Bytes)> {
-        let tuple_id = tuple.id.clone().ok_or(DatabaseError::PrimaryKeyNotFound)?;
-        let key = Self::encode_tuple_key(table_name, &tuple_id)?;
+        // let tuple_id = tuple.id.clone().ok_or(DatabaseError::PrimaryKeyNotFound)?;
+        let tuple_id = tuple.id.clone();
+        let key = match tuple_id{
+            Some(tuple_id) => Self::encode_tuple_key(table_name, &tuple_id)?,
+            None => Self::encode_tuple_key_without_primary_key(table_name)?,
+        };
+            
 
         Ok((Bytes::from(key), Bytes::from(tuple.serialize_to())))
+    }
+    pub fn encode_tuple_key_without_primary_key(table_name: &str) -> Result<Vec<u8>> {
+        let mut key_prefix = Self::key_prefix(CodecType::Tuple, table_name);
+        key_prefix.push(BOUND_MIN_TAG);
+
+        // tuple_id.to_primary_key(&mut key_prefix)?;
+
+        Ok(key_prefix)
     }
 
     pub fn encode_tuple_key(table_name: &str, tuple_id: &TupleId) -> Result<Vec<u8>> {

@@ -1,3 +1,5 @@
+use tracing::debug;
+
 use crate::catalog::{ColumnCatalog, ColumnRef};
 use crate::errors::*;
 use crate::types::value::{DataValue, ValueRef};
@@ -86,6 +88,7 @@ impl TupleBuilder {
         let mut primary_key = None;
 
         for (i, value) in row.into_iter().enumerate() {
+            // debug!("{}: {}", i, value);
             let data_value = Arc::new(
                 DataValue::Utf8(Some(value.to_string())).cast(self.columns[i].datatype())?,
             );

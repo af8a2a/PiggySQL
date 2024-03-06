@@ -76,12 +76,13 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 _ => todo!(),
             }
         }
-
-        if columns.iter().filter(|col| col.desc.is_primary).count() != 1 {
-            return Err(DatabaseError::InvalidTable(
-                "The primary key field must exist and have at least one".to_string(),
-            ));
-        }
+        //experiment
+        //allow table no primary key
+        // if columns.iter().filter(|col| col.desc.is_primary).count() != 1 {
+        //     return Err(DatabaseError::InvalidTable(
+        //         "The primary key field must exist and have at least one".to_string(),
+        //     ));
+        // }
 
         Ok(LogicalPlan::new(
             Operator::CreateTable(CreateTableOperator {
