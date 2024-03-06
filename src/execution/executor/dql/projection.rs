@@ -36,9 +36,9 @@ impl<T: Transaction> Executor<T> for Projection {
 
             tuples.push(tuple.clone());
         }
-        for tuple in &tuples {
-            println!("proj:{}", tuple);
-        }
+        // for tuple in &tuples {
+        //     println!("proj:{}", tuple);
+        // }
         Ok(tuples)
     }
 }
