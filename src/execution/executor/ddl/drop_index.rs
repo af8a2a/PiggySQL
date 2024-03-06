@@ -1,9 +1,8 @@
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::drop_index::DropIndexOperator;
 use crate::storage::Transaction;
 use crate::types::tuple_builder::TupleBuilder;
-
 
 pub struct DropIndex {
     op: DropIndexOperator,
@@ -23,10 +22,10 @@ impl<T: Transaction> Executor<T> for DropIndex {
             if_exists,
         } = self.op;
 
-        transaction.drop_index(table_name,index_name.clone(), if_exists)?;
+        transaction.drop_index(table_name, index_name.clone(), if_exists)?;
         let tuple_builder = TupleBuilder::new_result();
-        let tuple = tuple_builder
-            .push_result("DROP INDEX SUCCESS", format!("{}", index_name).as_str())?;
+        let tuple =
+            tuple_builder.push_result("DROP INDEX SUCCESS", format!("{}", index_name).as_str())?;
 
         Ok(vec![tuple])
     }

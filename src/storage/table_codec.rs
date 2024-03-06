@@ -1,5 +1,5 @@
 use crate::catalog::{ColumnCatalog, ColumnRef};
-use crate::errors::{Result};
+use crate::errors::Result;
 
 use crate::types::index::{Index, IndexId, IndexMeta};
 use crate::types::tuple::{Tuple, TupleId};
@@ -130,11 +130,10 @@ impl TableCodec {
     pub fn encode_tuple(table_name: &str, tuple: &Tuple) -> Result<(Bytes, Bytes)> {
         // let tuple_id = tuple.id.clone().ok_or(DatabaseError::PrimaryKeyNotFound)?;
         let tuple_id = tuple.id.clone();
-        let key = match tuple_id{
+        let key = match tuple_id {
             Some(tuple_id) => Self::encode_tuple_key(table_name, &tuple_id)?,
             None => Self::encode_tuple_key_without_primary_key(table_name)?,
         };
-            
 
         Ok((Bytes::from(key), Bytes::from(tuple.serialize_to())))
     }
@@ -270,14 +269,12 @@ mod tests {
     use std::sync::Arc;
 
     fn build_table_codec() -> TableCatalog {
-        let columns = vec![
-            ColumnCatalog::new(
-                "c1".into(),
-                false,
-                ColumnDesc::new(LogicalType::Integer, true, false, None),
-                None,
-            ),
-        ];
+        let columns = vec![ColumnCatalog::new(
+            "c1".into(),
+            false,
+            ColumnDesc::new(LogicalType::Integer, true, false, None),
+            None,
+        )];
         TableCatalog::new(Arc::new("t1".to_string()), columns).unwrap()
     }
 
@@ -287,9 +284,7 @@ mod tests {
 
         let tuple = Tuple {
             id: Some(Arc::new(DataValue::Int32(Some(0)))),
-            values: vec![
-                Arc::new(DataValue::Int32(Some(0))),
-            ],
+            values: vec![Arc::new(DataValue::Int32(Some(0)))],
         };
         let (_, bytes) = TableCodec::encode_tuple(&table_catalog.name, &tuple)?;
 

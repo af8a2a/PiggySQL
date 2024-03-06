@@ -106,8 +106,8 @@ impl Tuple {
 }
 
 pub fn create_table(tuples: &(SchemaRef, Vec<Tuple>)) -> Table {
-    let schema= &tuples.0;
-    let tuples= &tuples.1;
+    let schema = &tuples.0;
+    let tuples = &tuples.1;
     let mut table = Table::new();
 
     if tuples.is_empty() {

@@ -11,7 +11,9 @@ use self::{
     column_pruning::ColumnPruning,
     combine_operators::{CollapseProject, CombineFilter},
     constant_folder::ConstantFolder,
-    pushdown_limit::{EliminateLimits, LimitProjectTranspose, PushLimitIntoScan, PushLimitThroughJoin},
+    pushdown_limit::{
+        EliminateLimits, LimitProjectTranspose, PushLimitIntoScan, PushLimitThroughJoin,
+    },
     pushdown_predicates::{PushPredicateIntoScan, PushPredicateThroughJoin},
     simplification::SimplifyFilter,
 };
@@ -36,7 +38,7 @@ pub enum RuleImpl {
     // PushDown predicates
     PushPredicateIntoScan,
     PushPredicateThroughJoin,
-    
+
     ConstantFolder,
 }
 
@@ -51,10 +53,9 @@ impl Rule for RuleImpl {
             RuleImpl::CollapseProject => CollapseProject.pattern(),
             RuleImpl::CombineFilter => CombineFilter.pattern(),
             RuleImpl::SimplifyFilter => SimplifyFilter.pattern(),
-            RuleImpl::EliminateLimits=> EliminateLimits.pattern(),
+            RuleImpl::EliminateLimits => EliminateLimits.pattern(),
             RuleImpl::LimitProjectTranspose => LimitProjectTranspose.pattern(),
             RuleImpl::PushLimitThroughJoin => PushLimitThroughJoin.pattern(),
-
         }
     }
 

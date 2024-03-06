@@ -1,10 +1,10 @@
+use crate::errors::*;
 use crate::optimizer::core::pattern::PatternMatcher;
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::batch::{HepBatch, HepBatchStrategy};
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
 use crate::optimizer::heuristic::matcher::HepMatcher;
 use crate::optimizer::rule::RuleImpl;
-use crate::errors::*;
 use crate::planner::LogicalPlan;
 
 pub struct HepOptimizer {

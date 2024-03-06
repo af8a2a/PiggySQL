@@ -1,5 +1,3 @@
-
-
 use crossbeam_skiplist::SkipMap;
 
 use super::{KvScan, StorageEngine};

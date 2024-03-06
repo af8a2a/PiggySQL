@@ -54,4 +54,3 @@ impl PatternMatcher for HepMatcher<'_, '_> {
         true
     }
 }
-

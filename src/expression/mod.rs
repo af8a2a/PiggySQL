@@ -86,7 +86,6 @@ impl ScalarExpression {
         }
     }
 
-
     pub fn return_type(&self) -> LogicalType {
         match self {
             Self::Constant(v) => v.logical_type(),
@@ -105,7 +104,6 @@ impl ScalarExpression {
             } => *return_type,
             Self::IsNull { .. } | Self::In { .. } => LogicalType::Boolean,
             Self::Alias { expr, .. } => expr.return_type(),
-            
         }
     }
 
@@ -295,8 +293,6 @@ impl ScalarExpression {
         }
     }
 }
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum UnaryOperator {

@@ -28,13 +28,13 @@ impl<S: Storage> Database<S> {
     }
 
     // /// Run SQL queries.
-    pub async fn run(&self, sql: &str) -> Result<(SchemaRef,Vec<Tuple>)> {
+    pub async fn run(&self, sql: &str) -> Result<(SchemaRef, Vec<Tuple>)> {
         let mut transaction = self.storage.transaction().await?;
-        let (schema,tuples) = Self::_run(sql, &mut transaction)?;
+        let (schema, tuples) = Self::_run(sql, &mut transaction)?;
 
         transaction.commit().await?;
 
-        Ok((schema,tuples?))
+        Ok((schema, tuples?))
     }
 
     pub async fn new_transaction(&self) -> Result<DBTransaction<S>> {
@@ -55,7 +55,10 @@ impl<S: Storage> Database<S> {
         txn.rollback().await?;
         Ok(best_plan)
     }
-    fn _run(sql: &str, transaction: &mut <S as Storage>::TransactionType) -> Result<(SchemaRef,Source)> {
+    fn _run(
+        sql: &str,
+        transaction: &mut <S as Storage>::TransactionType,
+    ) -> Result<(SchemaRef, Source)> {
         // parse
         let stmts = parser::parse(sql)?;
         if stmts.is_empty() {
@@ -66,8 +69,8 @@ impl<S: Storage> Database<S> {
         // println!("source_plan plan: {:#?}", source_plan);
         let mut best_plan = apply_optimization(source_plan)?;
         // println!("best_plan plan: {:#?}", best_plan);
-        let schema=best_plan.output_schema().clone();
-        Ok((schema,build(best_plan, transaction)))
+        let schema = best_plan.output_schema().clone();
+        Ok((schema, build(best_plan, transaction)))
     }
 }
 
@@ -76,9 +79,9 @@ pub struct DBTransaction<S: Storage> {
 }
 
 impl<S: Storage> DBTransaction<S> {
-    pub async fn run(&mut self, sql: &str) -> Result<(SchemaRef,Vec<Tuple>)> {
-        let (schema,tuples) = Database::<S>::_run(sql, &mut self.inner)?;
-        Ok((schema,tuples?))
+    pub async fn run(&mut self, sql: &str) -> Result<(SchemaRef, Vec<Tuple>)> {
+        let (schema, tuples) = Database::<S>::_run(sql, &mut self.inner)?;
+        Ok((schema, tuples?))
     }
     pub async fn commit(self) -> Result<()> {
         self.inner.commit().await?;
@@ -127,7 +130,7 @@ mod test {
         database
             .run("update halloween set salary = salary + 1000 where salary < 3000")
             .await?;
-        let (_,tuple) = database.run("select salary from halloween;").await?;
+        let (_, tuple) = database.run("select salary from halloween;").await?;
         assert_eq!(tuple.len(), 4);
         assert_eq!(tuple[0].values[0], Arc::new(DataValue::Int32(Some(2000))));
         assert_eq!(tuple[1].values[0], Arc::new(DataValue::Int32(Some(3000))));

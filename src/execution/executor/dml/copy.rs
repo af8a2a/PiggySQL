@@ -1,4 +1,5 @@
 use crate::binder::copy::FileFormat;
+use crate::errors::*;
 use crate::execution::executor::{Executor, Source};
 use crate::planner::operator::copy_from_file::CopyFromFileOperator;
 use crate::storage::Transaction;
@@ -6,10 +7,9 @@ use crate::types::tuple::Tuple;
 use crate::types::tuple_builder::TupleBuilder;
 use csv::Terminator;
 use itertools::Itertools;
-use tracing::debug;
 use std::fs::File;
 use std::io::BufReader;
-use crate::errors::*;
+use tracing::debug;
 #[allow(dead_code)]
 pub struct CopyFromFile {
     op: CopyFromFileOperator,
@@ -24,7 +24,7 @@ impl From<CopyFromFileOperator> for CopyFromFile {
 impl<T: Transaction> Executor<T> for CopyFromFile {
     fn execute(self, transaction: &mut T) -> Source {
         let table_name = self.op.table.clone();
-        let tuples=self.read_file_blocking()?;
+        let tuples = self.read_file_blocking()?;
         let mut size = 0_usize;
         for tuple in tuples {
             transaction.append(&table_name, tuple, false)?;
@@ -73,12 +73,11 @@ impl CopyFromFile {
             .collect_vec();
         debug!("column count: {}", column_count);
         let tuple_builder = TupleBuilder::new(types, self.op.schema_ref.clone());
-        let mut tuples=vec![];
+        let mut tuples = vec![];
         for record in reader.records() {
             // read records and push raw str rows into data chunk builder
             let record = record?;
 
-    
             if !(record.len() == column_count
                 || record.len() == column_count + 1 && record.get(column_count) == Some(""))
             {

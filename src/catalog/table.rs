@@ -3,11 +3,10 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-
+use super::column::{ColumnCatalog, ColumnRef};
+use crate::errors::*;
 use crate::types::index::{IndexId, IndexMeta, IndexMetaRef};
 use crate::types::{ColumnId, LogicalType};
-use crate::errors::*;
-use super::column::{ColumnCatalog, ColumnRef};
 
 pub type TableName = Arc<String>;
 pub type IndexName = Arc<String>;
@@ -73,7 +72,7 @@ impl TableCatalog {
         col.summary.id = Some(col_id);
         self.column_idxs.insert(col.name().to_string(), col_id);
         self.columns.insert(col_id, Arc::new(col));
-        
+
         Ok(col_id)
     }
 
@@ -98,24 +97,18 @@ impl TableCatalog {
         &self.indexes[index_id]
     }
     #[allow(dead_code)]
-    pub(crate) fn get_index_by_name(
-        &mut self,
-        name: IndexName,
-    ) -> Result<IndexId> {
+    pub(crate) fn get_index_by_name(&mut self, name: IndexName) -> Result<IndexId> {
         // let index_id = self.indexes.len();
         let pos = self
             .indexes
             .iter()
-            .find_position(|idx| idx.name ==format!("{}_{}","uk",name));
+            .find_position(|idx| idx.name == format!("{}_{}", "uk", name));
         match pos {
             Some(pos) => Ok(self.indexes[pos.0].id),
-            None =>  Err(DatabaseError::NotFound("index", name.to_string())),
+            None => Err(DatabaseError::NotFound("index", name.to_string())),
         }
     }
-    pub(crate) fn new(
-        name: TableName,
-        columns: Vec<ColumnCatalog>,
-    ) -> Result<TableCatalog> {
+    pub(crate) fn new(name: TableName, columns: Vec<ColumnCatalog>) -> Result<TableCatalog> {
         if columns.is_empty() {
             return Err(DatabaseError::ColumnsEmpty);
         }

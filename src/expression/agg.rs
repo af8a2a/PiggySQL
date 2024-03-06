@@ -1,6 +1,3 @@
-
-
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
@@ -23,4 +20,3 @@ impl Aggregate {
         }
     }
 }
-

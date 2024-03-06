@@ -59,7 +59,10 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
         };
 
-        if let Some(table) = self.context.table(Arc::new(table_name.to_string().to_lowercase())) {
+        if let Some(table) = self
+            .context
+            .table(Arc::new(table_name.to_string().to_lowercase()))
+        {
             let schema_ref = table.all_columns();
             let ext_source = ExtSource {
                 path: match target {

@@ -6,7 +6,7 @@ use strum_macros::Display;
 
 use super::Operator;
 
-#[derive(Debug, PartialEq,Display,  Clone, Copy)]
+#[derive(Debug, PartialEq, Display, Clone, Copy)]
 pub enum JoinType {
     Inner,
     Left,
@@ -44,7 +44,6 @@ impl JoinOperator {
         )
     }
 }
-
 
 impl fmt::Display for JoinOperator {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

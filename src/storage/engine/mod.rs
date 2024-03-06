@@ -1,8 +1,8 @@
-use itertools::Itertools;
 use crate::errors::*;
+use itertools::Itertools;
+pub mod bitcask;
 pub mod memory;
 pub mod sled_store;
-pub mod bitcask;
 pub type KvScan = Box<dyn DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
 
 pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
@@ -16,7 +16,7 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Iterates over an ordered range of key/value pairs.
-    fn scan(&self, range:impl std::ops::RangeBounds<Vec<u8>>) -> Result<KvScan>;
+    fn scan(&self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Result<KvScan>;
 
     /// Sets a value for a key, replacing the existing value if any.
     fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()>;
@@ -40,10 +40,9 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    
+
     /// Generates common tests for any Engine implementation.
     macro_rules! test_engine {
         ($setup:expr) => {
@@ -55,7 +54,10 @@ mod tests {
             {
                 assert_eq!(
                     iter.collect::<Result<Vec<_>>>()?,
-                    expect.into_iter().map(|(k, v)| (k.to_vec(), v)).collect::<Vec<_>>()
+                    expect
+                        .into_iter()
+                        .map(|(k, v)| (k.to_vec(), v))
+                        .collect::<Vec<_>>()
                 );
                 Ok(())
             }
@@ -165,7 +167,10 @@ mod tests {
                 )?;
 
                 // Open ranges.
-                assert_scan(s.scan(b"bb".to_vec()..)?, vec![(b"bb", vec![2, 2]), (b"c", vec![3])])?;
+                assert_scan(
+                    s.scan(b"bb".to_vec()..)?,
+                    vec![(b"bb", vec![2, 2]), (b"c", vec![3])],
+                )?;
                 assert_scan(
                     s.scan(..=b"b".to_vec())?,
                     vec![(b"C", vec![3]), (b"a", vec![1]), (b"b", vec![2])],
@@ -382,8 +387,9 @@ mod tests {
                                 (from, to) = (to, from)
                             }
                             println!("scan {:?} .. {:?}", from, to);
-                            let result =
-                                s.scan(from.clone()..to.clone())?.collect::<Result<Vec<_>>>()?;
+                            let result = s
+                                .scan(from.clone()..to.clone())?
+                                .collect::<Result<Vec<_>>>()?;
                             let expect = m
                                 .range(from..to)
                                 .map(|(k, v)| (k.clone(), v.clone()))
@@ -405,7 +411,6 @@ mod tests {
 
                 Ok(())
             }
-
         };
     }
 

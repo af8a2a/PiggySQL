@@ -17,7 +17,6 @@ use crate::errors::*;
 
 use super::Version;
 
-
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Key {
     /// The next available version.
@@ -33,7 +32,7 @@ pub enum Key {
     TxnWrite(Version, Vec<u8>),
     /// A versioned key/value pair.
     Version(Vec<u8>, Version),
-/// Unversioned non-transactional key/value pairs. These exist separately
+    /// Unversioned non-transactional key/value pairs. These exist separately
     /// from versioned keys, i.e. the unversioned key "foo" is entirely
     /// independent of the versioned key "foo@7". These are mostly used
     /// for metadata.
@@ -48,10 +47,8 @@ pub enum KeyPrefix {
     TxnActiveSnapshot,
     TxnWrite(Version),
     Version(Vec<u8>),
-Unversioned,
+    Unversioned,
 }
-
-
 
 impl KeyPrefix {
     pub fn encode(&self) -> Result<Vec<u8>> {
@@ -61,7 +58,7 @@ impl KeyPrefix {
             KeyPrefix::TxnActiveSnapshot => Ok(vec![0x03]),
             KeyPrefix::TxnWrite(version) => Ok([&[0x04][..], &encode_u64(*version)].concat()),
             KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(key)].concat()),
-KeyPrefix::Unversioned => Ok(vec![0x06]),
+            KeyPrefix::Unversioned => Ok(vec![0x06]),
         }
     }
 }
@@ -75,7 +72,7 @@ impl Key {
             0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
             0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?),
             0x05 => Self::Version(take_bytes(bytes)?, take_u64(bytes)?),
-0x06 => Self::Unversioned(take_bytes(bytes)?),
+            0x06 => Self::Unversioned(take_bytes(bytes)?),
             _ => {
                 return Err(DatabaseError::InternalError(format!(
                     "Invalid key prefix {:?}",
@@ -96,15 +93,10 @@ impl Key {
             Key::Version(key, version) => {
                 Ok([&[0x05][..], &encode_bytes(key), &encode_u64(*version)].concat())
             }
-Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(key)].concat()),
+            Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(key)].concat()),
         }
     }
 }
-
-
-
-
-
 
 /// Encodes a boolean, using 0x00 for false and 0x01 for true.
 pub fn encode_boolean(bool: bool) -> u8 {
@@ -150,12 +142,14 @@ pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
 }
 
 /// Takes a single byte from a slice and shortens it, without any escaping.
-pub fn take_byte(bytes:&mut &[u8]) -> Result<u8> {
+pub fn take_byte(bytes: &mut &[u8]) -> Result<u8> {
     if bytes.is_empty() {
-        return Err(DatabaseError::InternalError("Unexpected end of bytes".into()));
+        return Err(DatabaseError::InternalError(
+            "Unexpected end of bytes".into(),
+        ));
     }
     let b = bytes[0];
-     *bytes = &bytes[1..];
+    *bytes = &bytes[1..];
     Ok(b)
 }
 
@@ -165,7 +159,7 @@ pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>> {
     // the byte size.
     let mut decoded = Vec::with_capacity(bytes.len() / 2);
     let mut iter = bytes.iter().enumerate();
-    let taken=loop {
+    let taken = loop {
         match iter.next().map(|(_, b)| b) {
             Some(0x00) => match iter.next() {
                 Some((i, 0x00)) => break i + 1,        // 0x00 0x00 is terminator
@@ -176,13 +170,21 @@ pub fn take_bytes(bytes: &mut &[u8]) -> Result<Vec<u8>> {
                         b
                     )))
                 }
-                None => return Err(DatabaseError::InternalError("Unexpected end of bytes".into())),
+                None => {
+                    return Err(DatabaseError::InternalError(
+                        "Unexpected end of bytes".into(),
+                    ))
+                }
             },
             Some(b) => decoded.push(*b),
-            None => return Err(DatabaseError::InternalError("Unexpected end of bytes".into())),
+            None => {
+                return Err(DatabaseError::InternalError(
+                    "Unexpected end of bytes".into(),
+                ))
+            }
         }
     };
-     *bytes = &bytes[taken..];
+    *bytes = &bytes[taken..];
     Ok(decoded)
 }
 
@@ -268,7 +270,7 @@ pub fn decode_u64(bytes: [u8; 8]) -> u64 {
 }
 
 /// Decodes a u64 from a slice and shrinks the slice.
-pub fn take_u64(bytes:&mut &[u8]) -> Result<u64> {
+pub fn take_u64(bytes: &mut &[u8]) -> Result<u64> {
     if bytes.len() < 8 {
         return Err(DatabaseError::InternalError(format!(
             "Unable to decode u64 from {} bytes",
@@ -276,10 +278,9 @@ pub fn take_u64(bytes:&mut &[u8]) -> Result<u64> {
         )));
     }
     let n = decode_u64(bytes[0..8].try_into()?);
-     *bytes = &bytes[8..];
+    *bytes = &bytes[8..];
     Ok(n)
 }
-
 
 #[cfg(test)]
 pub mod tests {
@@ -313,8 +314,14 @@ pub mod tests {
     fn encode_bytes() -> Result<()> {
         use super::encode_bytes;
         assert_eq!(encode_bytes(&[]), vec![0x00, 0x00]);
-        assert_eq!(encode_bytes(&[0x01, 0x02, 0x03]), vec![0x01, 0x02, 0x03, 0x00, 0x00]);
-        assert_eq!(encode_bytes(&[0x00, 0x01, 0x02]), vec![0x00, 0xff, 0x01, 0x02, 0x00, 0x00]);
+        assert_eq!(
+            encode_bytes(&[0x01, 0x02, 0x03]),
+            vec![0x01, 0x02, 0x03, 0x00, 0x00]
+        );
+        assert_eq!(
+            encode_bytes(&[0x00, 0x01, 0x02]),
+            vec![0x00, 0xff, 0x01, 0x02, 0x00, 0x00]
+        );
         Ok(())
     }
 
@@ -349,16 +356,46 @@ pub mod tests {
         use super::encode_f64;
         use std::f64;
         use std::f64::consts::PI;
-        assert_eq!(encode_f64(f64::NEG_INFINITY), [0x00, 0x0f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
-        assert_eq!(encode_f64(-PI * 1e100), [0x2b, 0x33, 0x46, 0x0a, 0x3c, 0x0d, 0x14, 0x7b]);
-        assert_eq!(encode_f64(-PI * 1e2), [0x3f, 0x8c, 0x5d, 0x73, 0xa6, 0x2a, 0xbc, 0xc4]);
-        assert_eq!(encode_f64(-0_f64), [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
-        assert_eq!(encode_f64(0_f64), [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode_f64(PI), [0xc0, 0x09, 0x21, 0xfb, 0x54, 0x44, 0x2d, 0x18]);
-        assert_eq!(encode_f64(PI * 1e2), [0xc0, 0x73, 0xa2, 0x8c, 0x59, 0xd5, 0x43, 0x3b]);
-        assert_eq!(encode_f64(PI * 1e100), [0xd4, 0xcc, 0xb9, 0xf5, 0xc3, 0xf2, 0xeb, 0x84]);
-        assert_eq!(encode_f64(f64::INFINITY), [0xff, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode_f64(f64::NAN), [0xff, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(
+            encode_f64(f64::NEG_INFINITY),
+            [0x00, 0x0f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
+        assert_eq!(
+            encode_f64(-PI * 1e100),
+            [0x2b, 0x33, 0x46, 0x0a, 0x3c, 0x0d, 0x14, 0x7b]
+        );
+        assert_eq!(
+            encode_f64(-PI * 1e2),
+            [0x3f, 0x8c, 0x5d, 0x73, 0xa6, 0x2a, 0xbc, 0xc4]
+        );
+        assert_eq!(
+            encode_f64(-0_f64),
+            [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
+        assert_eq!(
+            encode_f64(0_f64),
+            [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+        assert_eq!(
+            encode_f64(PI),
+            [0xc0, 0x09, 0x21, 0xfb, 0x54, 0x44, 0x2d, 0x18]
+        );
+        assert_eq!(
+            encode_f64(PI * 1e2),
+            [0xc0, 0x73, 0xa2, 0x8c, 0x59, 0xd5, 0x43, 0x3b]
+        );
+        assert_eq!(
+            encode_f64(PI * 1e100),
+            [0xd4, 0xcc, 0xb9, 0xf5, 0xc3, 0xf2, 0xeb, 0x84]
+        );
+        assert_eq!(
+            encode_f64(f64::INFINITY),
+            [0xff, 0xf0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+        assert_eq!(
+            encode_f64(f64::NAN),
+            [0xff, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
         Ok(())
     }
 
@@ -404,26 +441,68 @@ pub mod tests {
     #[test]
     fn encode_i64() -> Result<()> {
         use super::encode_i64;
-        assert_eq!(encode_i64(std::i64::MIN), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode_i64(-1024), [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x00]);
-        assert_eq!(encode_i64(-1), [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
-        assert_eq!(encode_i64(0), [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode_i64(1), [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
-        assert_eq!(encode_i64(1024), [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]);
-        assert_eq!(encode_i64(std::i64::MAX), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(
+            encode_i64(std::i64::MIN),
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+        assert_eq!(
+            encode_i64(-1024),
+            [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x00]
+        );
+        assert_eq!(
+            encode_i64(-1),
+            [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
+        assert_eq!(
+            encode_i64(0),
+            [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+        assert_eq!(
+            encode_i64(1),
+            [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
+        );
+        assert_eq!(
+            encode_i64(1024),
+            [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]
+        );
+        assert_eq!(
+            encode_i64(std::i64::MAX),
+            [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
         Ok(())
     }
 
     #[test]
     fn decode_i64() -> Result<()> {
         use super::decode_i64;
-        assert_eq!(decode_i64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), std::i64::MIN);
-        assert_eq!(decode_i64([0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x00]), -1024);
-        assert_eq!(decode_i64([0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), -1);
-        assert_eq!(decode_i64([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), 0);
-        assert_eq!(decode_i64([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]), 1);
-        assert_eq!(decode_i64([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]), 1024);
-        assert_eq!(decode_i64([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), std::i64::MAX);
+        assert_eq!(
+            decode_i64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            std::i64::MIN
+        );
+        assert_eq!(
+            decode_i64([0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfc, 0x00]),
+            -1024
+        );
+        assert_eq!(
+            decode_i64([0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+            -1
+        );
+        assert_eq!(
+            decode_i64([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            0
+        );
+        assert_eq!(
+            decode_i64([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            1
+        );
+        assert_eq!(
+            decode_i64([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]),
+            1024
+        );
+        assert_eq!(
+            decode_i64([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+            std::i64::MAX
+        );
         Ok(())
     }
 
@@ -457,7 +536,10 @@ pub mod tests {
             encode_string("x \u{0000} z"),
             vec![0x78, 0x20, 0x00, 0xff, 0x20, 0x7a, 0x00, 0x00]
         );
-        assert_eq!(encode_string("aáåA"), vec![0x61, 0xc3, 0xa1, 0xc3, 0xa5, 0x41, 0x00, 0x00]);
+        assert_eq!(
+            encode_string("aáåA"),
+            vec![0x61, 0xc3, 0xa1, 0xc3, 0xa5, 0x41, 0x00, 0x00]
+        );
         Ok(())
     }
 
@@ -476,7 +558,9 @@ pub mod tests {
         assert_eq!(take_string(&mut bytes)?, "abc".to_owned());
         assert!(bytes.is_empty());
 
-        let mut bytes: &[u8] = &[0x78, 0x20, 0x00, 0xff, 0x20, 0x7a, 0x00, 0x00, 0x01, 0x02, 0x03];
+        let mut bytes: &[u8] = &[
+            0x78, 0x20, 0x00, 0xff, 0x20, 0x7a, 0x00, 0x00, 0x01, 0x02, 0x03,
+        ];
         assert_eq!(take_string(&mut bytes)?, "x \u{0000} z".to_owned());
         assert_eq!(bytes, &[0x01, 0x02, 0x03]);
 
@@ -489,20 +573,44 @@ pub mod tests {
     #[test]
     fn encode_u64() -> Result<()> {
         use super::encode_u64;
-        assert_eq!(encode_u64(0), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-        assert_eq!(encode_u64(1), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]);
-        assert_eq!(encode_u64(1024), [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]);
-        assert_eq!(encode_u64(std::u64::MAX), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(
+            encode_u64(0),
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
+        assert_eq!(
+            encode_u64(1),
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]
+        );
+        assert_eq!(
+            encode_u64(1024),
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]
+        );
+        assert_eq!(
+            encode_u64(std::u64::MAX),
+            [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
         Ok(())
     }
 
     #[test]
     fn decode_u64() -> Result<()> {
         use super::decode_u64;
-        assert_eq!(decode_u64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), 0);
-        assert_eq!(decode_u64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]), 1);
-        assert_eq!(decode_u64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]), 1024);
-        assert_eq!(decode_u64([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), std::u64::MAX);
+        assert_eq!(
+            decode_u64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+            0
+        );
+        assert_eq!(
+            decode_u64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
+            1
+        );
+        assert_eq!(
+            decode_u64([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00]),
+            1024
+        );
+        assert_eq!(
+            decode_u64([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
+            std::u64::MAX
+        );
         Ok(())
     }
 
@@ -527,6 +635,4 @@ pub mod tests {
 
         Ok(())
     }
-
-
 }

@@ -1,8 +1,8 @@
+use crate::errors::*;
 use crate::expression::BinaryOperator;
 use crate::types::value::{DataValue, ValueRef};
 use crate::types::LogicalType;
 use std::sync::Arc;
-use crate::errors::*;
 
 use super::sum::SumAccumulator;
 use super::Accumulator;

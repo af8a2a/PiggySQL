@@ -8,7 +8,6 @@ use sqlparser::ast::{
 use std::slice;
 use std::sync::Arc;
 
-
 use super::Binder;
 use crate::expression::ScalarExpression;
 use crate::storage::Transaction;

@@ -1,8 +1,8 @@
+use crate::errors::*;
 use crate::expression::{BinaryOperator, ScalarExpression};
 use crate::optimizer::core::pattern::{Pattern, PatternChildrenPredicate};
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
-use crate::errors::*;
 use crate::planner::operator::filter::FilterOperator;
 use crate::planner::operator::Operator;
 use crate::types::LogicalType;
@@ -100,8 +100,6 @@ mod tests {
     use crate::types::LogicalType;
     use std::sync::Arc;
 
-
-
     #[tokio::test]
     async fn test_combine_filter() -> Result<(), DatabaseError> {
         let plan = select_sql_run("select * from t1 where c1 > 1").await?;
@@ -143,6 +141,4 @@ mod tests {
 
         Ok(())
     }
-
-
 }

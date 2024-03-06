@@ -4,6 +4,7 @@ pub(crate) mod copy;
 mod create_index;
 mod create_table;
 mod delete;
+mod describe;
 mod distinct;
 mod drop_index;
 mod drop_table;
@@ -14,7 +15,6 @@ mod select;
 mod set_var;
 mod show;
 mod update;
-mod describe;
 
 use crate::errors::*;
 

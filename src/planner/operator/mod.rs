@@ -1,7 +1,25 @@
 use itertools::Itertools;
 
 use self::{
-    aggregate::AggregateOperator, alter_table::{AddColumnOperator, DropColumnOperator}, copy_from_file::CopyFromFileOperator, create_index::CreateIndexOperator, create_table::CreateTableOperator, delete::DeleteOperator, describe::DescribeOperator, drop_index::DropIndexOperator, drop_table::DropTableOperator, filter::FilterOperator, insert::InsertOperator, join::{JoinCondition, JoinOperator}, limit::LimitOperator, project::ProjectOperator, scan::ScanOperator, set_var::SetVarOperator, sort::SortOperator, update::UpdateOperator, values::ValuesOperator
+    aggregate::AggregateOperator,
+    alter_table::{AddColumnOperator, DropColumnOperator},
+    copy_from_file::CopyFromFileOperator,
+    create_index::CreateIndexOperator,
+    create_table::CreateTableOperator,
+    delete::DeleteOperator,
+    describe::DescribeOperator,
+    drop_index::DropIndexOperator,
+    drop_table::DropTableOperator,
+    filter::FilterOperator,
+    insert::InsertOperator,
+    join::{JoinCondition, JoinOperator},
+    limit::LimitOperator,
+    project::ProjectOperator,
+    scan::ScanOperator,
+    set_var::SetVarOperator,
+    sort::SortOperator,
+    update::UpdateOperator,
+    values::ValuesOperator,
 };
 use crate::catalog::ColumnRef;
 use std::fmt;
@@ -9,9 +27,11 @@ use std::fmt::Formatter;
 
 pub mod aggregate;
 pub mod alter_table;
+pub mod copy_from_file;
 pub mod create_index;
 pub mod create_table;
 pub mod delete;
+pub mod describe;
 pub mod drop_index;
 pub mod drop_table;
 pub mod filter;
@@ -24,8 +44,6 @@ pub mod set_var;
 pub mod sort;
 pub mod update;
 pub mod values;
-pub mod copy_from_file;
-pub mod describe;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operator {
@@ -55,7 +73,6 @@ pub enum Operator {
     CreateIndex(CreateIndexOperator),
     DropIndex(DropIndexOperator),
     CopyFromFile(CopyFromFileOperator),
-
 }
 impl Operator {
     pub fn referenced_columns(&self, only_column_ref: bool) -> Vec<ColumnRef> {

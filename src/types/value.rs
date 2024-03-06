@@ -536,7 +536,7 @@ impl DataValue {
             DataValue::UInt16(Some(v)) => encode_u!(b, v),
             DataValue::UInt32(Some(v)) => encode_u!(b, v),
             DataValue::UInt64(Some(v)) => encode_u!(b, v),
-            DataValue::UUID(Some(v))=>Self::encode_bytes(b, v.as_bytes()),
+            DataValue::UUID(Some(v)) => Self::encode_bytes(b, v.as_bytes()),
             DataValue::Utf8(Some(v)) => Self::encode_bytes(b, v.as_bytes()),
             value => {
                 return if value.is_null() {
@@ -619,11 +619,9 @@ impl DataValue {
     pub fn cast(self, to: &LogicalType) -> Result<DataValue> {
         match self {
             DataValue::Null => match to {
-                LogicalType::Invalid => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                LogicalType::Invalid => {
+                    Err(DatabaseError::CastFail(self.logical_type(), self, *to))
+                }
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(None)),
                 LogicalType::Tinyint => Ok(DataValue::Int8(None)),
@@ -656,11 +654,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Float32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -670,31 +664,22 @@ impl DataValue {
                 LogicalType::Decimal(_, option) => Ok(DataValue::Decimal(
                     value
                         .map(|v| {
-                            let mut decimal = Decimal::from_f32(v).ok_or(
-                                DatabaseError::CastFail(self.logical_type(), self, *to),
-                            )?;
+                            let mut decimal = Decimal::from_f32(v)
+                                .ok_or(DatabaseError::CastFail(self.logical_type(), self, *to))?;
                             Self::decimal_round_f(option, &mut decimal);
 
                             Ok::<Decimal, DatabaseError>(decimal)
                         })
                         .transpose()?,
                 )),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Float64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Double => Ok(DataValue::Float64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Int8(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -716,11 +701,7 @@ impl DataValue {
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Int16(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -740,11 +721,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Int32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -763,11 +740,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v as f32))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Int64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -786,11 +759,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v as f32))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v as f64))),
 
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::UInt8(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -804,11 +773,7 @@ impl DataValue {
                 LogicalType::Float => Ok(DataValue::Float32(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::UInt16(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -821,11 +786,7 @@ impl DataValue {
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
 
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::UInt32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -834,21 +795,13 @@ impl DataValue {
                 LogicalType::UBigint => Ok(DataValue::UInt64(value.map(|v| v.into()))),
                 LogicalType::Double => Ok(DataValue::Float64(value.map(|v| v.into()))),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::UInt64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::UBigint => Ok(DataValue::UInt64(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Utf8(value) => match to {
                 LogicalType::Decimal(_, _) => Ok(DataValue::Decimal(
@@ -934,11 +887,7 @@ impl DataValue {
 
                     Ok(DataValue::Date64(option))
                 }
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Date64(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -952,11 +901,7 @@ impl DataValue {
                     Ok(DataValue::Date32(option))
                 }
                 LogicalType::DateTime => Ok(DataValue::Date64(value)),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             DataValue::Decimal(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -964,18 +909,10 @@ impl DataValue {
                 LogicalType::Double => Ok(DataValue::Float64(value.and_then(|v| v.to_f64()))),
                 LogicalType::Decimal(_, _) => Ok(DataValue::Decimal(value)),
                 LogicalType::Varchar(len) => varchar_cast!(value, len),
-                _ => Err(DatabaseError::CastFail(
-                    self.logical_type(),
-                    self,
-                    *to,
-                )),
+                _ => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
             },
             //now not support uuid cast
-            DataValue::UUID(_) => Err(DatabaseError::CastFail(
-                self.logical_type(),
-                self,
-                *to,
-            )),
+            DataValue::UUID(_) => Err(DatabaseError::CastFail(self.logical_type(), self, *to)),
         }
     }
 

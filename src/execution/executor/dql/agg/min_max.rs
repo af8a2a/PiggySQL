@@ -32,7 +32,9 @@ impl Accumulator for MinMaxAccumulator {
     fn update_value(&mut self, value: &ValueRef) -> Result<()> {
         if !value.is_null() {
             if let Some(inner_value) = &self.inner {
-                if let DataValue::Boolean(Some(result)) = DataValue::binary_op(inner_value, value, &self.op)? {
+                if let DataValue::Boolean(Some(result)) =
+                    DataValue::binary_op(inner_value, value, &self.op)?
+                {
                     result
                 } else {
                     unreachable!()

@@ -1,6 +1,6 @@
 use crate::expression::ScalarExpression;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Display};
+use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -8,7 +8,7 @@ use crate::types::value::ValueRef;
 use crate::types::{ColumnId, LogicalType};
 
 pub type ColumnRef = Arc<ColumnCatalog>;
-pub type SchemaRef=Arc<Vec<ColumnRef>>;
+pub type SchemaRef = Arc<Vec<ColumnRef>>;
 // pub type Schema=Vec<ColumnRef>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
@@ -21,7 +21,11 @@ pub struct ColumnCatalog {
 
 impl Display for ColumnCatalog {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "col name:{},type:{}", self.summary.name,self.desc.column_datatype)
+        write!(
+            f,
+            "col name:{},type:{}",
+            self.summary.name, self.desc.column_datatype
+        )
     }
 }
 

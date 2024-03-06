@@ -1,10 +1,8 @@
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::drop_table::DropTableOperator;
 use crate::storage::Transaction;
 use crate::types::tuple_builder::TupleBuilder;
-
-
 
 pub struct DropTable {
     op: DropTableOperator,

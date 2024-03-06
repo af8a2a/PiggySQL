@@ -100,10 +100,6 @@ impl<'a, T: Transaction> Binder<'a, T> {
         rows: Vec<Vec<ValueRef>>,
         columns: Vec<ColumnRef>,
     ) -> LogicalPlan {
-        LogicalPlan::new(
-            Operator::Values(ValuesOperator { rows, columns }),
-            vec![],
-        )
-
+        LogicalPlan::new(Operator::Values(ValuesOperator { rows, columns }), vec![])
     }
 }

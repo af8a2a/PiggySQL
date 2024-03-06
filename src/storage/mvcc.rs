@@ -436,9 +436,9 @@ impl<E: StorageEngine> MVCC<E> {
         debug!("start MVCC GC!");
         let mut gc_count = 0;
         let oldest_version = *MVCCTransaction::scan_active(&self.engine)?
-        .iter()
-        .min()
-        .unwrap_or(&u64::MAX);
+            .iter()
+            .min()
+            .unwrap_or(&u64::MAX);
 
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {

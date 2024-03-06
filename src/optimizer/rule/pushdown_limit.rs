@@ -22,7 +22,6 @@ lazy_static! {
             }]),
         }
     };
-
     static ref PUSH_LIMIT_INTO_TABLE_SCAN_RULE: Pattern = {
         Pattern {
             predicate: |op| matches!(op, Operator::Limit(_)),
@@ -50,7 +49,6 @@ lazy_static! {
             }]),
         }
     };
-
 }
 /// Push down `Limit` past a `Scan`.
 pub struct PushLimitIntoScan;
@@ -79,14 +77,12 @@ impl Rule for PushLimitIntoScan {
 
 pub struct PushLimitThroughJoin;
 
-
 impl Rule for PushLimitThroughJoin {
     fn pattern(&self) -> &Pattern {
         &PUSH_LIMIT_THROUGH_JOIN_RULE
     }
 
     fn apply(&self, node_id: HepNodeId, graph: &mut HepGraph) -> Result<()> {
-    
         if let Operator::Limit(op) = graph.operator(node_id) {
             if let Some(child_id) = graph.eldest_child_at(node_id) {
                 let join_type = if let Operator::Join(op) = graph.operator(child_id) {
@@ -113,10 +109,7 @@ impl Rule for PushLimitThroughJoin {
     }
 }
 
-
-
 pub struct LimitProjectTranspose;
-
 
 impl Rule for LimitProjectTranspose {
     fn pattern(&self) -> &Pattern {
@@ -131,7 +124,6 @@ impl Rule for LimitProjectTranspose {
         Ok(())
     }
 }
-
 
 /// Combines two adjacent Limit operators into one, merging the expressions into one single
 /// expression.

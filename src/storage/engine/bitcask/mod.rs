@@ -83,19 +83,19 @@ impl BitCask {
 
         let garbage_ratio = garbage_disk_size as f64 / total_disk_size as f64;
         if garbage_disk_size > 0 && garbage_ratio >= garbage_ratio_threshold {
-        debug!(
-            "Compacting {} to remove {:.3}MB garbage ({:.0}% of {:.3}MB)",
-            s.log.path.display(),
-            garbage_disk_size / 1024 / 1024,
-            garbage_ratio * 100.0,
-            total_disk_size / 1024 / 1024
-        );
-        s.compact()?;
-        debug!(
-            "Compacted {} to size {:.3}MB",
-            s.log.path.display(),
-            (total_disk_size - garbage_disk_size) / 1024 / 1024
-        );
+            debug!(
+                "Compacting {} to remove {:.3}MB garbage ({:.0}% of {:.3}MB)",
+                s.log.path.display(),
+                garbage_disk_size / 1024 / 1024,
+                garbage_ratio * 100.0,
+                total_disk_size / 1024 / 1024
+            );
+            s.compact()?;
+            debug!(
+                "Compacted {} to size {:.3}MB",
+                s.log.path.display(),
+                (total_disk_size - garbage_disk_size) / 1024 / 1024
+            );
         }
 
         Ok(s)
@@ -120,9 +120,7 @@ impl StorageEngine for BitCask {
     }
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        if let Some((value_pos, value_len)) =
-            self.keydir.get(key).map(|entry| *entry.value())
-        {
+        if let Some((value_pos, value_len)) = self.keydir.get(key).map(|entry| *entry.value()) {
             Ok(Some(self.log.read_value(value_pos, value_len)?))
         } else {
             Ok(None)

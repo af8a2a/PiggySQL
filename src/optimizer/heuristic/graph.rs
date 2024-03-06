@@ -184,7 +184,7 @@ impl HepGraph {
         let mut root_plan = LogicalPlan {
             operator: self.operator(start_index).clone(),
             childrens: vec![],
-            _output_schema_ref:None
+            _output_schema_ref: None,
         };
 
         self.build_childrens(&mut root_plan, start_index);
@@ -197,7 +197,7 @@ impl HepGraph {
             let mut child_plan = LogicalPlan {
                 operator: self.operator(child_id).clone(),
                 childrens: vec![],
-                _output_schema_ref:None
+                _output_schema_ref: None,
             };
 
             self.build_childrens(&mut child_plan, child_id);
@@ -208,8 +208,8 @@ impl HepGraph {
 
 #[cfg(test)]
 mod tests {
-    use crate::errors::*;
     use crate::binder::test::select_sql_run;
+    use crate::errors::*;
     use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
     use crate::planner::operator::Operator;
     use petgraph::stable_graph::{EdgeIndex, NodeIndex};

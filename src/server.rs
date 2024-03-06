@@ -200,7 +200,7 @@ impl ExtendedQueryHandler for Session {
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
                 // debug!("tuples: {:?}", tuples);
-                Ok(Response::Query(encode_tuples(schema,tuples)?))
+                Ok(Response::Query(encode_tuples(schema, tuples)?))
             }
         }
     }
@@ -283,14 +283,14 @@ impl SimpleQueryHandler for Session {
             _ => {
                 let mut guard = self.tx.lock().await;
 
-                let (schema,tuples) = if let Some(transaction) = guard.as_mut() {
+                let (schema, tuples) = if let Some(transaction) = guard.as_mut() {
                     transaction.run(query).await
                 } else {
                     self.inner.run(query).await
                 }
                 .map_err(|e| PgWireError::ApiError(Box::new(e)))?;
 
-                Ok(vec![Response::Query(encode_tuples(schema,tuples)?)])
+                Ok(vec![Response::Query(encode_tuples(schema, tuples)?)])
             }
         }
     }

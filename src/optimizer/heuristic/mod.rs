@@ -1,4 +1,4 @@
-pub mod optimizer;
+pub(crate) mod batch;
 pub(crate) mod graph;
 pub(crate) mod matcher;
-pub(crate) mod batch;
+pub mod optimizer;

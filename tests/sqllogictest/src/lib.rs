@@ -32,7 +32,7 @@ impl AsyncDB for Mock<Memory> {
         sql: &str,
     ) -> Result<sqllogictest::DBOutput<Self::ColumnType>, Self::Error> {
         let start = Instant::now();
-        let (schema,tuples) = self.db.run(sql).await?;
+        let (schema, tuples) = self.db.run(sql).await?;
         println!("|— Input SQL:");
         println!(" |— {}", sql);
         println!(" |— Time consuming: {:?}", start.elapsed());

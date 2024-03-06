@@ -321,14 +321,20 @@ impl<'a, T: Transaction> Binder<'a, T> {
         children: LogicalPlan,
         select_list: Vec<ScalarExpression>,
     ) -> LogicalPlan {
-        LogicalPlan::new(Operator::Project(ProjectOperator { exprs: select_list }), vec![children])
+        LogicalPlan::new(
+            Operator::Project(ProjectOperator { exprs: select_list }),
+            vec![children],
+        )
     }
 
     fn bind_sort(&mut self, children: LogicalPlan, sort_fields: Vec<SortField>) -> LogicalPlan {
-        LogicalPlan::new(Operator::Sort(SortOperator {
-            sort_fields,
-            limit: None,
-        }),vec![children])
+        LogicalPlan::new(
+            Operator::Sort(SortOperator {
+                sort_fields,
+                limit: None,
+            }),
+            vec![children],
+        )
     }
 
     fn bind_limit(

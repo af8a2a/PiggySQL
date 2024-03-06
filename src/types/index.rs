@@ -1,5 +1,5 @@
+use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use crate::{types::value::ValueRef};
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -29,7 +29,6 @@ impl Index {
         Index { id, column_values }
     }
 }
-
 
 impl fmt::Display for IndexMeta {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

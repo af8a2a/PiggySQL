@@ -1,12 +1,7 @@
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::scan::ScanOperator;
 use crate::storage::{Iter, Transaction};
-
-
-
-
-
 
 pub(crate) struct SeqScan {
     op: ScanOperator,
@@ -26,10 +21,9 @@ impl<T: Transaction> Executor<T> for SeqScan {
             limit,
             ..
         } = self.op;
-        let mut iter = transaction.read(table_name,limit, columns)?;
+        let mut iter = transaction.read(table_name, limit, columns)?;
         // let mut tuples = Vec::new();
         let tuples = iter.fetch_tuple()?.unwrap_or(vec![]);
         Ok(tuples)
     }
 }
-

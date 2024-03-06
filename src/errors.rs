@@ -8,7 +8,10 @@ use std::{
 use chrono::ParseError;
 use sqlparser::parser::ParserError;
 pub type Result<T> = std::result::Result<T, DatabaseError>;
-use crate::{expression::BinaryOperator, types::{value::DataValue, LogicalType}};
+use crate::{
+    expression::BinaryOperator,
+    types::{value::DataValue, LogicalType},
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DatabaseError {
@@ -21,7 +24,7 @@ pub enum DatabaseError {
     #[error("not implemented sqlparser datatype: {0}")]
     NotImplementedSqlparserDataType(String),
     #[error("Type:{0},lhs:{1} cast to {2} fail")]
-    CastFail(LogicalType,DataValue, LogicalType),
+    CastFail(LogicalType, DataValue, LogicalType),
     #[error("too long")]
     TooLong,
     #[error("cannot be Null")]
@@ -182,5 +185,4 @@ pub enum DatabaseError {
     ),
     #[error("the {0} cannot support {1} for calculations")]
     UnsupportedBinaryOperator(LogicalType, BinaryOperator),
-
 }

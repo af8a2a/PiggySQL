@@ -1,11 +1,9 @@
-use crate::execution::executor::{Source, Executor};
+use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::create_index::CreateIndexOperator;
 use crate::storage::Transaction;
 
 use crate::types::tuple_builder::TupleBuilder;
-
-
 
 pub struct CreateIndex {
     op: CreateIndexOperator,
@@ -24,8 +22,7 @@ impl<T: Transaction> Executor<T> for CreateIndex {
             index_name,
             col_name,
         } = self.op;
-        let _ = transaction
-            .create_index(table_name.clone(), index_name, &col_name)?;
+        let _ = transaction.create_index(table_name.clone(), index_name, &col_name)?;
         let tuple_builder = TupleBuilder::new_result();
         let tuple = tuple_builder
             .push_result("CREATE INDEX SUCCESS", format!("{}", table_name).as_str())?;

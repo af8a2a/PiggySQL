@@ -48,7 +48,7 @@ impl<T: Transaction> Executor<T> for Update {
         } = self;
         let schema = input.output_schema().clone();
         let input = build(input, transaction)?;
-        let  input_len=input.len();
+        let input_len = input.len();
 
         if let Some(table_catalog) = transaction.table(table_name.clone()) {
             //避免halloween问题
@@ -72,7 +72,7 @@ impl<T: Transaction> Executor<T> for Update {
                     .filter(|col| update_col.contains(&col.id()))
                     .enumerate()
                 {
-                    let value = set_expr[i].eval(&tuple,&schema)?;
+                    let value = set_expr[i].eval(&tuple, &schema)?;
 
                     if column.desc.is_primary {
                         //refuse to update primary key

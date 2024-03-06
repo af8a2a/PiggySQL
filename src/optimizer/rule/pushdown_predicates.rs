@@ -1,17 +1,16 @@
 use crate::catalog::ColumnRef;
+use crate::errors::*;
 use crate::expression::{BinaryOperator, ScalarExpression};
 use crate::optimizer::core::pattern::Pattern;
 use crate::optimizer::core::pattern::PatternChildrenPredicate;
 use crate::optimizer::core::rule::Rule;
 use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
-use crate::errors::*;
 use crate::planner::operator::filter::FilterOperator;
 use crate::planner::operator::join::JoinType;
 use crate::planner::operator::Operator;
 use crate::types::LogicalType;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-
 
 lazy_static! {
     static ref PUSH_PREDICATE_THROUGH_JOIN: Pattern = {
@@ -23,8 +22,6 @@ lazy_static! {
             }]),
         }
     };
-
-
     static ref PUSH_PREDICATE_INTO_SCAN: Pattern = {
         Pattern {
             predicate: |op| matches!(op, Operator::Filter(_)),
@@ -35,7 +32,6 @@ lazy_static! {
         }
     };
 }
-
 
 fn split_conjunctive_predicates(expr: &ScalarExpression) -> Vec<ScalarExpression> {
     match expr {
@@ -75,7 +71,6 @@ fn reduce_filters(filters: Vec<ScalarExpression>, having: bool) -> Option<Filter
 pub fn is_subset_cols(left: &[ColumnRef], right: &[ColumnRef]) -> bool {
     left.iter().all(|l| right.contains(l))
 }
-
 
 pub struct PushPredicateIntoScan;
 
@@ -119,7 +114,6 @@ impl Rule for PushPredicateIntoScan {
         Ok(())
     }
 }
-
 
 pub struct PushPredicateThroughJoin;
 
@@ -225,7 +219,6 @@ impl Rule for PushPredicateThroughJoin {
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod tests {

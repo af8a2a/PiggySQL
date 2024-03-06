@@ -1,4 +1,4 @@
-use crate::catalog::{ColumnSummary};
+use crate::catalog::ColumnSummary;
 use crate::errors::*;
 use crate::expression::agg::Aggregate;
 use crate::expression::ScalarExpression;
@@ -148,7 +148,7 @@ impl ColumnPruning {
         node_id: HepNodeId,
         graph: &mut HepGraph,
     ) {
-        for child_id in graph.children_at(node_id){
+        for child_id in graph.children_at(node_id) {
             let copy_references: HashSet<&ColumnSummary> = referenced_columns.clone();
 
             Self::_apply(copy_references, all_referenced, child_id, graph);

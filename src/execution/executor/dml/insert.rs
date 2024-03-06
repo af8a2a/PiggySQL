@@ -65,7 +65,7 @@ impl<T: Transaction> Executor<T> for Insert {
                         .map(|col| col.id().unwrap())
                 });
                 let all_columns = table_catalog.all_columns_with_id();
-                let tuple_id = match primary_col_id{
+                let tuple_id = match primary_col_id {
                     Some(primary_col_id) => tuple_map.get(primary_col_id).cloned(),
                     None => None,
                 };

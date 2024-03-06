@@ -28,4 +28,3 @@ async fn main() {
         println!("-> Pass!\n\n")
     }
 }
-

@@ -15,4 +15,3 @@ impl fmt::Display for DropTableOperator {
         Ok(())
     }
 }
-

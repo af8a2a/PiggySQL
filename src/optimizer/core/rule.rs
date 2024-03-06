@@ -1,7 +1,5 @@
-use crate::optimizer::{
-    heuristic::graph::{HepGraph, HepNodeId},
-};
 use crate::errors::*;
+use crate::optimizer::heuristic::graph::{HepGraph, HepNodeId};
 
 use super::pattern::Pattern;
 

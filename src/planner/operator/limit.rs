@@ -20,7 +20,6 @@ impl LimitOperator {
             Operator::Limit(LimitOperator { offset, limit }),
             vec![children],
         )
-
     }
 }
 impl fmt::Display for LimitOperator {

@@ -1,6 +1,4 @@
-
-
-use crate::catalog::{ColumnRef};
+use crate::catalog::ColumnRef;
 use crate::errors::*;
 use crate::types::value::{DataValue, ValueRef};
 use crate::types::LogicalType;
@@ -34,10 +32,7 @@ impl TupleBuilder {
 
     pub fn push_result(self, _header: &str, message: &str) -> Result<Tuple> {
         let values: Vec<ValueRef> = vec![Arc::new(DataValue::Utf8(Some(String::from(message))))];
-        let t = Tuple {
-            id: None,
-            values,
-        };
+        let t = Tuple { id: None, values };
         Ok(t)
     }
 
@@ -80,10 +75,7 @@ impl TupleBuilder {
     //     Ok(tuple)
     // }
 
-    pub fn build_with_row<'b>(
-        &self,
-        row: impl IntoIterator<Item = &'b str>,
-    ) -> Result<Tuple> {
+    pub fn build_with_row<'b>(&self, row: impl IntoIterator<Item = &'b str>) -> Result<Tuple> {
         let mut values = Vec::with_capacity(self.columns.len());
         let mut primary_key = None;
 
@@ -99,7 +91,10 @@ impl TupleBuilder {
             values.push(data_value);
         }
         if values.len() != self.columns.len() {
-            return Err(DatabaseError::MisMatch("types".to_string(), "values".to_string()));
+            return Err(DatabaseError::MisMatch(
+                "types".to_string(),
+                "values".to_string(),
+            ));
         }
 
         Ok(Tuple {
@@ -107,5 +102,4 @@ impl TupleBuilder {
             values,
         })
     }
-
 }
