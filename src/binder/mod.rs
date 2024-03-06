@@ -226,7 +226,7 @@ fn lower_case_name(name: &ObjectName) -> ObjectName {
     ObjectName(
         name.0
             .iter()
-            .map(|ident| Ident::new(ident.value.to_string()))
+            .map(|ident| Ident::new(ident.value.to_lowercase()))
             .collect(),
     )
 }
