@@ -39,7 +39,7 @@ dashmap = "5.4.0"
 crc32fast = "1.3.2"
 csv = "1"
 rust_decimal = "1"
-
+uuid = {version="1.7.0",features=["serde"]}
 [dev-dependencies]
 cargo-tarpaulin = "0.27.1"
 tokio-test = "0.4.2"

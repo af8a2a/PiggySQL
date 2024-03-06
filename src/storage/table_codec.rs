@@ -5,6 +5,7 @@ use crate::types::index::{Index, IndexId, IndexMeta};
 use crate::types::tuple::{Tuple, TupleId};
 use bytes::Bytes;
 use lazy_static::lazy_static;
+use uuid::Uuid;
 const BOUND_MIN_TAG: u8 = 0;
 const BOUND_MAX_TAG: u8 = 1;
 lazy_static! {
@@ -139,8 +140,7 @@ impl TableCodec {
     pub fn encode_tuple_key_without_primary_key(table_name: &str) -> Result<Vec<u8>> {
         let mut key_prefix = Self::key_prefix(CodecType::Tuple, table_name);
         key_prefix.push(BOUND_MIN_TAG);
-
-        // tuple_id.to_primary_key(&mut key_prefix)?;
+        let id = Uuid::new_v4().to_u128_le();
 
         Ok(key_prefix)
     }

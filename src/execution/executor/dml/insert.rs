@@ -63,12 +63,16 @@ impl<T: Transaction> Executor<T> for Insert {
                         .iter()
                         .find(|col| col.desc.is_primary)
                         .map(|col| col.id().unwrap())
-                        .unwrap()
                 });
                 let all_columns = table_catalog.all_columns_with_id();
-                let tuple_id = tuple_map.get(primary_col_id).cloned().unwrap();
+                let tuple_id = match primary_col_id{
+                    Some(primary_col_id) => tuple_map.get(primary_col_id).cloned(),
+                    None => None,
+                };
+
+                // tuple_map.get(primary_col_id).cloned().unwrap();
                 let mut tuple = Tuple {
-                    id: Some(tuple_id.clone()),
+                    id: tuple_id.clone(),
                     values: Vec::with_capacity(all_columns.len()),
                 };
                 for (col_id, col) in all_columns {
@@ -104,7 +108,7 @@ impl<T: Transaction> Executor<T> for Insert {
                             column_values: vec![value],
                         };
 
-                        transaction.add_index(&table_name, index, vec![tuple_id], true)?;
+                        transaction.add_index(&table_name, index, vec![tuple_id.unwrap()], true)?;
                     }
                 }
             }

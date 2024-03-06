@@ -211,7 +211,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
 impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
         let mut tuples = Vec::new();
-        let schema=self.table.all_columns();
+        let schema = self.table.all_columns();
         for binary in self.binaries.iter().cloned() {
             match binary {
                 ConstantBinary::Scope { min, max } => {
@@ -247,9 +247,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                         let collect = collect_iter
                             .iter()
                             .filter_map(|res| res.ok())
-                            .map(|(_, v)| -> Tuple {
-                                TableCodec::decode_tuple(&schema, &v)
-                            })
+                            .map(|(_, v)| -> Tuple { TableCodec::decode_tuple(&schema, &v) })
                             .collect_vec();
                         tuples.extend(collect);
                     } else {
@@ -383,7 +381,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     fn append(&mut self, table_name: &str, tuple: Tuple, is_overwrite: bool) -> Result<()> {
         let (key, value) = TableCodec::encode_tuple(table_name, &tuple)?;
 
-        if !is_overwrite && self.tx.get(&key)?.is_some() {
+        if !is_overwrite && self.tx.get(&key)?.is_some() && tuple.id.is_some() {
             return Err(DatabaseError::DuplicatePrimaryKey);
         }
         self.tx.set(&key, value.to_vec())?;

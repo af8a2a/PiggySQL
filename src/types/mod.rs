@@ -38,6 +38,8 @@ pub enum LogicalType {
     DateTime,
     // decimal (precision, scale)
     Decimal(Option<u8>, Option<u8>),
+    //uuid now only support to non-pk table,and use to identify a tuple
+    UUID,
 }
 
 impl LogicalType {
@@ -97,6 +99,7 @@ impl LogicalType {
             LogicalType::Date => Some(4),
             LogicalType::DateTime => Some(8),
             LogicalType::Decimal(_, _) => Some(16),
+            LogicalType::UUID => Some(16),
         }
     }
 
@@ -283,6 +286,7 @@ impl LogicalType {
             LogicalType::Date => matches!(to, LogicalType::DateTime | LogicalType::Varchar(_)),
             LogicalType::DateTime => matches!(to, LogicalType::Date | LogicalType::Varchar(_)),
             LogicalType::Decimal(_, _) => false,
+            LogicalType::UUID => false,
         }
     }
 }

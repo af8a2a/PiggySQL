@@ -11,6 +11,7 @@ use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fmt, mem};
+use uuid::Uuid;
 
 use crate::errors::*;
 use ordered_float::OrderedFloat;
@@ -50,6 +51,7 @@ pub enum DataValue {
     Date32(Option<i32>),
     /// Date stored as a signed 64bit int timestamp since UNIX epoch 1970-01-01
     Date64(Option<i64>),
+    UUID(Option<Uuid>),
     Decimal(Option<Decimal>),
 }
 
@@ -81,7 +83,9 @@ generate_get_option!(DataValue,
     u16 : UInt16(Option<u16>),
     u32 : UInt32(Option<u32>),
     u64 : UInt64(Option<u64>),
-    utf8 : Utf8(Option<String>)
+    utf8 : Utf8(Option<String>),
+    // decimal : Decimal(Option<Decimal>),
+    uuid: UUID(Option<Uuid>)
 
 );
 
@@ -129,6 +133,8 @@ impl PartialEq for DataValue {
             (Date64(_), _) => false,
             (Decimal(v1), Decimal(v2)) => v1.eq(v2),
             (Decimal(_), _) => false,
+            (UUID(v1), UUID(v2)) => v1.eq(v2),
+            (UUID(_), _) => false,
         }
     }
 }
@@ -177,6 +183,8 @@ impl PartialOrd for DataValue {
             (Date64(_), _) => None,
             (Decimal(v1), Decimal(v2)) => v1.partial_cmp(v2),
             (Decimal(_), _) => None,
+            (UUID(v1), UUID(v2)) => v1.partial_cmp(v2),
+            (UUID(_), _) => None,
         }
     }
 }
@@ -215,6 +223,7 @@ impl Hash for DataValue {
             Date32(v) => v.hash(state),
             Date64(v) => v.hash(state),
             Decimal(v) => v.hash(state),
+            UUID(v) => v.hash(state),
         }
     }
 }
@@ -316,6 +325,7 @@ impl DataValue {
             DataValue::Date32(value) => value.is_none(),
             DataValue::Date64(value) => value.is_none(),
             DataValue::Decimal(value) => value.is_none(),
+            DataValue::UUID(value) => value.is_none(),
         }
     }
 
@@ -338,6 +348,7 @@ impl DataValue {
             LogicalType::Date => DataValue::Date32(None),
             LogicalType::DateTime => DataValue::Date64(None),
             LogicalType::Decimal(_, _) => DataValue::Decimal(None),
+            LogicalType::UUID => DataValue::UUID(None),
         }
     }
 
@@ -360,6 +371,7 @@ impl DataValue {
             LogicalType::Date => DataValue::Date32(Some(UNIX_DATETIME.num_days_from_ce())),
             LogicalType::DateTime => DataValue::Date64(Some(UNIX_DATETIME.timestamp())),
             LogicalType::Decimal(_, _) => DataValue::Decimal(Some(Decimal::new(0, 0))),
+            LogicalType::UUID => DataValue::UUID(Some(Uuid::new_v4())),
         }
     }
 
@@ -381,6 +393,7 @@ impl DataValue {
             DataValue::Date32(v) => v.map(|v| v.encode_fixed_vec()),
             DataValue::Date64(v) => v.map(|v| v.encode_fixed_vec()),
             DataValue::Decimal(v) => v.map(|v| v.serialize().to_vec()),
+            DataValue::UUID(v) => v.map(|v| v.as_bytes().to_vec()),
         }
         .unwrap_or(vec![])
     }
@@ -437,6 +450,9 @@ impl DataValue {
                 (!bytes.is_empty())
                     .then(|| Decimal::deserialize(<[u8; 16]>::try_from(bytes).unwrap())),
             ),
+            LogicalType::UUID => {
+                DataValue::UUID((!bytes.is_empty()).then(|| Uuid::from_slice(bytes).unwrap()))
+            }
         }
     }
 
@@ -458,6 +474,7 @@ impl DataValue {
             DataValue::Date32(_) => LogicalType::Date,
             DataValue::Date64(_) => LogicalType::DateTime,
             DataValue::Decimal(_) => LogicalType::Decimal(None, None),
+            DataValue::UUID(_) => LogicalType::UUID,
         }
     }
 
@@ -622,6 +639,7 @@ impl DataValue {
                 LogicalType::Date => Ok(DataValue::Date32(None)),
                 LogicalType::DateTime => Ok(DataValue::Date64(None)),
                 LogicalType::Decimal(_, _) => Ok(DataValue::Decimal(None)),
+                LogicalType::UUID => Ok(DataValue::UUID(None)),
             },
             DataValue::Boolean(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -900,6 +918,7 @@ impl DataValue {
 
                     Ok(DataValue::Date64(option))
                 }
+                LogicalType::UUID => todo!(),
             },
             DataValue::Date32(value) => match to {
                 LogicalType::SqlNull => Ok(DataValue::Null),
@@ -950,6 +969,12 @@ impl DataValue {
                     to.clone(),
                 )),
             },
+            //now not support uuid cast
+            DataValue::UUID(_) => Err(DatabaseError::CastFail(
+                self.logical_type(),
+                self,
+                to.clone(),
+            )),
         }
     }
 
@@ -1048,6 +1073,7 @@ impl fmt::Display for DataValue {
             DataValue::Date32(e) => format_option!(f, e.and_then(DataValue::date_format))?,
             DataValue::Date64(e) => format_option!(f, e.and_then(DataValue::date_time_format))?,
             DataValue::Decimal(e) => format_option!(f, e.as_ref().map(DataValue::decimal_format))?,
+            DataValue::UUID(e) => format_option!(f, e)?,
         };
         Ok(())
     }
@@ -1073,6 +1099,7 @@ impl fmt::Debug for DataValue {
             DataValue::Date32(_) => write!(f, "Date32({})", self),
             DataValue::Date64(_) => write!(f, "Date64({})", self),
             DataValue::Decimal(_) => write!(f, "Decimal({})", self),
+            DataValue::UUID(_) => write!(f, "UUID({})", self),
         }
     }
 }
