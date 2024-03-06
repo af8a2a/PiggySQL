@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
             sql.push(format!(
                 "SELECT m.id, m.title, g.name FROM movies m JOIN genres g ON m.genre_id = g.id LIMIT 4;"
             ));
-            sql.push(format!("UPDATE movies SET rating = rating+1;"));
+            sql.push("UPDATE movies SET rating = rating+1;".to_string());
             let client = SQLClient::connect().await.unwrap();
             client.query_txn(sql).await.unwrap();
         })));

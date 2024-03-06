@@ -45,8 +45,8 @@ impl TableCatalog {
     #[allow(dead_code)]
     pub(crate) fn types(&self) -> Vec<LogicalType> {
         self.columns
-            .iter()
-            .map(|(_, column)| *column.datatype())
+            .values()
+            .map(|column| *column.datatype())
             .collect_vec()
     }
 
@@ -109,7 +109,7 @@ impl TableCatalog {
             .find_position(|idx| idx.name ==format!("{}_{}","uk",name.to_string()));
         match pos {
             Some(pos) => Ok(self.indexes[pos.0].id),
-            None => return Err(DatabaseError::NotFound("index", name.to_string())),
+            None =>  Err(DatabaseError::NotFound("index", name.to_string())),
         }
     }
     pub(crate) fn new(

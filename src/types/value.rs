@@ -622,7 +622,7 @@ impl DataValue {
                 LogicalType::Invalid => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(None)),
@@ -659,7 +659,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Float32(value) => match to {
@@ -671,7 +671,7 @@ impl DataValue {
                     value
                         .map(|v| {
                             let mut decimal = Decimal::from_f32(v).ok_or(
-                                DatabaseError::CastFail(self.logical_type(), self, to.clone()),
+                                DatabaseError::CastFail(self.logical_type(), self, *to),
                             )?;
                             Self::decimal_round_f(option, &mut decimal);
 
@@ -682,7 +682,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Float64(value) => match to {
@@ -693,7 +693,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Int8(value) => match to {
@@ -719,7 +719,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Int16(value) => match to {
@@ -743,7 +743,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Int32(value) => match to {
@@ -766,7 +766,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Int64(value) => match to {
@@ -789,7 +789,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::UInt8(value) => match to {
@@ -807,7 +807,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::UInt16(value) => match to {
@@ -824,7 +824,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::UInt32(value) => match to {
@@ -837,7 +837,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::UInt64(value) => match to {
@@ -847,7 +847,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Utf8(value) => match to {
@@ -857,7 +857,7 @@ impl DataValue {
                 LogicalType::Invalid => Err(DatabaseError::CastFail(
                     LogicalType::Invalid,
                     DataValue::Utf8(value),
-                    to.clone(),
+                    *to,
                 )),
                 LogicalType::SqlNull => Ok(DataValue::Null),
                 LogicalType::Boolean => Ok(DataValue::Boolean(
@@ -937,7 +937,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Date64(value) => match to {
@@ -955,7 +955,7 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             DataValue::Decimal(value) => match to {
@@ -967,14 +967,14 @@ impl DataValue {
                 _ => Err(DatabaseError::CastFail(
                     self.logical_type(),
                     self,
-                    to.clone(),
+                    *to,
                 )),
             },
             //now not support uuid cast
             DataValue::UUID(_) => Err(DatabaseError::CastFail(
                 self.logical_type(),
                 self,
-                to.clone(),
+                *to,
             )),
         }
     }

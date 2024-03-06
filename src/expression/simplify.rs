@@ -247,7 +247,7 @@ impl ConstantBinary {
             .next()
             .map(ConstantBinary::Eq);
 
-        return if let Some(eq) = eq_option {
+        if let Some(eq) = eq_option {
             Ok(vec![eq])
         } else if !matches!(
             (&scope_min, &scope_max),
@@ -261,7 +261,7 @@ impl ConstantBinary {
             Ok(vec![scope_binary])
         } else {
             Ok(vec![])
-        };
+        }
     }
 
     // Tips: It only makes sense if the condition is or aggregation
@@ -371,7 +371,7 @@ impl ConstantBinary {
             .chain(eqs.into_iter().map(|val| ConstantBinary::Eq(val.clone())))
             .collect_vec()
     }
-    fn join_write(f: &mut Formatter, binaries: &Vec<ConstantBinary>, op: &str) -> fmt::Result {
+    fn join_write(f: &mut Formatter, binaries: &[ConstantBinary], op: &str) -> fmt::Result {
         let binaries = binaries.iter().map(|binary| format!("{}", binary)).join(op);
         write!(f, " {} ", binaries)?;
 
@@ -415,10 +415,7 @@ impl ScalarExpression {
                 ..
             } => left_expr.exist_column(col_id) || right_expr.exist_column(col_id),
             ScalarExpression::In { expr, args, .. } => {
-                expr.exist_column(col_id)
-                    || args
-                        .iter()
-                        .any(|expr| expr.exist_column(col_id))
+                expr.exist_column(col_id) || args.iter().any(|expr| expr.exist_column(col_id))
             }
 
             _ => false,
@@ -646,7 +643,8 @@ impl ScalarExpression {
             }
             ScalarExpression::Unary { expr, op, ty } => {
                 if let Some(val) = expr.unpack_val() {
-                    let new_expr = ScalarExpression::Constant(Arc::new(DataValue::unary_op(&val, op)?));
+                    let new_expr =
+                        ScalarExpression::Constant(Arc::new(DataValue::unary_op(&val, op)?));
                     let _ = mem::replace(self, new_expr);
                 } else {
                     replaces.push(Replace::Unary(ReplaceUnary {
@@ -879,7 +877,7 @@ impl ScalarExpression {
             }
             ScalarExpression::Alias { expr, .. }
             | ScalarExpression::TypeCast { expr, .. }
-            | ScalarExpression::In { expr,.. }
+            | ScalarExpression::In { expr, .. }
             | ScalarExpression::Unary { expr, .. } => expr.convert_binary(col_id),
             ScalarExpression::IsNull { expr, negated } => match expr.as_ref() {
                 ScalarExpression::ColumnRef(column) => {
