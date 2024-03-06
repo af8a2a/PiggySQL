@@ -536,6 +536,7 @@ impl DataValue {
             DataValue::UInt16(Some(v)) => encode_u!(b, v),
             DataValue::UInt32(Some(v)) => encode_u!(b, v),
             DataValue::UInt64(Some(v)) => encode_u!(b, v),
+            DataValue::UUID(Some(v))=>Self::encode_bytes(b, v.as_bytes()),
             DataValue::Utf8(Some(v)) => Self::encode_bytes(b, v.as_bytes()),
             value => {
                 return if value.is_null() {

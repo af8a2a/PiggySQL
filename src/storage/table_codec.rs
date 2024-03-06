@@ -3,6 +3,8 @@ use crate::errors::{DatabaseError, Result};
 
 use crate::types::index::{Index, IndexId, IndexMeta};
 use crate::types::tuple::{Tuple, TupleId};
+use crate::types::value::DataValue;
+use crate::types::LogicalType;
 use bytes::Bytes;
 use lazy_static::lazy_static;
 use uuid::Uuid;
@@ -140,8 +142,8 @@ impl TableCodec {
     pub fn encode_tuple_key_without_primary_key(table_name: &str) -> Result<Vec<u8>> {
         let mut key_prefix = Self::key_prefix(CodecType::Tuple, table_name);
         key_prefix.push(BOUND_MIN_TAG);
-        let id = Uuid::new_v4().to_u128_le();
-
+        let id = DataValue::init(&LogicalType::UUID);
+        id.to_primary_key(&mut key_prefix)?;
         Ok(key_prefix)
     }
 
