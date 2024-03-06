@@ -110,20 +110,19 @@ impl LockManager {
     /// Aborts the transaction if necessary.
     pub(super) fn check_read_locks(&self, key: Vec<u8>, txn_id: u64) -> Result<()> {
         if let Some(entry) = self.read_locks.get(&key) {
-            for owner_id in entry.value().to_owned().into_iter() {
+            for owner_id in entry.value().iter().copied() {
                 //检查读写冲突
                 if owner_id == txn_id {
                     continue;
                 }
-                let status = self
+                let status = *self
                     .txn_status
                     .get(&owner_id)
                     .ok_or(DatabaseError::InternalError(format!(
                         "Expected status of txn {} in SSI manager.",
                         owner_id
                     )))?
-                    .value()
-                    .clone();
+                    .value();
                 match status.commit_timestamp {
                     Some(time) if time > txn_id => {
                         if status.in_conflict {
@@ -142,7 +141,7 @@ impl LockManager {
     /// Checks all acquired WRITE locks on the object, recording an RW-denpendency each.
     pub(super) fn check_write_locks(&self, key: Vec<u8>, txn_id: u64) -> Result<()> {
         if let Some(entry) = self.read_locks.get(&key) {
-            for owner_id in entry.value().to_owned().into_iter() {
+            for owner_id in entry.value().iter().copied() {
                 if owner_id == txn_id {
                     continue;
                 }
@@ -156,15 +155,15 @@ impl LockManager {
     /// Records the RW-dependency with the transaction and the creator of newer-versioned entry.
     /// Aborts the transaction if necessary.
     pub(super) fn abort_or_record_conflict(&self, creator_id: u64, txn_id: u64) -> Result<()> {
-        let status = self
+        let status = *self
             .txn_status
             .get(&creator_id)
             .ok_or(DatabaseError::InternalError(format!(
                 "Expected status of txn {} in SSI manager.",
                 creator_id
             )))?
-            .value()
-            .clone();
+            .value();
+
         match status.commit_timestamp {
             Some(_) if status.out_conflict => return Err(DatabaseError::Serialization),
             _ => self.record_conflict(txn_id, creator_id)?,
@@ -196,15 +195,14 @@ impl LockManager {
     /// Aborts the transaction if it has become a pivot (both flags are positive).
     /// Does this by returning `Error::Serialization`.
     pub(super) fn check_abort(&self, txn_id: u64) -> Result<()> {
-        let status = self
+        let status = *self
             .txn_status
             .get(&txn_id)
             .ok_or(DatabaseError::InternalError(format!(
                 "Expected status of txn {} in SSI manager.",
                 txn_id
             )))?
-            .value()
-            .clone();
+            .value();
         match status.in_conflict && status.out_conflict {
             true => Err(DatabaseError::Serialization),
             false => Ok(()),

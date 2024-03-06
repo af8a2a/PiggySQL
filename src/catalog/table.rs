@@ -106,7 +106,7 @@ impl TableCatalog {
         let pos = self
             .indexes
             .iter()
-            .find_position(|idx| idx.name ==format!("{}_{}","uk",name.to_string()));
+            .find_position(|idx| idx.name ==format!("{}_{}","uk",name));
         match pos {
             Some(pos) => Ok(self.indexes[pos.0].id),
             None =>  Err(DatabaseError::NotFound("index", name.to_string())),

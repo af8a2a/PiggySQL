@@ -292,7 +292,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         if let Some(lock_manager) = &self.lock_manager {
             let mut scan = self.engine.scan(from..=to)?;
             while let Some((_k, _)) = scan.next().transpose()? {
-                match Key::decode(&key)? {
+                match Key::decode(key)? {
                     Key::Version(_, version) => {
                         lock_manager.abort_or_record_conflict(version, self.state.version)?
                     }
@@ -435,10 +435,10 @@ impl<E: StorageEngine> MVCC<E> {
         let mut hashset = HashSet::new();
         debug!("start MVCC GC!");
         let mut gc_count = 0;
-        let oldest_version = MVCCTransaction::scan_active(&self.engine)?
+        let oldest_version = *MVCCTransaction::scan_active(&self.engine)?
         .iter()
         .min()
-        .unwrap_or(&u64::MAX).clone();
+        .unwrap_or(&u64::MAX);
 
         while let Some((key, _)) = scan.next().transpose()? {
             match Key::decode(&key)? {

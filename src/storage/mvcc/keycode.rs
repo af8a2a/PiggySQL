@@ -60,7 +60,7 @@ impl KeyPrefix {
             KeyPrefix::TxnActive => Ok(vec![0x02]),
             KeyPrefix::TxnActiveSnapshot => Ok(vec![0x03]),
             KeyPrefix::TxnWrite(version) => Ok([&[0x04][..], &encode_u64(*version)].concat()),
-            KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(&key)].concat()),
+            KeyPrefix::Version(key) => Ok([&[0x05][..], &encode_bytes(key)].concat()),
 KeyPrefix::Unversioned => Ok(vec![0x06]),
         }
     }
@@ -73,9 +73,9 @@ impl Key {
             0x01 => Self::NextVersion,
             0x02 => Self::TxnActive(take_u64(bytes)?),
             0x03 => Self::TxnActiveSnapshot(take_u64(bytes)?),
-            0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?.into()),
-            0x05 => Self::Version(take_bytes(bytes)?.into(), take_u64(bytes)?),
-0x06 => Self::Unversioned(take_bytes(bytes)?.into()),
+            0x04 => Self::TxnWrite(take_u64(bytes)?, take_bytes(bytes)?),
+            0x05 => Self::Version(take_bytes(bytes)?, take_u64(bytes)?),
+0x06 => Self::Unversioned(take_bytes(bytes)?),
             _ => {
                 return Err(DatabaseError::InternalError(format!(
                     "Invalid key prefix {:?}",
@@ -91,12 +91,12 @@ impl Key {
             Key::TxnActive(version) => Ok([&[0x02][..], &encode_u64(*version)].concat()),
             Key::TxnActiveSnapshot(version) => Ok([&[0x03][..], &encode_u64(*version)].concat()),
             Key::TxnWrite(version, key) => {
-                Ok([&[0x04][..], &encode_u64(*version), &encode_bytes(&key)].concat())
+                Ok([&[0x04][..], &encode_u64(*version), &encode_bytes(key)].concat())
             }
             Key::Version(key, version) => {
-                Ok([&[0x05][..], &encode_bytes(&key), &encode_u64(*version)].concat())
+                Ok([&[0x05][..], &encode_bytes(key), &encode_u64(*version)].concat())
             }
-Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(&key)].concat()),
+Key::Unversioned(key) => Ok([&[0x06][..], &encode_bytes(key)].concat()),
         }
     }
 }

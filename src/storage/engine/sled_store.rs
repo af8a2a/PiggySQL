@@ -41,7 +41,7 @@ impl StorageEngine for SledStore {
     }
 
     fn set(&self, key: &[u8], value: Vec<u8>) -> Result<()> {
-        self.data.insert(&key, value)?;
+        self.data.insert(key, value)?;
         Ok(())
     }
 }

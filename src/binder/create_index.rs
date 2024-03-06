@@ -20,7 +20,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         &mut self,
         index_name: &ObjectName,
         table_name: &ObjectName,
-        columns: &Vec<OrderByExpr>,
+        columns: &[OrderByExpr],
     ) -> Result<LogicalPlan> {
         let table_name = lower_case_name(table_name);
         let index_name = lower_case_name(index_name);

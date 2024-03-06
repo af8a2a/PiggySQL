@@ -51,7 +51,7 @@ impl<T: Transaction> Executor<T> for Insert {
             for tuple in input.iter() {
                 let Tuple { values, .. } = tuple;
                 let mut tuple_map = HashMap::new();
-                for (i, value) in values.into_iter().enumerate() {
+                for (i, value) in values.iter().enumerate() {
                     let col = &schema[i];
 
                     if let Some(col_id) = col.id() {

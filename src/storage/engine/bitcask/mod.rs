@@ -121,7 +121,7 @@ impl StorageEngine for BitCask {
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         if let Some((value_pos, value_len)) =
-            self.keydir.get(key).map(|entry| entry.value().clone())
+            self.keydir.get(key).map(|entry| *entry.value())
         {
             Ok(Some(self.log.read_value(value_pos, value_len)?))
         } else {
@@ -232,7 +232,7 @@ impl BitCask {
         for (key, (value_pos, value_len)) in self
             .keydir
             .iter()
-            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .map(|entry| (entry.key().clone(), *entry.value()))
         {
             let value = self.log.read_value(value_pos, value_len)?;
             let (pos, len) = new_log.write_entry(&key, Some(&value))?;

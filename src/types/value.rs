@@ -261,7 +261,7 @@ impl DataValue {
     }
     pub fn decimal(&self) -> Option<Decimal> {
         if let DataValue::Decimal(Some(val)) = self {
-            Some(val.clone())
+            Some(*val)
         } else {
             None
         }

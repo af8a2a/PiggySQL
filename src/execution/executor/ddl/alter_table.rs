@@ -25,7 +25,7 @@ impl<T: Transaction> Executor<T> for AddColumn {
     fn execute(self, transaction: &mut T) -> Source {
         let AddColumn { op, input } = self;
         let mut input = build(input, transaction)?;
-        let mut unique_values = op.column.desc().is_unique.then(|| Vec::new());
+        let mut unique_values = op.column.desc().is_unique.then(Vec::new);
 
         for tuple in input.iter_mut() {
             // tuple.columns.push(Arc::new(column.clone()));

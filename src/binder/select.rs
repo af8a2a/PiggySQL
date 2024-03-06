@@ -361,11 +361,11 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 ScalarExpression::Constant(dv) => match dv.as_ref() {
                     DataValue::Int32(Some(v)) if *v > 0 => offset = Some(*v as usize),
                     DataValue::Int64(Some(v)) if *v > 0 => offset = Some(*v as usize),
-                    _ => return Err(DatabaseError::from(DatabaseError::InvalidType)),
+                    _ => return Err(DatabaseError::InvalidType),
                 },
                 _ => {
                     return Err(DatabaseError::InvalidColumn(
-                        "invalid limit expression.".to_owned(),
+                        "invalid limit expression.".to_string(),
                     ))
                 }
             }

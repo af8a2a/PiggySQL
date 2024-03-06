@@ -192,7 +192,7 @@ impl ConstantBinary {
     }
 
     // Tips: It only makes sense if the condition is and aggregation
-    fn and_scope_aggregation(binaries: &Vec<ConstantBinary>) -> Result<Vec<ConstantBinary>> {
+    fn and_scope_aggregation(binaries: &[ConstantBinary]) -> Result<Vec<ConstantBinary>> {
         if binaries.is_empty() {
             return Ok(vec![]);
         }

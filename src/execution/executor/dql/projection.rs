@@ -28,7 +28,7 @@ impl<T: Transaction> Executor<T> for Projection {
             let mut values = Vec::with_capacity(exprs.len());
 
             for expr in exprs.iter() {
-                values.push(expr.eval(&tuple, &schema)?);
+                values.push(expr.eval(tuple, &schema)?);
                 // columns.push(expr.output_columns());
             }
             // tuple.columns = columns;

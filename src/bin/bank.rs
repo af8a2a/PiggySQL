@@ -81,9 +81,9 @@ async fn main() -> Result<()> {
     for _ in 0..6 {
         tasks.push(tokio::spawn(tokio::spawn(async move {
             let mut sql = vec![];
-            sql.push(format!(
-                "SELECT m.id, m.title, g.name FROM movies m JOIN genres g ON m.genre_id = g.id LIMIT 4;"
-            ));
+            sql.push(
+                "SELECT m.id, m.title, g.name FROM movies m JOIN genres g ON m.genre_id = g.id LIMIT 4;".to_string()
+            );
             sql.push("UPDATE movies SET rating = rating+1;".to_string());
             let client = SQLClient::connect().await.unwrap();
             client.query_txn(sql).await.unwrap();

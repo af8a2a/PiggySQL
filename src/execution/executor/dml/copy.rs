@@ -69,7 +69,7 @@ impl CopyFromFile {
             .op
             .schema_ref
             .iter()
-            .map(|column| column.datatype().clone())
+            .map(|column| *column.datatype())
             .collect_vec();
         debug!("column count: {}", column_count);
         let tuple_builder = TupleBuilder::new(types, self.op.schema_ref.clone());

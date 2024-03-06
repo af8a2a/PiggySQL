@@ -125,7 +125,7 @@ pub trait Iter: Sync + Send {
 
 pub(crate) fn tuple_projection(
     projections: &Projections,
-    schema: &Vec<ColumnRef>,
+    schema: &[ColumnRef],
     tuple: Tuple,
 ) -> Result<Tuple> {
     let projection_len = projections.len();
@@ -152,10 +152,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
             Some(limit) => limit,
             None => usize::MAX,
         };
-        let offset = match self.bound.0 {
-            Some(offset) => offset,
-            None => 0,
-        };
+        let offset = self.bound.0.unwrap_or(0);
         let tuples = self
             .scan
             .iter()
@@ -195,7 +192,7 @@ impl<E: StorageEngine> MVCCIndexIter<'_, E> {
         }
     }
     fn get_tuple_by_id(&self, tuple_id: &TupleId) -> Result<Option<Tuple>> {
-        let key = TableCodec::encode_tuple_key(&self.table.name, &tuple_id)?;
+        let key = TableCodec::encode_tuple_key(&self.table.name, tuple_id)?;
         let schema = self.table.all_columns();
         self.tx
             .get(&key)?
@@ -464,7 +461,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
                 let (index_min, index_max) = TableCodec::index_bound(table_name, &index_meta.id);
                 Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
             }
-            let (key, _) = TableCodec::encode_column(&table_name, column)?;
+            let (key, _) = TableCodec::encode_column(table_name, column)?;
 
             match self.tx.delete(&key) {
                 Ok(_) => (),
@@ -637,7 +634,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         let mut indexs = Self::index_meta_collect(&table_name, &self.tx).unwrap();
         let (i, _) = indexs
             .iter()
-            .find_position(|meta| meta.name == format!("{}_{}", "uk", index_name.to_string()))
+            .find_position(|meta| meta.name == format!("{}_{}", "uk", index_name))
             .unwrap();
         let item = indexs.remove(i);
         let mut cols = Self::column_collect(table_name.clone(), &self.tx).unwrap();
@@ -651,7 +648,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(&table_name);
         Self::_drop_data(&mut self.tx, &index_meta_min, &index_meta_max)?;
         for meta in indexs.iter() {
-            let (key, value) = TableCodec::encode_index_meta(&table_name, &meta)?;
+            let (key, value) = TableCodec::encode_index_meta(&table_name, meta)?;
             self.tx.set(&key, value.to_vec())?;
         }
         //删除索引数据
@@ -659,7 +656,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         Self::_drop_data(&mut self.tx, &index_min, &index_max)?;
 
         let table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
-        Self::update_table_meta(&mut self.tx, &table)?;
+        Self::update_table_meta(&self.tx, &table)?;
         self.cache.remove(&table_name);
 
         Ok(())
