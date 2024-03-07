@@ -1,7 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use config::Config;
-use piggysql::{server::Server, storage::engine::sled_store::SledStore};
+use piggysql::{
+    server::Server,
+    storage::engine::{bitcask::BitCask, memory::Memory, sled_store::SledStore},
+};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -19,14 +22,30 @@ async fn main() {
         .add_source(config::File::with_name("config/Settings"))
         // Add in settings from the environment (with a prefix of APP)
         // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
-        .add_source(config::Environment::with_prefix("APP"))
+        // .add_source(config::Environment::with_prefix("APP"))
         .build()
         .unwrap();
     let setting_map = settings
         .try_deserialize::<HashMap<String, String>>()
         .unwrap();
-    let filename=setting_map.get("filename").unwrap();
-    let store=SledStore::new(PathBuf::from(filename)).unwrap();
-    let server=Server::new(store).await.unwrap();
-    Server::run(server).await;
+    let filename = setting_map.get("filename").unwrap();
+    let engine = setting_map.get("engine").unwrap();
+    match engine.as_str() {
+        "sled" => {
+            let store = SledStore::new(PathBuf::from(filename)).unwrap();
+            let server = Server::new(store).await.unwrap();
+            Server::run(server).await;
+        }
+        "bitcask" => {
+            let store = BitCask::new(PathBuf::from(filename)).unwrap();
+            let server = Server::new(store).await.unwrap();
+            Server::run(server).await;
+        }
+        _ => {
+            //fallback
+            let store = Memory::new();
+            let server = Server::new(store).await.unwrap();
+            Server::run(server).await;
+        }
+    };
 }
