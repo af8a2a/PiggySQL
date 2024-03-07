@@ -1,6 +1,5 @@
 pub mod binder;
 pub mod catalog;
-pub mod client;
 pub mod db;
 pub mod errors;
 pub mod execution;

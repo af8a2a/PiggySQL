@@ -171,12 +171,6 @@ pub enum DatabaseError {
         #[source]
         sled::Error,
     ),
-    #[error("client error {0}")]
-    ClientError(
-        #[from]
-        #[source]
-        tokio_postgres::Error,
-    ),
     #[error("csv error: {0}")]
     Csv(
         #[from]

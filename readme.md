@@ -75,6 +75,8 @@ then run
 ```bash
 psql 
 ```
+or run my tiny client
+
 to enter the postgres client
 
 also connect to the database with JDBC (experimental)
