@@ -1,0 +1,4 @@
+#V2
+show tables;
+describe lineitem;
+select * from lineitem limit 1;
