@@ -31,7 +31,6 @@ rand = "~0.8.3"
 sled="0.34.7"
 pgwire = { version = "0.19.2" }
 async-trait = "0.1"
-tokio-postgres = {version="0.7.10",features=["runtime"]}
 moka = {version="0.12.5",features=["sync","future"] }
 config = "0.14.0"
 dashmap = "5.4.0"
@@ -47,7 +46,7 @@ tempdir = "~0.3.7"
 criterion = { version = "0.5.1", features = ["html_reports","async_tokio"] }
 
 [workspace]
-members = [
+members = [ "client",
   "tests/sqllogictest",
 ]
 
