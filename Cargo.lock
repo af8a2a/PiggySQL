@@ -2132,7 +2132,6 @@ dependencies = [
  "bytes",
  "cargo-tarpaulin",
  "chrono",
- "clap",
  "comfy-table",
  "config",
  "crc32fast",

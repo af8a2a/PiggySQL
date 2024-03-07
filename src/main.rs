@@ -1,4 +1,7 @@
-use piggysql::server::Server;
+use std::{collections::HashMap, path::PathBuf};
+
+use config::Config;
+use piggysql::{server::Server, storage::engine::sled_store::SledStore};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -11,5 +14,19 @@ async fn main() {
         // completes the builder.
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-    Server::run().await;
+    let settings = Config::builder()
+        // Add in `./Settings.toml`
+        .add_source(config::File::with_name("config/Settings"))
+        // Add in settings from the environment (with a prefix of APP)
+        // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
+        .add_source(config::Environment::with_prefix("APP"))
+        .build()
+        .unwrap();
+    let setting_map = settings
+        .try_deserialize::<HashMap<String, String>>()
+        .unwrap();
+    let filename=setting_map.get("filename").unwrap();
+    let store=SledStore::new(PathBuf::from(filename)).unwrap();
+    let server=Server::new(store).await.unwrap();
+    Server::run(server).await;
 }

@@ -1,7 +1,6 @@
 use std::{io, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
-use clap::Parser;
 use futures::stream;
 use rust_decimal::prelude::ToPrimitive;
 
@@ -24,29 +23,23 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{engine::bitcask::BitCask, MVCCLayer},
+    storage::{
+        engine::{bitcask::BitCask, StorageEngine},
+        MVCCLayer,
+    },
     types::{tuple::Tuple, LogicalType},
 };
 
-#[derive(clap::Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-pub struct Args {
-    #[clap(long, default_value = "127.0.0.1")]
-    pub ip: String,
-    #[clap(long, default_value = "5432")]
-    pub port: u16,
+pub struct Session<E: StorageEngine> {
+    inner: Arc<Database<MVCCLayer<E>>>,
+    tx: Mutex<Option<DBTransaction<MVCCLayer<E>>>>,
+}
+pub struct Server<E: StorageEngine> {
+    inner: Arc<Database<MVCCLayer<E>>>,
 }
 
-pub struct Session {
-    inner: Arc<Database<MVCCLayer<BitCask>>>,
-    tx: Mutex<Option<DBTransaction<MVCCLayer<BitCask>>>>,
-}
-pub struct Server {
-    inner: Arc<Database<MVCCLayer<BitCask>>>,
-}
-
-impl MakeHandler for Server {
-    type Handler = Arc<Session>;
+impl<E: StorageEngine> MakeHandler for Server<E> {
+    type Handler = Arc<Session<E>>;
 
     fn make(&self) -> Self::Handler {
         Arc::new(Session {
@@ -57,7 +50,7 @@ impl MakeHandler for Server {
 }
 
 #[async_trait]
-impl ExtendedQueryHandler for Session {
+impl<E: StorageEngine> ExtendedQueryHandler for Session<E> {
     type Statement = String;
 
     type QueryParser = NoopQueryParser;
@@ -225,7 +218,7 @@ fn row_desc_from_stmt(schema: SchemaRef, format: &Format) -> PgWireResult<Vec<Fi
 }
 
 #[async_trait]
-impl SimpleQueryHandler for Session {
+impl<E: StorageEngine> SimpleQueryHandler for Session<E> {
     async fn do_query<'a, 'b: 'a, C>(
         &'b self,
         _client: &mut C,
@@ -296,29 +289,27 @@ impl SimpleQueryHandler for Session {
     }
 }
 
-impl Server {
-    async fn new() -> Result<Server> {
-        let database = Database::new(MVCCLayer::new(BitCask::new_compact(
-            PathBuf::from("test.db"),
-            0.2,
-        )?))?;
+impl<E: StorageEngine> Server<E> {
+    pub async fn new(engine: E) -> Result<Arc<Server<E>>> {
+        // let database = Database::new(MVCCLayer::new(BitCask::new_compact(
+        //     PathBuf::from("test.db"),
+        //     0.2,
+        // )?))?;
 
-        Ok(Server {
-            inner: Arc::new(database),
-        })
+        Ok(Arc::new(Server {
+            inner: Arc::new(Database::new(MVCCLayer::new(engine))?),
+        }))
     }
-    pub async fn run() {
-        let args = Args::parse();
-
-        let backend = Server::new().await.unwrap();
-        let processor = Arc::new(backend);
+    pub async fn run(server:Arc<Self>) {
+        // let backend = Server::new().await.unwrap();
+        let processor = server;
 
         // We have not implemented extended query in this server, use placeholder instead
         // let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
         //     PlaceholderExtendedQueryHandler,
         // )));
         let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
-        let server_addr = format!("{}:{}", args.ip, args.port);
+        let server_addr = format!("{}:{}", "127.0.0.1", "5432");
         let listener = TcpListener::bind(server_addr).await.unwrap();
 
         tokio::select! {
