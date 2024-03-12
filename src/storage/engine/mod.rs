@@ -2,6 +2,7 @@ use crate::errors::*;
 use itertools::Itertools;
 pub mod bitcask;
 pub mod memory;
+pub mod lsm;
 pub mod sled_store;
 pub type KvScan = Box<dyn DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
 
