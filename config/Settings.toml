@@ -1,2 +1,2 @@
-engine="sled"
+engine="lsm"
 filename="test.db"

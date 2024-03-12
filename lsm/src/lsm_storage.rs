@@ -1,3 +1,4 @@
+use std::backtrace;
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::ops::Bound;
@@ -114,8 +115,25 @@ impl LsmStorageOptions {
             serializable: false,
         }
     }
+    pub fn default() -> Self {
+        Self {
+                block_size: 4096,
+                target_sst_size: 2 << 20, // 2MB
+                num_memtable_limit: 3,
+                compaction_options: 
+                        CompactionOptions::Leveled(LeveledCompactionOptions {
+                            level0_file_num_compaction_trigger: 2,
+                            max_levels: 4,
+                            base_level_size_mb: 128,
+                            level_size_multiplier: 2,
+                        }),
+                    enable_wal: true,
+                    serializable: false,
+            }
+    
+    
 }
-
+}
 fn range_overlap(
     user_begin: Bound<&[u8]>,
     user_end: Bound<&[u8]>,
@@ -519,8 +537,8 @@ impl LsmStorageInner {
                 WriteBatchRecord::Put(key, value) => {
                     let key = key.as_ref();
                     let value = value.as_ref();
-                    assert!(!key.is_empty(), "key cannot be empty");
-                    assert!(!value.is_empty(), "value cannot be empty");
+                    // assert!(!key.is_empty(), "key cannot be empty");
+                    // assert!(!value.is_empty(), "value cannot be empty");
                     let size;
                     {
                         let guard = self.state.read();

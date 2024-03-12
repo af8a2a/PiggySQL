@@ -199,7 +199,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         // key, since we can construct the engine key using the version.
         self.engine.set(
             &Key::TxnWrite(self.state.version, key.into()).encode()?,
-            vec![],
+            vec![0],
         )?;
         self.engine.set(
             &Key::Version(key.into(), self.state.version).encode()?,

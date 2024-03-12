@@ -20,7 +20,7 @@ pub struct LSM {
 impl LSM {
     pub fn new(path: impl AsRef<Path>) -> Self {
         Self {
-            inner: MiniLsm::open(path, LsmStorageOptions::default_for_week1_day6_test()).unwrap(),
+            inner: MiniLsm::open(path, LsmStorageOptions::default()).unwrap(),
         }
     }
 }

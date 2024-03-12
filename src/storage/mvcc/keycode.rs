@@ -635,4 +635,10 @@ pub mod tests {
 
         Ok(())
     }
+    #[test]
+    fn option_encode()->Result<()>{
+        let op:Option<Vec<u8>>=None;
+        assert_ne!(bincode::serialize(&op).unwrap(),Vec::<u8>::new());
+        Ok(())
+    }
 }

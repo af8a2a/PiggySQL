@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use config::Config;
 use piggysql::{
     server::Server,
-    storage::engine::{bitcask::BitCask, memory::Memory, sled_store::SledStore},
+    storage::engine::{bitcask::BitCask, lsm::LSM, memory::Memory, sled_store::SledStore},
 };
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -40,6 +40,12 @@ async fn main() {
             let store = BitCask::new(PathBuf::from(filename)).unwrap();
             let server = Server::new(store).await.unwrap();
             Server::run(server).await;
+        }
+        "lsm"=>{
+            let store = LSM::new(PathBuf::from(filename));
+            let server = Server::new(store).await.unwrap();
+            Server::run(server).await;
+
         }
         _ => {
             //fallback
