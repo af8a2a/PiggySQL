@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf, sync::Arc};
+use std::{io, sync::Arc};
 
 use async_trait::async_trait;
 use futures::stream;
@@ -23,10 +23,7 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{
-        engine::{bitcask::BitCask, StorageEngine},
-        MVCCLayer,
-    },
+    storage::{engine::StorageEngine, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
 
@@ -291,16 +288,11 @@ impl<E: StorageEngine> SimpleQueryHandler for Session<E> {
 
 impl<E: StorageEngine> Server<E> {
     pub async fn new(engine: E) -> Result<Arc<Server<E>>> {
-        // let database = Database::new(MVCCLayer::new(BitCask::new_compact(
-        //     PathBuf::from("test.db"),
-        //     0.2,
-        // )?))?;
-
         Ok(Arc::new(Server {
             inner: Arc::new(Database::new(MVCCLayer::new(engine))?),
         }))
     }
-    pub async fn run(server:Arc<Self>) {
+    pub async fn run(server: Arc<Self>) {
         // let backend = Server::new().await.unwrap();
         let processor = server;
 
@@ -322,7 +314,7 @@ impl<E: StorageEngine> Server<E> {
     }
 }
 
-async fn server_run<
+pub(crate) async fn server_run<
     A: MakeHandler<Handler = Arc<impl StartupHandler + 'static>>,
     Q: MakeHandler<Handler = Arc<impl SimpleQueryHandler + 'static>>,
     EQ: MakeHandler<Handler = Arc<impl ExtendedQueryHandler + 'static>>,

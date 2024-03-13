@@ -3,7 +3,12 @@ use piggysql::{
     db::Database,
     errors::*,
     storage::{
-        engine::{bitcask::BitCask, memory::Memory, sled_store::SledStore},
+        engine::{
+            bitcask::BitCask,
+            lsm::{lsm_storage::LsmStorageOptions, LSM},
+            memory::Memory,
+            sled_store::SledStore,
+        },
         MVCCLayer,
     },
 };
@@ -79,6 +84,28 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
         .await?;
     Ok(db)
 }
+async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
+    let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
+    let db = Database::new(MVCCLayer::new(LSM::new(path, LsmStorageOptions::default())))?;
+
+    db.run(
+        "CREATE TABLE BenchTable(
+            id INT PRIMARY KEY,
+            val INT);
+            ",
+    )
+    .await?;
+    let mut batch = String::new();
+    for i in 0..100000 {
+        batch += format!("({},{})", i, i).as_str();
+        batch += ","
+    }
+    batch += format!("({},{})", 100001, 100001).as_str();
+
+    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+        .await?;
+    Ok(db)
+}
 pub async fn primary_key_benchmark_100000(engine: &Database<MVCCLayer<Memory>>) -> Result<()> {
     let _ = engine
         .run("SELECT * FROM BenchTable where id=90000")
@@ -118,6 +145,12 @@ pub async fn sled_benchmark_100000(engine: &Database<MVCCLayer<SledStore>>) -> R
         .await?;
     Ok(())
 }
+pub async fn lsm_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
+    let _ = engine
+        .run("SELECT * FROM BenchTable where val=90000")
+        .await?;
+    Ok(())
+}
 
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -127,7 +160,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     let engine = rt.block_on(async { data_source().await.unwrap() });
     let bitcask = rt.block_on(async { data_source_bitcask().await.unwrap() });
-
+    let lsm = rt.block_on(async { data_source_lsm().await.unwrap() });
     let sled = rt.block_on(async { data_source_sled().await.unwrap() });
     c.bench_function("select rows with primary key", |b| {
         b.to_async(&rt)
@@ -152,6 +185,10 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("sled benchmark select rows with primary key", |b| {
         b.to_async(&rt)
             .iter(|| async { sled_benchmark_100000(&sled).await })
+    });
+    c.bench_function("lsm benchmark select rows with primary key", |b| {
+        b.to_async(&rt)
+            .iter(|| async { lsm_benchmark_100000(&lsm).await })
     });
 }
 criterion_group!(

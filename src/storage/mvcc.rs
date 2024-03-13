@@ -72,7 +72,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             )?
         }
         //设置活跃事务
-        engine.set(&Key::TxnActive(version).encode()?, vec![])?;
+        engine.set(&Key::TxnActive(version).encode()?, vec![0])?;
         // if let Some(ref lock_manager) = lock_manager {
         //     lock_manager.init_txn(version);
         // }
@@ -199,7 +199,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         // key, since we can construct the engine key using the version.
         self.engine.set(
             &Key::TxnWrite(self.state.version, key.into()).encode()?,
-            vec![],
+            vec![0],
         )?;
         self.engine.set(
             &Key::Version(key.into(), self.state.version).encode()?,
