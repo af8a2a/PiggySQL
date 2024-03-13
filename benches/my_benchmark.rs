@@ -3,7 +3,12 @@ use piggysql::{
     db::Database,
     errors::*,
     storage::{
-        engine::{bitcask::BitCask, lsm::{lsm_storage::LsmStorageOptions, LSM}, memory::Memory, sled_store::SledStore},
+        engine::{
+            bitcask::BitCask,
+            lsm::{lsm_storage::LsmStorageOptions, LSM},
+            memory::Memory,
+            sled_store::SledStore,
+        },
         MVCCLayer,
     },
 };
@@ -80,11 +85,8 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
     Ok(db)
 }
 async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
-    let path = tempdir::TempDir::new("piggydb")
-        .unwrap()
-        .path()
-        .join("lsm");
-    let db = Database::new(MVCCLayer::new(LSM::new(path,LsmStorageOptions::default())))?;
+    let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
+    let db = Database::new(MVCCLayer::new(LSM::new(path, LsmStorageOptions::default())))?;
 
     db.run(
         "CREATE TABLE BenchTable(
@@ -150,7 +152,6 @@ pub async fn lsm_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<(
     Ok(())
 }
 
-
 fn criterion_benchmark(c: &mut Criterion) {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(8)
@@ -159,7 +160,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     let engine = rt.block_on(async { data_source().await.unwrap() });
     let bitcask = rt.block_on(async { data_source_bitcask().await.unwrap() });
-    let lsm=rt.block_on(async { data_source_lsm().await.unwrap() });
+    let lsm = rt.block_on(async { data_source_lsm().await.unwrap() });
     let sled = rt.block_on(async { data_source_sled().await.unwrap() });
     c.bench_function("select rows with primary key", |b| {
         b.to_async(&rt)
@@ -189,7 +190,6 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.to_async(&rt)
             .iter(|| async { lsm_benchmark_100000(&lsm).await })
     });
-
 }
 criterion_group!(
     name = benches;

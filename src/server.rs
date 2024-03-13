@@ -23,10 +23,7 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{
-        engine::{StorageEngine},
-        MVCCLayer,
-    },
+    storage::{engine::StorageEngine, MVCCLayer},
     types::{tuple::Tuple, LogicalType},
 };
 
@@ -291,12 +288,11 @@ impl<E: StorageEngine> SimpleQueryHandler for Session<E> {
 
 impl<E: StorageEngine> Server<E> {
     pub async fn new(engine: E) -> Result<Arc<Server<E>>> {
-
         Ok(Arc::new(Server {
             inner: Arc::new(Database::new(MVCCLayer::new(engine))?),
         }))
     }
-    pub async fn run(server:Arc<Self>) {
+    pub async fn run(server: Arc<Self>) {
         // let backend = Server::new().await.unwrap();
         let processor = server;
 

@@ -11,8 +11,8 @@ use ouroboros::self_referencing;
 
 use super::iterators::StorageIterator;
 use super::key::KeySlice;
-use super::wal::Wal;
 use super::table::SsTableBuilder;
+use super::wal::Wal;
 
 /// A basic mem-table based on crossbeam-skiplist.
 ///

@@ -1,10 +1,10 @@
+use derive_with::With;
 use std::{
     collections::{BTreeSet, HashMap},
     ops::Bound,
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, Arc},
 };
-use derive_with::With;
 
 use super::{
     block::Block,
@@ -67,7 +67,7 @@ pub enum WriteBatchRecord<T: AsRef<[u8]>> {
     Del(T),
 }
 
-#[derive(Debug, Clone,With)]
+#[derive(Debug, Clone, With)]
 pub struct LsmStorageOptions {
     // Block size in bytes
     pub block_size: usize,
@@ -224,7 +224,7 @@ impl LsmStorageInner {
                     table_id,
                     Some(block_cache.clone()),
                     FileObject::open(&Self::path_of_sst_static(path, table_id))
-                        .expect(&format!("failed to open SST: {}", table_id)),
+                        .unwrap_or_else(|_| panic!("failed to open SST: {}", table_id)),
                 )?;
                 state.sstables.insert(table_id, Arc::new(sst));
                 sst_cnt += 1;

@@ -31,7 +31,7 @@ impl Display for Tuple {
 }
 
 impl Tuple {
-    pub fn deserialize_from(columns: &Vec<ColumnRef>, bytes: &[u8]) -> Self {
+    pub fn deserialize_from(columns: &[ColumnRef], bytes: &[u8]) -> Self {
         fn is_none(bits: u8, i: usize) -> bool {
             bits & (1 << (7 - i)) > 0
         }

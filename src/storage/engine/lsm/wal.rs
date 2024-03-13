@@ -49,7 +49,7 @@ impl Wal {
             rbuf.advance(value_len);
             let checksum = rbuf.get_u32();
             if hasher.finalize() != checksum {
-                panic!("checksum mismatch");//todo
+                panic!("checksum mismatch"); //todo
             }
             skiplist.insert(key, value);
         }
