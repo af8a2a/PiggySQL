@@ -91,6 +91,6 @@ mod test {
             .unwrap()
             .path()
             .join("piggydb");
-        LSM::new(path)
+        LSM::new(path,LsmStorageOptions::default())
     });
 }

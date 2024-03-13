@@ -3,7 +3,7 @@ use piggysql::{
     db::Database,
     errors::*,
     storage::{
-        engine::{bitcask::BitCask, lsm::LSM, memory::Memory, sled_store::SledStore},
+        engine::{bitcask::BitCask, lsm::{lsm_storage::LsmStorageOptions, LSM}, memory::Memory, sled_store::SledStore},
         MVCCLayer,
     },
 };
@@ -84,7 +84,7 @@ async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
         .unwrap()
         .path()
         .join("lsm");
-    let db = Database::new(MVCCLayer::new(LSM::new(path)))?;
+    let db = Database::new(MVCCLayer::new(LSM::new(path,LsmStorageOptions::default())))?;
 
     db.run(
         "CREATE TABLE BenchTable(
