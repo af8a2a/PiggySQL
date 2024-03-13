@@ -137,3 +137,18 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
         self.iter.num_active_iterators()
     }
 }
+
+impl Iterator for LsmIterator {
+    type Item = (Vec<u8>, Vec<u8>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.is_valid() {
+            return None;
+        } else {
+            let res = (self.key().to_vec(), self.value().to_vec());
+            self.next_inner().unwrap();
+            self.move_to_non_delete().unwrap();
+            return Some(res);
+        }
+    }
+}

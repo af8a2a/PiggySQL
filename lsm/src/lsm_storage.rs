@@ -537,8 +537,8 @@ impl LsmStorageInner {
                 WriteBatchRecord::Put(key, value) => {
                     let key = key.as_ref();
                     let value = value.as_ref();
-                    // assert!(!key.is_empty(), "key cannot be empty");
-                    // assert!(!value.is_empty(), "value cannot be empty");
+                    assert!(!key.is_empty(), "key cannot be empty");
+                    assert!(!value.is_empty(), "value cannot be empty");
                     let size;
                     {
                         let guard = self.state.read();

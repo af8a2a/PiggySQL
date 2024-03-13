@@ -72,7 +72,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             )?
         }
         //设置活跃事务
-        engine.set(&Key::TxnActive(version).encode()?, vec![])?;
+        engine.set(&Key::TxnActive(version).encode()?, vec![0])?;
         // if let Some(ref lock_manager) = lock_manager {
         //     lock_manager.init_txn(version);
         // }
