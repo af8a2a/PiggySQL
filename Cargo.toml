@@ -38,6 +38,11 @@ crc32fast = "1.3.2"
 csv = "1"
 rust_decimal = "1"
 uuid = { version = "1.7.0", features = ["serde"] }
+ouroboros = "0.18"
+farmhash = "1"
+crossbeam-channel = "0.5.11"
+serde_json = { version = "1.0" }
+
 lsm = { path = "lsm" }
 [dev-dependencies]
 cargo-tarpaulin = "0.27.1"
