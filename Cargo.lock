@@ -890,6 +890,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-with"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841ea25b31404c50f2ddc92e028984a42d0fc818c10afee0b1fbda27c995f028"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2321,6 +2332,7 @@ dependencies = [
  "crossbeam-skiplist",
  "csv",
  "dashmap",
+ "derive-with",
  "farmhash",
  "futures",
  "integer-encoding",

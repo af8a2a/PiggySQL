@@ -27,9 +27,9 @@ pub struct LSM {
 }
 
 impl LSM {
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub fn new(path: impl AsRef<Path>,option:LsmStorageOptions) -> Self {
         Self {
-            inner: MiniLsm::open(path, LsmStorageOptions::default()).unwrap(),
+            inner: MiniLsm::open(path, option).unwrap(),
         }
     }
 }

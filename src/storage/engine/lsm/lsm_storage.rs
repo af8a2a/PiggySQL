@@ -4,14 +4,27 @@ use std::{
     path::{Path, PathBuf},
     sync::{atomic::AtomicUsize, Arc},
 };
+use derive_with::With;
 
-use bytes::Bytes;
-use lsm::compact::LeveledCompactionOptions;
-use parking_lot::{Mutex, MutexGuard, RwLock};
-use crate::{errors::*, storage::engine::lsm::table::FileObject};
 use super::{
-    block::Block, compact::{CompactionController, CompactionOptions, SimpleLeveledCompactionController, SimpleLeveledCompactionOptions}, iterators::{concat_iterator::SstConcatIterator, merge_iterator::MergeIterator, two_merge_iterator::TwoMergeIterator, StorageIterator}, key::KeySlice, lsm_iterator::{FusedIterator, LsmIterator}, manifest::{Manifest, ManifestRecord}, memtable::{map_bound, MemTable}, table::{SsTable, SsTableBuilder, SsTableIterator}
+    block::Block,
+    compact::{
+        CompactionController, CompactionOptions, SimpleLeveledCompactionController,
+        SimpleLeveledCompactionOptions,
+    },
+    iterators::{
+        concat_iterator::SstConcatIterator, merge_iterator::MergeIterator,
+        two_merge_iterator::TwoMergeIterator, StorageIterator,
+    },
+    key::KeySlice,
+    lsm_iterator::{FusedIterator, LsmIterator},
+    manifest::{Manifest, ManifestRecord},
+    memtable::{map_bound, MemTable},
+    table::{SsTable, SsTableBuilder, SsTableIterator},
 };
+use crate::{errors::*, storage::engine::lsm::table::FileObject};
+use bytes::Bytes;
+use parking_lot::{Mutex, MutexGuard, RwLock};
 pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
 
 #[derive(Clone)]
@@ -31,7 +44,7 @@ pub struct LsmStorageState {
 impl LsmStorageState {
     fn create(options: &LsmStorageOptions) -> Self {
         let levels = match &options.compaction_options {
-            // CompactionOptions::Leveled(LeveledCompactionOptions { max_levels, .. })| 
+            // CompactionOptions::Leveled(LeveledCompactionOptions { max_levels, .. })|
             CompactionOptions::Simple(SimpleLeveledCompactionOptions { max_levels, .. }) => (1
                 ..=*max_levels)
                 .map(|level| (level, Vec::new()))
@@ -54,7 +67,7 @@ pub enum WriteBatchRecord<T: AsRef<[u8]>> {
     Del(T),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,With)]
 pub struct LsmStorageOptions {
     // Block size in bytes
     pub block_size: usize,
@@ -64,7 +77,8 @@ pub struct LsmStorageOptions {
     pub num_memtable_limit: usize,
     pub compaction_options: CompactionOptions,
     pub enable_wal: bool,
-    pub serializable: bool,
+    pub enable_bloom: bool,
+    pub bloom_false_positive_rate: f64,
 }
 
 impl LsmStorageOptions {
@@ -79,7 +93,8 @@ impl LsmStorageOptions {
                 size_ratio_percent: 128,
             }),
             enable_wal: true,
-            serializable: false,
+            enable_bloom: true,
+            bloom_false_positive_rate: 0.01,
         }
     }
 }
@@ -652,15 +667,11 @@ impl MiniLsm {
 
         let mut compaction_thread = self.compaction_thread.lock();
         if let Some(compaction_thread) = compaction_thread.take() {
-            compaction_thread
-                .join()
-                .unwrap();
+            compaction_thread.join().unwrap();
         }
         let mut flush_thread = self.flush_thread.lock();
         if let Some(flush_thread) = flush_thread.take() {
-            flush_thread
-                .join()
-                .unwrap();
+            flush_thread.join().unwrap();
         }
 
         // create memtable and skip updating manifest

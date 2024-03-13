@@ -291,10 +291,6 @@ impl<E: StorageEngine> SimpleQueryHandler for Session<E> {
 
 impl<E: StorageEngine> Server<E> {
     pub async fn new(engine: E) -> Result<Arc<Server<E>>> {
-        // let database = Database::new(MVCCLayer::new(BitCask::new_compact(
-        //     PathBuf::from("test.db"),
-        //     0.2,
-        // )?))?;
 
         Ok(Arc::new(Server {
             inner: Arc::new(Database::new(MVCCLayer::new(engine))?),
@@ -322,7 +318,7 @@ impl<E: StorageEngine> Server<E> {
     }
 }
 
-async fn server_run<
+pub(crate) async fn server_run<
     A: MakeHandler<Handler = Arc<impl StartupHandler + 'static>>,
     Q: MakeHandler<Handler = Arc<impl SimpleQueryHandler + 'static>>,
     EQ: MakeHandler<Handler = Arc<impl ExtendedQueryHandler + 'static>>,
