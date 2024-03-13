@@ -1,7 +1,6 @@
 use std::{
     fmt::Display,
-    io::Read,
-    path::{Path, PathBuf},
+    path::{Path},
     sync::Arc,
 };
 pub mod block;
@@ -19,7 +18,7 @@ pub mod lsm_iterator;
 
 use self::{iterators::StorageIterator, lsm_storage::{LsmStorageOptions, MiniLsm}};
 
-use super::Result;
+
 use super::StorageEngine;
 
 pub struct LSM {

@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf, sync::Arc};
+use std::{io, sync::Arc};
 
 use async_trait::async_trait;
 use futures::stream;
@@ -24,7 +24,7 @@ use crate::{
     errors::*,
     planner::operator::Operator,
     storage::{
-        engine::{bitcask::BitCask, StorageEngine},
+        engine::{StorageEngine},
         MVCCLayer,
     },
     types::{tuple::Tuple, LogicalType},
