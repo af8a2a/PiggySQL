@@ -1,4 +1,4 @@
-engine="lsm"
+engine="bitcask"
 filename="test.db"
 #config for lsm
 bloom_filter=true

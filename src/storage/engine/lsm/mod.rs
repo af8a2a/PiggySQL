@@ -47,6 +47,7 @@ impl StorageEngine for LSM {
     }
 
     fn flush(&self) -> super::Result<()> {
+        self.inner.force_flush()?;
         self.inner.sync().unwrap();
         Ok(())
     }

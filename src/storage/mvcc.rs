@@ -385,7 +385,7 @@ impl<E: StorageEngine> MVCC<E> {
             last_gc: Arc::new(AtomicU64::new(0)),
             threshold: 1024 * 16,
         };
-        block_on(mvcc.do_recovery()).unwrap();
+        // block_on(mvcc.do_recovery()).unwrap();
         // mvcc.do_recovery().unwrap();
         mvcc
     }
@@ -404,6 +404,7 @@ impl<E: StorageEngine> MVCC<E> {
             debug!("GC watermark: {}", watermark);
             // self.gc()?;
             self.gc().await?;
+            self.engine.flush()?;
         }
         MVCCTransaction::begin(self.engine.clone())
     }
