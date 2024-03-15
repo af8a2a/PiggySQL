@@ -34,7 +34,7 @@ fn serialize<V: Serialize>(value: &V) -> Result<Vec<u8>> {
 fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V> {
     Ok(bincode::deserialize(bytes)?)
 }
-
+const GC_BAIS:u64=1;
 pub struct MVCCTransaction<E: StorageEngine> {
     engine: Arc<E>,
     pub(crate) lock_manager: Option<Arc<LockManager>>,
@@ -392,7 +392,7 @@ impl<E: StorageEngine> MVCC<E> {
             engine,
             watermark: Arc::new(AtomicU64::new(1)),
             last_gc: Arc::new(AtomicU64::new(0)),
-            threshold: 1024 * 16,
+            threshold: 65535,
         };
         block_on(mvcc.do_recovery()).unwrap();
         // mvcc.do_recovery().unwrap();
@@ -452,7 +452,7 @@ impl<E: StorageEngine> MVCC<E> {
             None => 1,
         };
         let active = MVCCTransaction::scan_active(&self.engine)?;
-        let oldest_version = *active.iter().min().unwrap_or(&netx_version);
+        let oldest_version = u64::max(*active.iter().min().unwrap_or(&netx_version)-GC_BAIS,1);
         let resume_state = TransactionState {
             version: oldest_version,
             active,
