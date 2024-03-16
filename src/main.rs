@@ -1,6 +1,5 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
-use config::Config;
 use piggysql::{
     server::Server,
     storage::engine::{
@@ -9,6 +8,7 @@ use piggysql::{
         memory::Memory,
         sled_store::SledStore,
     },
+    CONFIG_MAP,
 };
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -22,19 +22,8 @@ async fn main() {
         // completes the builder.
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-    let settings = Config::builder()
-        // Add in `./Settings.toml`
-        .add_source(config::File::with_name("config/Settings"))
-        // Add in settings from the environment (with a prefix of APP)
-        // Eg.. `APP_DEBUG=1 ./target/app` would set the `debug` key
-        // .add_source(config::Environment::with_prefix("APP"))
-        .build()
-        .unwrap();
-    let setting_map = settings
-        .try_deserialize::<HashMap<String, String>>()
-        .unwrap();
-    let filename = setting_map.get("filename").unwrap();
-    let engine = setting_map.get("engine").unwrap();
+    let filename = CONFIG_MAP.get("filename").unwrap();
+    let engine = CONFIG_MAP.get("engine").unwrap();
     match engine.as_str() {
         "sled" => {
             let store = SledStore::new(PathBuf::from(filename)).unwrap();
@@ -47,12 +36,12 @@ async fn main() {
             Server::run(server).await;
         }
         "lsm" => {
-            let bloom_enable = setting_map
+            let bloom_enable = CONFIG_MAP
                 .get("bloom_filter")
                 .unwrap()
                 .parse::<bool>()
                 .expect("bloom_filter must be true or false");
-            let bloom_false_positive_rate = setting_map
+            let bloom_false_positive_rate = CONFIG_MAP
                 .get("bloom_false_positive_rate")
                 .cloned()
                 .unwrap_or("0.01".to_string())

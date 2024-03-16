@@ -3,3 +3,8 @@ filename="test.db"
 #config for lsm
 bloom_filter=true
 bloom_false_positive_rate=0.01
+#config for mvcc
+gc_threshold=16384
+
+#config for cache
+table_cache_size=64

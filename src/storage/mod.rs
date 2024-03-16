@@ -8,7 +8,7 @@ use tracing::debug;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
-use crate::errors::*;
+use crate::{errors::*, CONFIG_MAP};
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::storage::table_codec::TableCodec;
@@ -27,8 +27,6 @@ use self::engine::StorageEngine;
 use self::mvcc::{Scan, MVCC};
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
-
-    #[allow(async_fn_in_trait)]
     async fn transaction(&self) -> Result<Self::TransactionType>;
 }
 
@@ -799,17 +797,19 @@ pub struct MVCCLayer<E: StorageEngine> {
 }
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
+        let cache_size=CONFIG_MAP.get("table_cache_size").unwrap().parse::<u64>().unwrap();
         Self {
             layer: MVCC::new(Arc::new(engine)),
-            cache: Arc::new(Cache::new(40)),
+            cache: Arc::new(Cache::new(cache_size)),
         }
     }
 }
 impl MVCCLayer<Memory> {
     pub fn new_memory() -> Self {
+        let mock_cache_size=40;
         Self {
             layer: MVCC::new(Arc::new(Memory::new())),
-            cache: Arc::new(Cache::new(40)),
+            cache: Arc::new(Cache::new(mock_cache_size)),
         }
     }
 }
