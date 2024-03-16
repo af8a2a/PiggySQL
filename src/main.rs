@@ -47,10 +47,18 @@ async fn main() {
                 .unwrap_or("0.01".to_string())
                 .parse::<f64>()
                 .unwrap_or(0.01);
-
-            let option = LsmStorageOptions::default()
-                .with_enable_bloom(bloom_enable)
-                .with_bloom_false_positive_rate(bloom_false_positive_rate);
+            let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
+            let option = match compaction.as_str() {
+                "leveled" => LsmStorageOptions::leveled_compaction()
+                    .with_enable_bloom(bloom_enable)
+                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                "simple" => LsmStorageOptions::default()
+                    .with_enable_bloom(bloom_enable)
+                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                _ => LsmStorageOptions::no_compaction()
+                    .with_enable_bloom(bloom_enable)
+                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
+            };
             let store = LSM::new(PathBuf::from(filename), option);
             let server = Server::new(store).await.unwrap();
             Server::run(server).await;

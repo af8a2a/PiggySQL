@@ -1,7 +1,20 @@
+#use backend engine
+#"lsm"=rocksdb like lsm-tree engine
+#"bitcask"=simple bitcask variant
+#"memory"=in-memory skiplist engine
+#"sled"=bw-tree engine
 engine="lsm"
+#database filedir
 filename="test.db"
 #config for lsm
+#compaction config:
+#"leveled"=rocksdb's leveled compaction
+#"simple"=lsm's paper compaction
+#anythine else=no compaction
+compaction="leveled"
+#enable bloom filter
 bloom_filter=true
+#config for bloom filter
 bloom_false_positive_rate=0.01
 #config for mvcc
 gc_threshold=16384

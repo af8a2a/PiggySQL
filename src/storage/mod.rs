@@ -27,6 +27,7 @@ use self::engine::StorageEngine;
 use self::mvcc::{Scan, MVCC};
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
+    #[allow(async_fn_in_trait)]
     async fn transaction(&self) -> Result<Self::TransactionType>;
 }
 

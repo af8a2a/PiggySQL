@@ -9,7 +9,8 @@ use std::{
 use super::{
     block::Block,
     compact::{
-        CompactionController, CompactionOptions, SimpleLeveledCompactionController,
+        CompactionController, CompactionOptions, LeveledCompactionController,
+        LeveledCompactionOptions, SimpleLeveledCompactionController,
         SimpleLeveledCompactionOptions,
     },
     iterators::{
@@ -44,8 +45,8 @@ pub struct LsmStorageState {
 impl LsmStorageState {
     fn create(options: &LsmStorageOptions) -> Self {
         let levels = match &options.compaction_options {
-            // CompactionOptions::Leveled(LeveledCompactionOptions { max_levels, .. })|
-            CompactionOptions::Simple(SimpleLeveledCompactionOptions { max_levels, .. }) => (1
+            CompactionOptions::Leveled(LeveledCompactionOptions { max_levels, .. })
+            | CompactionOptions::Simple(SimpleLeveledCompactionOptions { max_levels, .. }) => (1
                 ..=*max_levels)
                 .map(|level| (level, Vec::new()))
                 .collect::<Vec<_>>(),
@@ -91,6 +92,37 @@ impl LsmStorageOptions {
                 level0_file_num_compaction_trigger: 2,
                 max_levels: 4,
                 size_ratio_percent: 128,
+            }),
+            enable_wal: true,
+            enable_bloom: true,
+            bloom_false_positive_rate: 0.01,
+        }
+    }
+    pub fn no_compaction() -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 2 << 20, // 2MB
+            num_memtable_limit: 3,
+            compaction_options: CompactionOptions::Simple(SimpleLeveledCompactionOptions {
+                level0_file_num_compaction_trigger: 2,
+                max_levels: 4,
+                size_ratio_percent: 128,
+            }),
+            enable_wal: true,
+            enable_bloom: true,
+            bloom_false_positive_rate: 0.01,
+        }
+    }
+    pub fn leveled_compaction() -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 2 << 20, // 2MB
+            num_memtable_limit: 3,
+            compaction_options: CompactionOptions::Leveled(LeveledCompactionOptions {
+                level0_file_num_compaction_trigger: 2,
+                max_levels: 4,
+                base_level_size_mb: 128,
+                level_size_multiplier: 2,
             }),
             enable_wal: true,
             enable_bloom: true,
@@ -157,9 +189,9 @@ impl LsmStorageInner {
         let manifest;
 
         let compaction_controller = match &options.compaction_options {
-            // CompactionOptions::Leveled(options) => {
-            //     CompactionController::Leveled(LeveledCompactionController::new(options.clone()))
-            // }
+            CompactionOptions::Leveled(options) => {
+                CompactionController::Leveled(LeveledCompactionController::new(options.clone()))
+            }
             // CompactionOptions::Tiered(options) => {
             //     CompactionController::Tiered(TieredCompactionController::new(options.clone()))
             // }
