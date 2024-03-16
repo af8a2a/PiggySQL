@@ -72,6 +72,10 @@ impl CompactionController {
             (CompactionController::Simple(ctrl), CompactionTask::Simple(task)) => {
                 ctrl.apply_compaction_result(snapshot, task, output)
             }
+            (CompactionController::Leveled(ctrl), CompactionTask::Leveled(task)) => {
+                ctrl.apply_compaction_result(snapshot, task, output)
+            }
+
             _ => unreachable!(),
         }
     }
@@ -290,7 +294,7 @@ impl LsmStorageInner {
         let Some(task) = task else {
             return Ok(());
         };
-        // self.dump_structure();
+        self.dump_structure();
         println!("running compaction task: {:?}", task);
         let sstables = self.compact(&task)?;
         let output = sstables.iter().map(|x| x.sst_id()).collect::<Vec<_>>();

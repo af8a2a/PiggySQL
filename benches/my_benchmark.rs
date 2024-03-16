@@ -86,7 +86,7 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
 }
 async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
     let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
-    let db = Database::new(MVCCLayer::new(LSM::new(path, LsmStorageOptions::default())))?;
+    let db = Database::new(MVCCLayer::new(LSM::new(path, LsmStorageOptions::leveled_compaction())))?;
 
     db.run(
         "CREATE TABLE BenchTable(
@@ -158,34 +158,34 @@ fn criterion_benchmark(c: &mut Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    let engine = rt.block_on(async { data_source().await.unwrap() });
-    let bitcask = rt.block_on(async { data_source_bitcask().await.unwrap() });
+    // let engine = rt.block_on(async { data_source().await.unwrap() });
+    // let bitcask = rt.block_on(async { data_source_bitcask().await.unwrap() });
     let lsm = rt.block_on(async { data_source_lsm().await.unwrap() });
-    let sled = rt.block_on(async { data_source_sled().await.unwrap() });
-    c.bench_function("select rows with primary key", |b| {
-        b.to_async(&rt)
-            .iter(|| async { primary_key_benchmark_100000(&engine).await })
-    });
-    c.bench_function("select rows without primary key", |b| {
-        b.to_async(&rt)
-            .iter(|| async { without_primary_key_benchmark_100000(&engine).await })
-    });
-    c.bench_function("transaction in Snapshot isolation", |b| {
-        b.to_async(&rt)
-            .iter(|| async { si_key_benchmark_100000(&engine).await })
-    });
-    c.bench_function("transaction in Serializable Snapshot isolation", |b| {
-        b.to_async(&rt)
-            .iter(|| async { ssi_key_benchmark_100000(&engine).await })
-    });
-    c.bench_function("bitcask benchmark select rows with primary key", |b| {
-        b.to_async(&rt)
-            .iter(|| async { bitcask_benchmark_100000(&bitcask).await })
-    });
-    c.bench_function("sled benchmark select rows with primary key", |b| {
-        b.to_async(&rt)
-            .iter(|| async { sled_benchmark_100000(&sled).await })
-    });
+    // let sled = rt.block_on(async { data_source_sled().await.unwrap() });
+    // c.bench_function("select rows with primary key", |b| {
+    //     b.to_async(&rt)
+    //         .iter(|| async { primary_key_benchmark_100000(&engine).await })
+    // });
+    // c.bench_function("select rows without primary key", |b| {
+    //     b.to_async(&rt)
+    //         .iter(|| async { without_primary_key_benchmark_100000(&engine).await })
+    // });
+    // c.bench_function("transaction in Snapshot isolation", |b| {
+    //     b.to_async(&rt)
+    //         .iter(|| async { si_key_benchmark_100000(&engine).await })
+    // });
+    // c.bench_function("transaction in Serializable Snapshot isolation", |b| {
+    //     b.to_async(&rt)
+    //         .iter(|| async { ssi_key_benchmark_100000(&engine).await })
+    // });
+    // c.bench_function("bitcask benchmark select rows with primary key", |b| {
+    //     b.to_async(&rt)
+    //         .iter(|| async { bitcask_benchmark_100000(&bitcask).await })
+    // });
+    // c.bench_function("sled benchmark select rows with primary key", |b| {
+    //     b.to_async(&rt)
+    //         .iter(|| async { sled_benchmark_100000(&sled).await })
+    // });
     c.bench_function("lsm benchmark select rows with primary key", |b| {
         b.to_async(&rt)
             .iter(|| async { lsm_benchmark_100000(&lsm).await })
