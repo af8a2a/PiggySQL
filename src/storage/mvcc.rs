@@ -13,7 +13,7 @@ use std::{
 use self::lock_manager::LockManager;
 
 use super::engine::{KvScan, StorageEngine};
-use crate::errors::*;
+use crate::{errors::*, CONFIG_MAP};
 
 use futures::executor::block_on;
 pub use keycode::*;
@@ -388,14 +388,14 @@ pub struct MVCC<E: StorageEngine> {
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
+        let threshold=CONFIG_MAP.get("gc_threshold").unwrap().parse::<u64>().unwrap();
         let mvcc = MVCC {
             engine,
             watermark: Arc::new(AtomicU64::new(1)),
             last_gc: Arc::new(AtomicU64::new(0)),
-            threshold: 65535,
+            threshold,
         };
-        block_on(mvcc.do_recovery()).unwrap();
-        // mvcc.do_recovery().unwrap();
+        mvcc.do_recovery().unwrap();
         mvcc
     }
 
@@ -412,13 +412,13 @@ impl<E: StorageEngine> MVCC<E> {
 
             debug!("GC watermark: {}", watermark);
             // self.gc()?;
-            self.gc().await?;
-            self.engine.flush()?;
+            self.gc()?;
+            // self.engine.flush()?;
         }
         MVCCTransaction::begin(self.engine.clone())
     }
-    pub async fn do_recovery(&self) -> Result<()> {
-        self.gc().await?;
+    pub fn do_recovery(&self) -> Result<()> {
+        self.gc()?;
 
         let active_set = self
             .engine
@@ -440,7 +440,7 @@ impl<E: StorageEngine> MVCC<E> {
         Ok(())
     }
 
-    pub async fn gc(&self) -> Result<()> {
+    pub fn gc(&self) -> Result<()> {
         let mut scan = self
             .engine
             .scan(&Key::Version(vec![], 0).encode()?..&KeyPrefix::Unversioned.encode()?)?
@@ -1164,7 +1164,7 @@ pub mod tests {
             .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
             .collect_vec();
         assert_eq!(scan.len(), 3);
-        mvcc.gc().await?;
+        mvcc.gc()?;
         let scan = mvcc
             .engine
             .scan_prefix(&KeyPrefix::Version(b"a".to_vec()).encode()?)?
