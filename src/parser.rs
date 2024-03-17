@@ -4,7 +4,7 @@ use sqlparser::{ast::Statement as SqlStatement, parser::Parser};
 const DIALECT: PostgreSqlDialect = PostgreSqlDialect {};
 
 pub fn parse(sql: &str) -> Result<Vec<SqlStatement>, ParserError> {
-    Parser::parse_sql(&DIALECT, sql.to_lowercase().as_str())
+    Parser::parse_sql(&DIALECT, sql)
 }
 
 #[cfg(test)]

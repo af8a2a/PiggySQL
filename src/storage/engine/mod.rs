@@ -1,8 +1,8 @@
 use crate::errors::*;
 use itertools::Itertools;
 pub mod bitcask;
-pub mod memory;
 pub mod lsm;
+pub mod memory;
 pub mod sled_store;
 pub type KvScan = Box<dyn DoubleEndedIterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
 
@@ -43,7 +43,6 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
-
     /// Generates common tests for any Engine implementation.
     macro_rules! test_engine {
         ($setup:expr) => {

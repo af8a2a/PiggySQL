@@ -1,11 +1,11 @@
-use std::{fs::File, io, path::Path};
+use std::path::Path;
 
 use sqllogictest::Runner;
 use sqllogictest_test::Mock;
 #[tokio::main]
 async fn main() {
     const SLT_PATTERN: &str = "tests/slt/**/*.slt";
-    const TEST: &str = "tests/slt/join.slt";
+    // const TEST: &str = "tests/slt/join.slt";
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     std::env::set_current_dir(path).unwrap();
 

@@ -15,7 +15,7 @@
   - [x] Distinct
   - [x] Aggregation: Count / Sum / Avg / Min / Max
   - [x] Subquery
-  - [x] Join: Left Outer / Right Outer / Full Outer / Inner / Cross
+  - [x] Join: Left  / Right  /  Inner
   - [x] Group By
   - [x] Having
   - [x] Order By
@@ -49,13 +49,18 @@
     - [x] Coloumn Pruning
     - [x] Limit Pushdown  
     - [x] Combine operator  
-
 - Execution
   - [x] Volcano
 - Net
   - [x] PSQL Client  
+  - [x] Rust CLI Client
   - [x] Server  
   - [x] JDBC Driver (only a little)
+- Storage
+  - [x] BitCask variant(from toydb)
+  - [x] LSM variant (from mini-lsm)
+  - [x] Memory SkipMap (crossbeam-skiplist)
+  - [x] Sled
 
 ## References
 We have referred to the following excellent open-source database projects and express our gratitude for their work
@@ -64,7 +69,7 @@ We have referred to the following excellent open-source database projects and ex
 - [Fedomn/sqlrs](https://github.com/Fedomn/sqlrs): Main reference materials, Optimizer and Executor all refer to the design of sqlrs
 - [KipData/KipSQL](https://github.com/KipData/KipSQL): Main reference materials,refer to a largenumber of SQL layer designs,Excellent Work!
 - [erikgrinaker/ToyDB](https://github.com/erikgrinaker/toydb): Main reference MVCC Design,Encode and Decode,Storage Engine,Transaction, architecture refer the design of toydb
-- [skyzh/mini-lsm](https://github.com/skyzh/mini-lsm) refer to the design of Storage Engine
+- [skyzh/mini-lsm](https://github.com/skyzh/mini-lsm) refer to the LSM design and implementation  
 - [YumingxuanGuo/featherdb](https://github.com/YumingxuanGuo/featherdb) reference serializable snapshot isolation
 
 ## Run PiggySQL
