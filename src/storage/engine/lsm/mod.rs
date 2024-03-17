@@ -10,20 +10,12 @@ pub mod iterators;
 pub mod key;
 pub mod lsm_iterator;
 pub mod lsm_storage;
-<<<<<<< HEAD
 pub mod mem_table;
 pub mod table;
 pub mod wal;
 pub mod manifest;
-pub mod lsm_iterator;
 mod debug;
 
-=======
-pub mod manifest;
-pub mod memtable;
-pub mod table;
-pub mod wal;
->>>>>>> main
 
 use self::{
     iterators::StorageIterator,

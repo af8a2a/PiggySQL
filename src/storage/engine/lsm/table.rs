@@ -91,12 +91,6 @@ pub struct FileObject(Option<File>, u64);
 impl FileObject {
     pub fn read(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
         let mut data = vec![0; len as usize];
-<<<<<<< HEAD
-        self.0
-            .as_ref()
-            .unwrap()
-            .seek_read(&mut data[..], offset)?;
-=======
 
         #[cfg(windows)]
         {
@@ -111,7 +105,6 @@ impl FileObject {
                 .unwrap()
                 .read_exact_at(&mut data[..], offset)?;
         }
->>>>>>> main
         Ok(data)
     }
 

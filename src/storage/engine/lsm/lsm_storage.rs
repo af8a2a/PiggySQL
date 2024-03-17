@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 use std::backtrace;
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
@@ -16,32 +15,6 @@ use super::block::Block;
 use super::compact::{
     CompactionController, CompactionOptions, LeveledCompactionController, LeveledCompactionOptions,
     SimpleLeveledCompactionController, SimpleLeveledCompactionOptions, TieredCompactionController,
-=======
-use derive_with::With;
-use std::{
-    collections::{BTreeSet, HashMap},
-    ops::Bound,
-    path::{Path, PathBuf},
-    sync::{atomic::AtomicUsize, Arc},
-};
-
-use super::{
-    block::Block,
-    compact::{
-        CompactionController, CompactionOptions, LeveledCompactionController,
-        LeveledCompactionOptions, SimpleLeveledCompactionController,
-        SimpleLeveledCompactionOptions,
-    },
-    iterators::{
-        concat_iterator::SstConcatIterator, merge_iterator::MergeIterator,
-        two_merge_iterator::TwoMergeIterator, StorageIterator,
-    },
-    key::KeySlice,
-    lsm_iterator::{FusedIterator, LsmIterator},
-    manifest::{Manifest, ManifestRecord},
-    memtable::{map_bound, MemTable},
-    table::{SsTable, SsTableBuilder, SsTableIterator},
->>>>>>> main
 };
 use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
@@ -97,16 +70,7 @@ impl LsmStorageState {
     }
 }
 
-<<<<<<< HEAD
 #[derive(Debug, Clone,With)]
-=======
-pub enum WriteBatchRecord<T: AsRef<[u8]>> {
-    Put(T, T),
-    Del(T),
-}
-
-#[derive(Debug, Clone, With)]
->>>>>>> main
 pub struct LsmStorageOptions {
     // Block size in bytes
     pub block_size: usize,
@@ -116,7 +80,6 @@ pub struct LsmStorageOptions {
     pub num_memtable_limit: usize,
     pub compaction_options: CompactionOptions,
     pub enable_wal: bool,
-    pub serializable: bool,
 }
 
 impl LsmStorageOptions {
@@ -127,7 +90,6 @@ impl LsmStorageOptions {
             compaction_options: CompactionOptions::NoCompaction,
             enable_wal: false,
             num_memtable_limit: 50,
-            serializable: false,
         }
     }
 
@@ -138,7 +100,6 @@ impl LsmStorageOptions {
             compaction_options: CompactionOptions::NoCompaction,
             enable_wal: false,
             num_memtable_limit: 2,
-            serializable: false,
         }
     }
 
@@ -149,7 +110,6 @@ impl LsmStorageOptions {
             compaction_options,
             enable_wal: false,
             num_memtable_limit: 2,
-            serializable: false,
         }
     }
     pub fn default() -> Self {
@@ -164,7 +124,6 @@ impl LsmStorageOptions {
                 level_size_multiplier: 2,
             }),
             enable_wal: true,
-            serializable: false,
         }
     }
     pub fn no_compaction() -> Self {
@@ -178,8 +137,8 @@ impl LsmStorageOptions {
                 size_ratio_percent: 128,
             }),
             enable_wal: true,
-            enable_bloom: true,
-            bloom_false_positive_rate: 0.01,
+            // enable_bloom: true,
+            // bloom_false_positive_rate: 0.01,
         }
     }
     pub fn leveled_compaction() -> Self {
@@ -194,8 +153,8 @@ impl LsmStorageOptions {
                 level_size_multiplier: 2,
             }),
             enable_wal: true,
-            enable_bloom: true,
-            bloom_false_positive_rate: 0.01,
+            // enable_bloom: true,
+            // bloom_false_positive_rate: 0.01,
         }
     }
 }
@@ -387,15 +346,9 @@ impl LsmStorageInner {
             CompactionOptions::Leveled(options) => {
                 CompactionController::Leveled(LeveledCompactionController::new(options.clone()))
             }
-<<<<<<< HEAD
             CompactionOptions::Tiered(options) => {
                 CompactionController::Tiered(TieredCompactionController::new(options.clone()))
             }
-=======
-            // CompactionOptions::Tiered(options) => {
-            //     CompactionController::Tiered(TieredCompactionController::new(options.clone()))
-            // }
->>>>>>> main
             CompactionOptions::Simple(options) => CompactionController::Simple(
                 SimpleLeveledCompactionController::new(options.clone()),
             ),
@@ -456,12 +409,7 @@ impl LsmStorageInner {
                 let sst = SsTable::open(
                     table_id,
                     Some(block_cache.clone()),
-<<<<<<< HEAD
                     FileObject::open(&Self::path_of_sst_static(path, table_id))?,
-=======
-                    FileObject::open(&Self::path_of_sst_static(path, table_id))
-                        .unwrap_or_else(|_| panic!("failed to open SST: {}", table_id)),
->>>>>>> main
                 )?;
                 state.sstables.insert(table_id, Arc::new(sst));
                 sst_cnt += 1;
@@ -870,153 +818,3 @@ impl LsmStorageInner {
         )?))
     }
 }
-<<<<<<< HEAD
-=======
-/// A thin wrapper for `LsmStorageInner` and the user interface for MiniLSM.
-pub struct MiniLsm {
-    pub(crate) inner: Arc<LsmStorageInner>,
-    /// Notifies the L0 flush thread to stop working. (In week 1 day 6)
-    flush_notifier: crossbeam_channel::Sender<()>,
-    /// The handle for the compaction thread. (In week 1 day 6)
-    flush_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
-    /// Notifies the compaction thread to stop working. (In week 2)
-    compaction_notifier: crossbeam_channel::Sender<()>,
-    /// The handle for the compaction thread. (In week 2)
-    compaction_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
-}
-
-impl Drop for MiniLsm {
-    fn drop(&mut self) {
-        self.compaction_notifier.send(()).ok();
-        self.flush_notifier.send(()).ok();
-    }
-}
-
-impl MiniLsm {
-    pub fn close(&self) -> Result<()> {
-        self.inner.sync_dir()?;
-        self.compaction_notifier.send(()).ok();
-        self.flush_notifier.send(()).ok();
-
-        if self.inner.options.enable_wal {
-            self.inner.sync()?;
-            self.inner.sync_dir()?;
-            return Ok(());
-        }
-
-        let mut compaction_thread = self.compaction_thread.lock();
-        if let Some(compaction_thread) = compaction_thread.take() {
-            compaction_thread.join().unwrap();
-        }
-        let mut flush_thread = self.flush_thread.lock();
-        if let Some(flush_thread) = flush_thread.take() {
-            flush_thread.join().unwrap();
-        }
-
-        // create memtable and skip updating manifest
-        if !self.inner.state.read().memtable.is_empty() {
-            self.inner
-                .freeze_memtable_with_memtable(Arc::new(MemTable::create(
-                    self.inner.next_sst_id(),
-                )))?;
-        }
-
-        while {
-            let snapshot = self.inner.state.read();
-            !snapshot.imm_memtables.is_empty()
-        } {
-            self.inner.force_flush_next_imm_memtable()?;
-        }
-        self.inner.sync_dir()?;
-
-        Ok(())
-    }
-
-    /// Start the storage engine by either loading an existing directory or creating a new one if the directory does
-    /// not exist.
-    pub fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Arc<Self>> {
-        let inner = Arc::new(LsmStorageInner::open(path, options)?);
-        let (tx1, rx) = crossbeam_channel::unbounded();
-        let compaction_thread = inner.spawn_compaction_thread(rx)?;
-        let (tx2, rx) = crossbeam_channel::unbounded();
-        let flush_thread = inner.spawn_flush_thread(rx)?;
-        Ok(Arc::new(Self {
-            inner,
-            flush_notifier: tx2,
-            flush_thread: Mutex::new(flush_thread),
-            compaction_notifier: tx1,
-            compaction_thread: Mutex::new(compaction_thread),
-        }))
-    }
-
-    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
-        self.inner.get(key)
-    }
-
-    pub fn write_batch<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<()> {
-        self.inner.write_batch(batch)
-    }
-
-    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        self.inner.put(key, value)
-    }
-
-    pub fn delete(&self, key: &[u8]) -> Result<()> {
-        self.inner.delete(key)
-    }
-
-    pub fn sync(&self) -> Result<()> {
-        self.inner.sync()
-    }
-
-    pub fn new_txn(&self) -> Result<()> {
-        self.inner.new_txn()
-    }
-
-    pub fn scan(
-        &self,
-        lower: Bound<&[u8]>,
-        upper: Bound<&[u8]>,
-    ) -> Result<FusedIterator<LsmIterator>> {
-        self.inner.scan(lower, upper)
-    }
-
-    /// Only call this in test cases due to race conditions
-    pub fn force_flush(&self) -> Result<()> {
-        if !self.inner.state.read().memtable.is_empty() {
-            self.inner
-                .force_freeze_memtable(&self.inner.state_lock.lock())?;
-        }
-        if !self.inner.state.read().imm_memtables.is_empty() {
-            self.inner.force_flush_next_imm_memtable()?;
-        }
-        Ok(())
-    }
-
-    pub fn force_full_compaction(&self) -> Result<()> {
-        self.inner.force_full_compaction()
-    }
-}
-
-impl LsmStorageInner {
-    pub fn dump_structure(&self) {
-        let snapshot = self.state.read();
-        if !snapshot.l0_sstables.is_empty() {
-            println!(
-                "L0 ({}): {:?}",
-                snapshot.l0_sstables.len(),
-                snapshot.l0_sstables,
-            );
-        }
-        for (level, files) in &snapshot.levels {
-            println!("L{level} ({}): {:?}", files.len(), files);
-        }
-    }
-}
-
-impl MiniLsm {
-    pub fn dump_structure(&self) {
-        self.inner.dump_structure()
-    }
-}
->>>>>>> main

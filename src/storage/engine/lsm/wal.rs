@@ -51,11 +51,7 @@ impl Wal {
             rbuf.advance(value_len);
             let checksum = rbuf.get_u32();
             if hasher.finalize() != checksum {
-<<<<<<< HEAD
                 panic!("checksum mismatch");
-=======
-                panic!("checksum mismatch"); //todo
->>>>>>> main
             }
             skiplist.insert(key, value);
         }

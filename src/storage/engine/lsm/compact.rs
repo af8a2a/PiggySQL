@@ -1,10 +1,6 @@
 mod leveled;
 mod simple_leveled;
-<<<<<<< HEAD
 mod tiered;
-=======
-
->>>>>>> main
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,7 +14,6 @@ pub use simple_leveled::{
 pub use tiered::{TieredCompactionController, TieredCompactionOptions, TieredCompactionTask};
 
 
-pub use self::leveled::{LeveledCompactionController, LeveledCompactionOptions, LeveledCompactionTask};
 
 use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
@@ -31,51 +26,36 @@ use super::table::{SsTable, SsTableBuilder, SsTableIterator};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CompactionTask {
-<<<<<<< HEAD
     Leveled(LeveledCompactionTask),
     Tiered(TieredCompactionTask),
-=======
->>>>>>> main
     Simple(SimpleLeveledCompactionTask),
     ForceFullCompaction {
         l0_sstables: Vec<usize>,
         l1_sstables: Vec<usize>,
     },
-    Leveled(LeveledCompactionTask),
 }
 
 impl CompactionTask {
     fn compact_to_bottom_level(&self) -> bool {
         match self {
             CompactionTask::ForceFullCompaction { .. } => true,
-<<<<<<< HEAD
             CompactionTask::Leveled(task) => task.is_lower_level_bottom_level,
             CompactionTask::Simple(task) => task.is_lower_level_bottom_level,
             CompactionTask::Tiered(task) => task.bottom_tier_included,
-=======
-            CompactionTask::Simple(task) => task.is_lower_level_bottom_level,
-            CompactionTask::Leveled(task) => task.is_lower_level_bottom_level,
->>>>>>> main
         }
     }
 }
 
 pub(crate) enum CompactionController {
-<<<<<<< HEAD
     Leveled(LeveledCompactionController),
     Tiered(TieredCompactionController),
-=======
->>>>>>> main
     Simple(SimpleLeveledCompactionController),
-    Leveled(LeveledCompactionController),
-
     NoCompaction,
 }
 
 impl CompactionController {
     pub fn generate_compaction_task(&self, snapshot: &LsmStorageState) -> Option<CompactionTask> {
         match self {
-<<<<<<< HEAD
             CompactionController::Leveled(ctrl) => ctrl
                 .generate_compaction_task(snapshot)
                 .map(CompactionTask::Leveled),
@@ -85,14 +65,6 @@ impl CompactionController {
             CompactionController::Tiered(ctrl) => ctrl
                 .generate_compaction_task(snapshot)
                 .map(CompactionTask::Tiered),
-=======
-            CompactionController::Simple(ctrl) => ctrl
-                .generate_compaction_task(snapshot)
-                .map(CompactionTask::Simple),
-            CompactionController::Leveled(ctrl) => ctrl
-                .generate_compaction_task(snapshot)
-                .map(CompactionTask::Leveled),
->>>>>>> main
             CompactionController::NoCompaction => unreachable!(),
         }
     }
@@ -104,7 +76,6 @@ impl CompactionController {
         output: &[usize],
     ) -> (LsmStorageState, Vec<usize>) {
         match (self, task) {
-<<<<<<< HEAD
             (CompactionController::Leveled(ctrl), CompactionTask::Leveled(task)) => {
                 ctrl.apply_compaction_result(snapshot, task, output)
             }
@@ -114,15 +85,6 @@ impl CompactionController {
             (CompactionController::Tiered(ctrl), CompactionTask::Tiered(task)) => {
                 ctrl.apply_compaction_result(snapshot, task, output)
             }
-=======
-            (CompactionController::Simple(ctrl), CompactionTask::Simple(task)) => {
-                ctrl.apply_compaction_result(snapshot, task, output)
-            }
-            (CompactionController::Leveled(ctrl), CompactionTask::Leveled(task)) => {
-                ctrl.apply_compaction_result(snapshot, task, output)
-            }
-
->>>>>>> main
             _ => unreachable!(),
         }
     }
@@ -130,14 +92,10 @@ impl CompactionController {
 
 impl CompactionController {
     pub fn flush_to_l0(&self) -> bool {
-<<<<<<< HEAD
         matches!(
             self,
             Self::Leveled(_) | Self::Simple(_) | Self::NoCompaction
         )
-=======
-        matches!(self, Self::Simple(_) | Self::NoCompaction)
->>>>>>> main
     }
 }
 
@@ -146,12 +104,8 @@ pub enum CompactionOptions {
     /// Leveled compaction with partial compaction + dynamic level support (= RocksDB's Leveled
     /// Compaction)
     Leveled(LeveledCompactionOptions),
-<<<<<<< HEAD
     /// Tiered compaction (= RocksDB's universal compaction)
     Tiered(TieredCompactionOptions),
-=======
-
->>>>>>> main
     /// Simple leveled compaction
     Simple(SimpleLeveledCompactionOptions),
     /// In no compaction mode (week 1), always flush to L0
@@ -279,7 +233,6 @@ impl LsmStorageInner {
                     )
                 }
             },
-<<<<<<< HEAD
             CompactionTask::Tiered(TieredCompactionTask { tiers, .. }) => {
                 let mut iters = Vec::with_capacity(tiers.len());
                 for (_, tier_sst_ids) in tiers {
@@ -294,8 +247,6 @@ impl LsmStorageInner {
                     task.compact_to_bottom_level(),
                 )
             }
-=======
->>>>>>> main
         }
     }
 
@@ -420,14 +371,9 @@ impl LsmStorageInner {
         self: &Arc<Self>,
         rx: crossbeam_channel::Receiver<()>,
     ) -> Result<Option<std::thread::JoinHandle<()>>> {
-<<<<<<< HEAD
         if let CompactionOptions::Leveled(_)
         | CompactionOptions::Simple(_)
         | CompactionOptions::Tiered(_) = self.options.compaction_options
-=======
-        if let CompactionOptions::Simple(_) | CompactionOptions::Leveled(_) =
-            self.options.compaction_options
->>>>>>> main
         {
             let this = self.clone();
             let handle = std::thread::spawn(move || {

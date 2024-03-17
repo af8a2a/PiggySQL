@@ -4,10 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::storage::engine::lsm::lsm_storage::LsmStorageState;
 
-<<<<<<< HEAD
-=======
-
->>>>>>> main
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LeveledCompactionTask {
     // if upper_level is `None`, then it is L0 compaction
