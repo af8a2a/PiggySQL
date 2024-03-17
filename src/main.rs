@@ -47,21 +47,21 @@ async fn main() {
             Server::run(server).await;
         }
         "lsm" => {
-            let bloom_enable = setting_map
-                .get("bloom_filter")
-                .unwrap()
-                .parse::<bool>()
-                .expect("bloom_filter must be true or false");
-            let bloom_false_positive_rate = setting_map
-                .get("bloom_false_positive_rate")
-                .cloned()
-                .unwrap_or("0.01".to_string())
-                .parse::<f64>()
-                .unwrap_or(0.01);
+            // let bloom_enable = setting_map
+            //     .get("bloom_filter")
+            //     .unwrap()
+            //     .parse::<bool>()
+            //     .expect("bloom_filter must be true or false");
+            // let bloom_false_positive_rate = setting_map
+            //     .get("bloom_false_positive_rate")
+            //     .cloned()
+            //     .unwrap_or("0.01".to_string())
+            //     .parse::<f64>()
+            //     .unwrap_or(0.01);
 
-            let option = LsmStorageOptions::default()
-                .with_enable_bloom(bloom_enable)
-                .with_bloom_false_positive_rate(bloom_false_positive_rate);
+            let option = LsmStorageOptions::default();
+                // .with_enable_bloom(bloom_enable)
+                // .with_bloom_false_positive_rate(bloom_false_positive_rate);
             let store = LSM::new(PathBuf::from(filename), option);
             let server = Server::new(store).await.unwrap();
             Server::run(server).await;

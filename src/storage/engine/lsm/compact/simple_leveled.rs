@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::storage::engine::lsm::lsm_storage::LsmStorageState;
 
+
 #[derive(Debug, Clone)]
 pub struct SimpleLeveledCompactionOptions {
     pub size_ratio_percent: usize,

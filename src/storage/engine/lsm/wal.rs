@@ -1,12 +1,14 @@
-use crate::errors::*;
-use bytes::{Buf, BufMut, Bytes};
-use crossbeam_skiplist::SkipMap;
-use parking_lot::Mutex;
 use std::fs::{File, OpenOptions};
 use std::hash::Hasher;
 use std::io::{BufWriter, Read, Write};
 use std::path::Path;
 use std::sync::Arc;
+use crate::errors::Result;
+
+use bytes::{Buf, BufMut, Bytes};
+use crossbeam_skiplist::SkipMap;
+use parking_lot::Mutex;
+
 pub struct Wal {
     file: Arc<Mutex<BufWriter<File>>>,
 }
@@ -49,7 +51,7 @@ impl Wal {
             rbuf.advance(value_len);
             let checksum = rbuf.get_u32();
             if hasher.finalize() != checksum {
-                panic!("checksum mismatch");//todo
+                panic!("checksum mismatch");
             }
             skiplist.insert(key, value);
         }

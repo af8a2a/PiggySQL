@@ -1,23 +1,21 @@
 pub(crate) mod bloom;
 mod builder;
 mod iterator;
+use crate::errors::Result;
 
-use crate::errors::*;
-pub use builder::SsTableBuilder;
-use bytes::{Buf, BufMut};
-pub use iterator::SsTableIterator;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+pub use builder::SsTableBuilder;
+use bytes::{Buf, BufMut};
+pub use iterator::SsTableIterator;
+
+
 use self::bloom::Bloom;
 
-use super::{
-    block::Block,
-    key::{KeyBytes, KeySlice},
-    lsm_storage::BlockCache,
-};
+use super::{block::Block, key::{KeyBytes, KeySlice}, lsm_storage::BlockCache};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
@@ -94,7 +92,10 @@ impl FileObject {
     pub fn read(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
         use std::os::windows::fs::FileExt;
         let mut data = vec![0; len as usize];
-        self.0.as_ref().unwrap().seek_read(&mut data[..], offset)?;
+        self.0
+            .as_ref()
+            .unwrap()
+            .seek_read(&mut data[..], offset)?;
         Ok(data)
     }
 
@@ -106,15 +107,13 @@ impl FileObject {
     pub fn create(path: &Path, data: Vec<u8>) -> Result<Self> {
         // std::fs::write(path, &data)?;
         // println!("reach");
-        let mut file = File::options()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(path)
-            .unwrap();
+        let mut file=File::options().read(true).write(true).create(true).open(path).unwrap();
         file.write_all(&data)?;
         file.sync_all().unwrap();
-        Ok(FileObject(Some(file), data.len() as u64))
+        Ok(FileObject(
+            Some(file),
+            data.len() as u64,
+        ))
     }
 
     pub fn open(path: &Path) -> Result<Self> {
@@ -212,8 +211,7 @@ impl SsTable {
     pub fn read_block_cached(&self, block_idx: usize) -> Result<Arc<Block>> {
         if let Some(ref block_cache) = self.block_cache {
             let blk = block_cache
-                .try_get_with((self.id, block_idx), || self.read_block(block_idx))
-                .expect("block cache error");
+                .try_get_with((self.id, block_idx), || self.read_block(block_idx)).unwrap();
             Ok(blk)
         } else {
             self.read_block(block_idx)

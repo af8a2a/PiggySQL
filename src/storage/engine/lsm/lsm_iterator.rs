@@ -1,12 +1,13 @@
 use std::ops::Bound;
 
+use crate::errors::Result;
 use bytes::Bytes;
-use crate::errors::*;
+
 use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
 use super::iterators::two_merge_iterator::TwoMergeIterator;
 use super::iterators::StorageIterator;
-use super::memtable::MemTableIterator;
+use super::mem_table::MemTableIterator;
 use super::table::SsTableIterator;
 
 /// Represents the internal type for an LSM iterator. This type will be changed across the tutorial for multiple times.

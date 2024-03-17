@@ -1,12 +1,8 @@
 use std::sync::Arc;
+use crate::errors::Result;
 
-use crate::{
-    errors::Result,
-    storage::engine::lsm::{
-        key::KeySlice,
-        table::{SsTable, SsTableIterator},
-    },
-};
+
+use crate::storage::engine::lsm::{key::KeySlice, table::{SsTable, SsTableIterator}};
 
 use super::StorageIterator;
 

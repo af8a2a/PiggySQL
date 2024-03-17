@@ -9,11 +9,12 @@ pub mod compact;
 pub mod iterators;
 pub mod key;
 pub mod lsm_storage;
-pub mod memtable;
+pub mod mem_table;
 pub mod table;
 pub mod wal;
 pub mod manifest;
 pub mod lsm_iterator;
+mod debug;
 
 
 
