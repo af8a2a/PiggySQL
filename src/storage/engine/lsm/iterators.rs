@@ -1,7 +1,8 @@
 pub mod concat_iterator;
 pub mod merge_iterator;
 pub mod two_merge_iterator;
-use crate::errors::*;
+use crate::errors::Result;
+
 pub trait StorageIterator {
     type KeyType<'a>: PartialEq + Eq + PartialOrd + Ord
     where

@@ -7,8 +7,7 @@ use piggysql::{
         lsm::{lsm_storage::LsmStorageOptions, LSM},
         memory::Memory,
         sled_store::SledStore,
-    },
-    CONFIG_MAP,
+    }, CONFIG_MAP,
 };
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -49,15 +48,15 @@ async fn main() {
                 .unwrap_or(0.01);
             let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
             let option = match compaction.as_str() {
-                "leveled" => LsmStorageOptions::leveled_compaction()
-                    .with_enable_bloom(bloom_enable)
-                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
-                "simple" => LsmStorageOptions::default()
-                    .with_enable_bloom(bloom_enable)
-                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
-                _ => LsmStorageOptions::no_compaction()
-                    .with_enable_bloom(bloom_enable)
-                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                "leveled" => LsmStorageOptions::leveled_compaction(),
+                    // .with_enable_bloom(bloom_enable)
+                    // .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                "simple" => LsmStorageOptions::default(),
+                    // .with_enable_bloom(bloom_enable)
+                    // .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                _ => LsmStorageOptions::no_compaction(),
+                    // .with_enable_bloom(bloom_enable)
+                    // .with_bloom_false_positive_rate(bloom_false_positive_rate),
             };
             let store = LSM::new(PathBuf::from(filename), option);
             let server = Server::new(store).await.unwrap();
