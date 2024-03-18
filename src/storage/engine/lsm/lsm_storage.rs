@@ -767,7 +767,7 @@ impl LsmStorageInner {
                         level_ssts,
                         KeySlice::from_slice(key),
                     )?;
-                    if iter.is_valid() && iter.key().raw_ref() == key {
+                    while iter.is_valid() && iter.key().raw_ref() == key {
                         iter.next()?;
                     }
                     iter

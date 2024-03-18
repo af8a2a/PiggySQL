@@ -68,13 +68,20 @@ impl StorageEngine for LSM {
         };
         let mut iter = self.inner.scan(start, end).unwrap();
         let mut kv = vec![];
+
+        debug!("range={:?}", (start, end));
+
         while iter.is_valid() {
-            let key=iter.key();
-            // if range.contains(&key.to_vec()){
-            //     kv.push((iter.key().to_vec(), iter.value().to_vec()));
+            let flag = iter.is_valid();
+            let key = iter.key();
+            debug!("key={:?}", key);
+            debug!("flag={:?}", flag);
+
+            // if !range.contains(&key.to_vec()){
+            //     debug!("key={:?}",key);
             // }
             kv.push((iter.key().to_vec(), iter.value().to_vec()));
-            iter.next().ok().unwrap();
+            iter.next()?;
         }
         Ok(Box::new(kv.into_iter().map(Ok)))
     }
