@@ -12,6 +12,7 @@ pub use simple_leveled::{
     SimpleLeveledCompactionController, SimpleLeveledCompactionOptions, SimpleLeveledCompactionTask
 };
 pub use tiered::{TieredCompactionController, TieredCompactionOptions, TieredCompactionTask};
+use tracing::debug;
 
 
 
@@ -141,6 +142,7 @@ impl LsmStorageInner {
                 let sst = Arc::new(builder.build(
                     sst_id,
                     Some(self.block_cache.clone()),
+                    self.options.bloom_false_positive_rate,
                     self.path_of_sst(sst_id),
                 )?);
                 new_sst.push(sst);
@@ -151,6 +153,7 @@ impl LsmStorageInner {
             let sst = Arc::new(builder.build(
                 sst_id,
                 Some(self.block_cache.clone()),
+                self.options.bloom_false_positive_rate,
                 self.path_of_sst(sst_id),
             )?);
             new_sst.push(sst);
@@ -322,7 +325,7 @@ impl LsmStorageInner {
             return Ok(());
         };
         self.dump_structure();
-        println!("running compaction task: {:?}", task);
+        debug!("running compaction task: {:?}", task);
         let sstables = self.compact(&task)?;
         let output = sstables.iter().map(|x| x.sst_id()).collect::<Vec<_>>();
         let ssts_to_remove = {
@@ -353,7 +356,7 @@ impl LsmStorageInner {
                 .add_record(&state_lock, ManifestRecord::Compaction(task, new_sst_ids))?;
             ssts_to_remove
         };
-        println!(
+        debug!(
             "compaction finished: {} files removed, {} files added, output={:?}",
             ssts_to_remove.len(),
             output.len(),

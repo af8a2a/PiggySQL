@@ -1,5 +1,6 @@
 use crate::errors::*;
 use itertools::Itertools;
+use tracing::{debug, trace};
 pub mod bitcask;
 pub mod lsm;
 pub mod memory;
@@ -36,7 +37,7 @@ pub trait StorageEngine: std::fmt::Display + Send + Sync + 'static {
             ),
             None => std::ops::Bound::Unbounded,
         };
-
+        trace!("scan_prefix({:?}, {:?})", start, end);
         self.scan((start, end))
     }
 }

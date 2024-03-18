@@ -8,6 +8,7 @@ use bytes::Bytes;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
+use tracing::{debug, trace};
 
 use super::iterators::StorageIterator;
 use super::key::KeySlice;
@@ -66,21 +67,6 @@ impl MemTable {
         })
     }
 
-    pub fn for_testing_put_slice(&self, key: &[u8], value: &[u8]) -> Result<()> {
-        self.put(key, value)
-    }
-
-    pub fn for_testing_get_slice(&self, key: &[u8]) -> Option<Bytes> {
-        self.get(key)
-    }
-
-    pub fn for_testing_scan_slice(
-        &self,
-        lower: Bound<&[u8]>,
-        upper: Bound<&[u8]>,
-    ) -> MemTableIterator {
-        self.scan(lower, upper)
-    }
 
     /// Get a value by key.
     pub fn get(&self, key: &[u8]) -> Option<Bytes> {
@@ -113,6 +99,7 @@ impl MemTable {
     /// Get an iterator over a range of keys.
     pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> MemTableIterator {
         let (lower, upper) = (map_bound(lower), map_bound(upper));
+        trace!("memtable scan: {:?} - {:?}", lower, upper);
         let mut iter = MemTableIteratorBuilder {
             map: self.map.clone(),
             iter_builder: |map| map.range((lower, upper)),

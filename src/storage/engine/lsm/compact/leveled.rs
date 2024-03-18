@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use crate::storage::engine::lsm::lsm_storage::LsmStorageState;
 
@@ -96,7 +97,7 @@ impl LeveledCompactionController {
 
         // Flush L0 SST is the top priority
         if snapshot.l0_sstables.len() >= self.options.level0_file_num_compaction_trigger {
-            println!("flush L0 SST to base level {}", base_level);
+            debug!("flush L0 SST to base level {}", base_level);
             return Some(LeveledCompactionTask {
                 upper_level: None,
                 upper_level_sst_ids: snapshot.l0_sstables.clone(),

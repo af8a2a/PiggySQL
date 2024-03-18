@@ -14,10 +14,18 @@ use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main(worker_threads = 8)]
 async fn main() {
+    let log_level= CONFIG_MAP.get("log_level").unwrap();
+    let log_level= match log_level.as_str(){
+        "info" => Level::INFO,
+        "debug" => Level::DEBUG,
+        "error" => Level::ERROR,
+        "trace" => Level::TRACE,
+        _=>Level::INFO
+    } ;
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
-        .with_max_level(Level::DEBUG)
+        .with_max_level(log_level)
         // completes the builder.
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
@@ -35,11 +43,6 @@ async fn main() {
             Server::run(server).await;
         }
         "lsm" => {
-            let bloom_enable = CONFIG_MAP
-                .get("bloom_filter")
-                .unwrap()
-                .parse::<bool>()
-                .expect("bloom_filter must be true or false");
             let bloom_false_positive_rate = CONFIG_MAP
                 .get("bloom_false_positive_rate")
                 .cloned()
@@ -48,15 +51,12 @@ async fn main() {
                 .unwrap_or(0.01);
             let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
             let option = match compaction.as_str() {
-                "leveled" => LsmStorageOptions::leveled_compaction(),
-                    // .with_enable_bloom(bloom_enable)
-                    // .with_bloom_false_positive_rate(bloom_false_positive_rate),
-                "simple" => LsmStorageOptions::default(),
-                    // .with_enable_bloom(bloom_enable)
-                    // .with_bloom_false_positive_rate(bloom_false_positive_rate),
-                _ => LsmStorageOptions::no_compaction(),
-                    // .with_enable_bloom(bloom_enable)
-                    // .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                "leveled" => LsmStorageOptions::leveled_compaction()
+                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                "simple" => LsmStorageOptions::default()
+                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
+                _ => LsmStorageOptions::no_compaction()
+                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
             };
             let store = LSM::new(PathBuf::from(filename), option);
             let server = Server::new(store).await.unwrap();

@@ -12,8 +12,6 @@ filename="test.db"
 #"simple"=lsm's paper compaction
 #anythine else=no compaction
 compaction="leveled"
-#enable bloom filter
-bloom_filter=true
 #config for bloom filter
 bloom_false_positive_rate=0.01
 #config for mvcc
@@ -21,3 +19,6 @@ gc_threshold=16384
 
 #config for cache
 table_cache_size=64
+
+#config for log
+log_level="debug"

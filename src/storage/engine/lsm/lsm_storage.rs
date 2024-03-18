@@ -10,6 +10,7 @@ use crate::errors::Result;
 use bytes::Bytes;
 use derive_with::With;
 use parking_lot::{Mutex, MutexGuard, RwLock};
+use tracing::debug;
 
 use super::block::Block;
 use super::compact::{
@@ -80,53 +81,12 @@ pub struct LsmStorageOptions {
     pub num_memtable_limit: usize,
     pub compaction_options: CompactionOptions,
     pub enable_wal: bool,
+    pub bloom_false_positive_rate: f64,
 }
 
 impl LsmStorageOptions {
-    pub fn default_for_week1_test() -> Self {
-        Self {
-            block_size: 4096,
-            target_sst_size: 2 << 20,
-            compaction_options: CompactionOptions::NoCompaction,
-            enable_wal: false,
-            num_memtable_limit: 50,
-        }
-    }
 
-    pub fn default_for_week1_day6_test() -> Self {
-        Self {
-            block_size: 4096,
-            target_sst_size: 2 << 20,
-            compaction_options: CompactionOptions::NoCompaction,
-            enable_wal: false,
-            num_memtable_limit: 2,
-        }
-    }
-
-    pub fn default_for_week2_test(compaction_options: CompactionOptions) -> Self {
-        Self {
-            block_size: 4096,
-            target_sst_size: 1 << 20, // 1MB
-            compaction_options,
-            enable_wal: false,
-            num_memtable_limit: 2,
-        }
-    }
     pub fn default() -> Self {
-        Self {
-            block_size: 4096,
-            target_sst_size: 2 << 20, // 2MB
-            num_memtable_limit: 3,
-            compaction_options: CompactionOptions::Leveled(LeveledCompactionOptions {
-                level0_file_num_compaction_trigger: 2,
-                max_levels: 4,
-                base_level_size_mb: 128,
-                level_size_multiplier: 2,
-            }),
-            enable_wal: true,
-        }
-    }
-    pub fn no_compaction() -> Self {
         Self {
             block_size: 4096,
             target_sst_size: 2 << 20, // 2MB
@@ -134,11 +94,20 @@ impl LsmStorageOptions {
             compaction_options: CompactionOptions::Simple(SimpleLeveledCompactionOptions {
                 level0_file_num_compaction_trigger: 2,
                 max_levels: 4,
-                size_ratio_percent: 128,
+                size_ratio_percent:128,
             }),
             enable_wal: true,
-            // enable_bloom: true,
-            // bloom_false_positive_rate: 0.01,
+            bloom_false_positive_rate: 0.01,
+        }
+    }
+    pub fn no_compaction() -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 2 << 20, // 2MB
+            num_memtable_limit: 3,
+            compaction_options: CompactionOptions::NoCompaction,
+            enable_wal: true,
+            bloom_false_positive_rate: 0.01,
         }
     }
     pub fn leveled_compaction() -> Self {
@@ -153,8 +122,7 @@ impl LsmStorageOptions {
                 level_size_multiplier: 2,
             }),
             enable_wal: true,
-            // enable_bloom: true,
-            // bloom_false_positive_rate: 0.01,
+            bloom_false_positive_rate: 0.01,
         }
     }
 }
@@ -682,6 +650,7 @@ impl LsmStorageInner {
         let sst = Arc::new(builder.build(
             sst_id,
             Some(self.block_cache.clone()),
+            self.options.bloom_false_positive_rate,
             self.path_of_sst(sst_id),
         )?);
 
@@ -700,7 +669,7 @@ impl LsmStorageInner {
                 // In tiered compaction, create a new tier
                 snapshot.levels.insert(0, (sst_id, vec![sst_id]));
             }
-            println!("flushed {}.sst with size={}", sst_id, sst.table_size());
+            debug!("flushed {}.sst with size={}", sst_id, sst.table_size());
             snapshot.sstables.insert(sst_id, sst);
             // Update the snapshot.
             *guard = Arc::new(snapshot);
@@ -735,7 +704,6 @@ impl LsmStorageInner {
             let guard = self.state.read();
             Arc::clone(&guard)
         }; // drop global lock here
-
         let mut memtable_iters = Vec::with_capacity(snapshot.imm_memtables.len() + 1);
         memtable_iters.push(Box::new(snapshot.memtable.scan(lower, upper)));
         for memtable in snapshot.imm_memtables.iter() {
