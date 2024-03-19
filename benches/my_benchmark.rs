@@ -108,7 +108,7 @@ async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
 }
 pub async fn primary_key_benchmark_100000(engine: &Database<MVCCLayer<Memory>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=90000")
+        .run("SELECT * FROM BenchTable where id>90000")
         .await?;
     Ok(())
 }
@@ -116,26 +116,44 @@ pub async fn without_primary_key_benchmark_100000(
     engine: &Database<MVCCLayer<Memory>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=90000")
+        .run("SELECT * FROM BenchTable where val>90000")
         .await?;
     Ok(())
 }
 
 pub async fn bitcask_benchmark_100000(engine: &Database<MVCCLayer<BitCask>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=90000")
+        .run("SELECT * FROM BenchTable where id>90000")
+        .await?;
+    Ok(())
+}
+pub async fn bitcask_without_primary_benchmark_100000(engine: &Database<MVCCLayer<BitCask>>) -> Result<()> {
+    let _ = engine
+        .run("SELECT * FROM BenchTable where val>90000")
         .await?;
     Ok(())
 }
 pub async fn sled_benchmark_100000(engine: &Database<MVCCLayer<SledStore>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=90000")
+        .run("SELECT * FROM BenchTable where id>90000")
+        .await?;
+    Ok(())
+}
+pub async fn sled_without_primary_benchmark_100000(engine: &Database<MVCCLayer<SledStore>>) -> Result<()> {
+    let _ = engine
+        .run("SELECT * FROM BenchTable where val>90000")
         .await?;
     Ok(())
 }
 pub async fn lsm_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=90000")
+        .run("SELECT * FROM BenchTable where id>90000")
+        .await?;
+    Ok(())
+}
+pub async fn lsm_without_primary_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
+    let _ = engine
+        .run("SELECT * FROM BenchTable where val>90000")
         .await?;
     Ok(())
 }
@@ -162,14 +180,29 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.to_async(&rt)
             .iter(|| async { bitcask_benchmark_100000(&bitcask).await })
     });
+    c.bench_function("bitcask benchmark select rows without primary key", |b| {
+        b.to_async(&rt)
+            .iter(|| async { bitcask_without_primary_benchmark_100000(&bitcask).await })
+    });
+
     c.bench_function("sled benchmark select rows with primary key", |b| {
         b.to_async(&rt)
             .iter(|| async { sled_benchmark_100000(&sled).await })
     });
+    c.bench_function("sled benchmark select rows without primary key", |b| {
+        b.to_async(&rt)
+            .iter(|| async { sled_without_primary_benchmark_100000(&sled).await })
+    });
+
     c.bench_function("lsm benchmark select rows with primary key", |b| {
         b.to_async(&rt)
             .iter(|| async { lsm_benchmark_100000(&lsm).await })
     });
+    c.bench_function("lsm benchmark select rows without primary key", |b| {
+        b.to_async(&rt)
+            .iter(|| async { lsm_without_primary_benchmark_100000(&lsm).await })
+    });
+
 }
 criterion_group!(
     name = benches;

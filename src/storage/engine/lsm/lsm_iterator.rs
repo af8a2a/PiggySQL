@@ -46,10 +46,6 @@ impl LsmIterator {
             Bound::Included(key) => self.is_valid = self.inner.key().raw_ref() <= key.as_ref(),
             Bound::Excluded(key) => self.is_valid = self.inner.key().raw_ref() < key.as_ref(),
         }
-        if self.is_valid == false {
-            let key=self.inner.key().raw_ref();
-            debug!("current_key={:?},end_bound={:?}", key, self.end_bound);
-        }
         // debug!("valid={:?}",self.is_valid);
 
         Ok(())
@@ -68,6 +64,15 @@ impl StorageIterator for LsmIterator {
     type KeyType<'a> = &'a [u8];
 
     fn is_valid(&self) -> bool {
+        // let mut res=true;
+        // if self.inner.is_valid() {
+        //     res=match self.end_bound.as_ref() {
+        //         Bound::Unbounded => {true},
+        //         Bound::Included(key) => self.inner.key().raw_ref() <= key.as_ref(),
+        //         Bound::Excluded(key) => self.inner.key().raw_ref() < key.as_ref(),
+        //     };
+    
+        // }
         self.is_valid
     }
 

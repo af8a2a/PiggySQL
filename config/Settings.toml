@@ -21,4 +21,4 @@ gc_threshold=16384
 table_cache_size=64
 
 #config for log
-log_level="debug"
+log_level="info"

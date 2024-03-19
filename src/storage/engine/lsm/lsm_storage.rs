@@ -10,6 +10,7 @@ use crate::errors::Result;
 use bytes::Bytes;
 use derive_with::With;
 use parking_lot::{Mutex, MutexGuard, RwLock};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tracing::debug;
 
 use super::block::Block;
@@ -28,7 +29,6 @@ use super::mem_table::{map_bound, MemTable};
 use super::table::{FileObject, SsTable, SsTableBuilder, SsTableIterator};
 
 pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
-
 /// Represents the state of the storage engine.
 #[derive(Clone)]
 pub struct LsmStorageState {
@@ -37,9 +37,11 @@ pub struct LsmStorageState {
     /// Immutable memtables, from latest to earliest.
     pub imm_memtables: Vec<Arc<MemTable>>,
     /// L0 SSTs, from latest to earliest.
+    /// l0 is unsorted,each l0 sst created by imm_memtables,but imm_memtables is not sorted by key  
     pub l0_sstables: Vec<usize>,
     /// SsTables sorted by key range; L1 - L_max for leveled compaction, or tiers for tiered
-    /// compaction.
+    /// compaction.  
+    /// each element is (level, a vec of sst_id of current level)  
     pub levels: Vec<(usize, Vec<usize>)>,
     /// SST objects.
     pub sstables: HashMap<usize, Arc<SsTable>>,
@@ -71,7 +73,7 @@ impl LsmStorageState {
     }
 }
 
-#[derive(Debug, Clone,With)]
+#[derive(Debug, Clone, With)]
 pub struct LsmStorageOptions {
     // Block size in bytes
     pub block_size: usize,
@@ -85,7 +87,6 @@ pub struct LsmStorageOptions {
 }
 
 impl LsmStorageOptions {
-
     pub fn default() -> Self {
         Self {
             block_size: 4096,
@@ -94,7 +95,7 @@ impl LsmStorageOptions {
             compaction_options: CompactionOptions::Simple(SimpleLeveledCompactionOptions {
                 level0_file_num_compaction_trigger: 2,
                 max_levels: 4,
-                size_ratio_percent:128,
+                size_ratio_percent: 128,
             }),
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
@@ -712,6 +713,39 @@ impl LsmStorageInner {
         let memtable_iter = MergeIterator::create(memtable_iters);
 
         let mut table_iters = Vec::with_capacity(snapshot.l0_sstables.len());
+        let mut collect_l0 = |table_id| -> Result<()> {
+            let table = snapshot.sstables[table_id].clone();
+            if range_overlap(
+                lower,
+                upper,
+                table.first_key().as_key_slice(),
+                table.last_key().as_key_slice(),
+            ) {
+                let iter = match lower {
+                    Bound::Included(key) => {
+                        SsTableIterator::create_and_seek_to_key(table, KeySlice::from_slice(key))?
+                    }
+                    Bound::Excluded(key) => {
+                        let mut iter = SsTableIterator::create_and_seek_to_key(
+                            table,
+                            KeySlice::from_slice(key),
+                        )?;
+                        if iter.is_valid() && iter.key().raw_ref() == key {
+                            iter.next()?;
+                        }
+                        iter
+                    }
+                    Bound::Unbounded => SsTableIterator::create_and_seek_to_first(table)?,
+                };
+
+                table_iters.push(Box::new(iter));
+            }
+            Ok(())
+        };
+        snapshot
+            .l0_sstables
+            .par_iter()
+            .try_for_each(|table_id| collect_l0(table_id));
         for table_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables[table_id].clone();
             if range_overlap(

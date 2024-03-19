@@ -54,15 +54,6 @@ impl TransactionState {
             version <= self.version
         }
     }
-    ///不破坏快照的可见性判断
-    fn snapshot_visible(&self, version: Version) -> bool {
-        let lowest_version = *self.active.iter().min().unwrap_or(&self.version);
-        if self.active.contains(&version) {
-            false
-        } else {
-            version <= lowest_version
-        }
-    }
 }
 impl<E: StorageEngine> MVCCTransaction<E> {
     pub fn begin(engine: Arc<E>) -> Result<MVCCTransaction<E>> {
@@ -144,12 +135,13 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                     rollback.push(Key::Version(key, self.state.version).encode()?)
                     // the version
                 }
-                key => {
-                    return Err(DatabaseError::InternalError(format!(
-                        "Expected TxnWrite, got {:?}",
-                        key
-                    )))
-                }
+                _=>{},
+                // key => {
+                //     return Err(DatabaseError::InternalError(format!(
+                //         "Expected TxnWrite, got {:?}",
+                //         key
+                //     )))
+                // }
             };
             rollback.push(key); // the TxnWrite record
         }
