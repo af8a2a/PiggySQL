@@ -5,6 +5,7 @@ mod constant_folder;
 mod pushdown_limit;
 mod pushdown_predicates;
 mod simplification;
+mod join_type;
 use crate::errors::*;
 
 use self::{
@@ -40,6 +41,7 @@ pub enum RuleImpl {
     PushPredicateThroughJoin,
 
     ConstantFolder,
+    JoinType,
 }
 
 impl Rule for RuleImpl {

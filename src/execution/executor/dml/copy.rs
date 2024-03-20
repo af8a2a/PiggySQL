@@ -72,7 +72,7 @@ impl CopyFromFile {
             .map(|column| *column.datatype())
             .collect_vec();
         debug!("column count: {}", column_count);
-        let tuple_builder = TupleBuilder::new(types, self.op.schema_ref.clone());
+        let tuple_builder = TupleBuilder::new(self.op.schema_ref.clone());
         let mut tuples = vec![];
         for record in reader.records() {
             // read records and push raw str rows into data chunk builder

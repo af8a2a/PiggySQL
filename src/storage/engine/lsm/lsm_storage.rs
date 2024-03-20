@@ -742,10 +742,10 @@ impl LsmStorageInner {
             }
             Ok(())
         };
-        snapshot
-            .l0_sstables
-            .par_iter()
-            .try_for_each(|table_id| collect_l0(table_id));
+        // snapshot
+        //     .l0_sstables
+        //     .par_iter()
+        //     .try_for_each(|table_id| collect_l0(table_id));
         for table_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables[table_id].clone();
             if range_overlap(

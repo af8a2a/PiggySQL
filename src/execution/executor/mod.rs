@@ -16,24 +16,20 @@ use self::{
         create_table::CreateTable,
         drop_index::DropIndex,
         drop_table::DropTable,
-    },
-    dml::{copy::CopyFromFile, delete::Delete, insert::Insert, update::Update},
-    dql::{
+    }, dml::{copy::CopyFromFile, delete::Delete, insert::Insert, update::Update}, dql::{
         agg::{hash_agg::HashAggExecutor, simple_agg::SimpleAggExecutor},
         describe::Describe,
         dummy::Dummy,
         explain::Explain,
         filter::Filter,
         index_scan::IndexScan,
-        join::HashJoin,
+        join::*,
         limit::Limit,
         projection::Projection,
         seq_scan::SeqScan,
         sort::Sort,
         values::Values,
-    },
-    set::SetVariable,
-    show::ShowTables,
+    }, hash_join::HashJoin, set::SetVariable, show::ShowTables
 };
 use crate::errors::*;
 

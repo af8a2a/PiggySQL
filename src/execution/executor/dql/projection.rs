@@ -1,9 +1,12 @@
+use crate::catalog::ColumnRef;
+use crate::errors::*;
 use crate::execution::executor::{build, Executor, Source};
-
 use crate::expression::ScalarExpression;
 use crate::planner::operator::project::ProjectOperator;
 use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
+use crate::types::tuple::Tuple;
+use crate::types::value::ValueRef;
 
 pub struct Projection {
     pub(crate) exprs: Vec<ScalarExpression>,
@@ -13,6 +16,19 @@ pub struct Projection {
 impl From<(ProjectOperator, LogicalPlan)> for Projection {
     fn from((ProjectOperator { exprs }, input): (ProjectOperator, LogicalPlan)) -> Self {
         Projection { exprs, input }
+    }
+}
+impl Projection {
+    pub fn projection(
+        tuple: &Tuple,
+        exprs: &[ScalarExpression],
+        schmea: &[ColumnRef],
+    ) -> Result<Vec<ValueRef>> {
+        let mut values = Vec::with_capacity(exprs.len());
+        for expr in exprs.iter() {
+            values.push(expr.eval(tuple, schmea)?);
+        }
+        Ok(values)
     }
 }
 
