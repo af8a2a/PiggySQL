@@ -17,6 +17,12 @@ mod evaluator;
 pub mod simplify;
 pub mod value_compute;
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum AliasType {
+    Name(String),
+    Expr(Box<ScalarExpression>),
+}
+
 /// ScalarExpression represnet all scalar expression in SQL.
 /// SELECT a+1, b FROM t1.
 /// a+1 -> ScalarExpression::Unary(a + 1)
@@ -185,13 +191,13 @@ impl ScalarExpression {
                 format!("{}", value),
                 true,
                 ColumnDesc::new(value.logical_type(), false, false, None),
-                Some(self.clone()),
+                // Some(self.clone()),
             )),
             ScalarExpression::Alias { expr, alias } => Arc::new(ColumnCatalog::new(
                 alias.to_string(),
                 true,
                 ColumnDesc::new(expr.return_type(), false, false, None),
-                Some(self.clone()),
+                // Some(self.clone()),
             )),
             ScalarExpression::AggCall {
                 kind,
@@ -221,7 +227,7 @@ impl ScalarExpression {
                     column_name,
                     true,
                     ColumnDesc::new(*ty, false, false, None),
-                    Some(self.clone()),
+                    // Some(self.clone()),
                 ))
             }
             ScalarExpression::Binary {
@@ -241,7 +247,7 @@ impl ScalarExpression {
                     column_name,
                     true,
                     ColumnDesc::new(*ty, false, false, None),
-                    Some(self.clone()),
+                    // Some(self.clone()),
                 ))
             }
             ScalarExpression::Unary { expr, op, ty } => {
@@ -250,7 +256,7 @@ impl ScalarExpression {
                     column_name,
                     true,
                     ColumnDesc::new(*ty, false, false, None),
-                    Some(self.clone()),
+                    // Some(self.clone()),
                 ))
             }
             ScalarExpression::IsNull { negated, expr } => {
@@ -259,7 +265,7 @@ impl ScalarExpression {
                     format!("{} {}", expr.output_columns().name(), suffix),
                     true,
                     ColumnDesc::new(LogicalType::Boolean, false, false, None),
-                    Some(self.clone()),
+                    // Some(self.clone()),
                 ))
             }
             ScalarExpression::In {
@@ -281,14 +287,14 @@ impl ScalarExpression {
                     ),
                     true,
                     ColumnDesc::new(LogicalType::Boolean, false, false, None),
-                    Some(self.clone()),
+                    // Some(self.clone()),
                 ))
             }
             ScalarExpression::TypeCast { expr, ty } => Arc::new(ColumnCatalog::new(
                 format!("CAST({} as {})", expr.output_columns().name(), ty),
                 true,
                 ColumnDesc::new(*ty, false, false, None),
-                Some(self.clone()),
+                // Some(self.clone()),
             )),
         }
     }

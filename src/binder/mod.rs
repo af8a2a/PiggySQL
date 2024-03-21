@@ -114,6 +114,7 @@ impl<'a, T: Transaction> BinderContext<'a, T> {
     pub fn has_agg_call(&self, expr: &ScalarExpression) -> bool {
         self.group_by_exprs.contains(expr)
     }
+
 }
 
 pub struct Binder<'a, T: Transaction> {
@@ -268,13 +269,13 @@ pub mod test {
                     "c1".to_string(),
                     false,
                     ColumnDesc::new(Integer, true, false, None),
-                    None,
+                    // None,
                 ),
                 ColumnCatalog::new(
                     "c2".to_string(),
                     false,
                     ColumnDesc::new(Integer, false, true, None),
-                    None,
+                    // None,
                 ),
             ],
             false,
@@ -287,13 +288,13 @@ pub mod test {
                     "c3".to_string(),
                     false,
                     ColumnDesc::new(Integer, true, false, None),
-                    None,
+                    // None,
                 ),
                 ColumnCatalog::new(
                     "c4".to_string(),
                     false,
                     ColumnDesc::new(Integer, false, false, None),
-                    None,
+                    // None,
                 ),
             ],
             false,

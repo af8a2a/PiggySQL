@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::catalog::ColumnRef;
 use crate::errors::*;
 use crate::execution::executor::{build, Executor, Source};
@@ -25,6 +27,7 @@ impl Projection {
         schmea: &[ColumnRef],
     ) -> Result<Vec<ValueRef>> {
         let mut values = Vec::with_capacity(exprs.len());
+        // println!("exprs:{}",exprs.iter().map(|expr|expr.to_string()).join(","));
         for expr in exprs.iter() {
             values.push(expr.eval(tuple, schmea)?);
         }
@@ -39,22 +42,14 @@ impl<T: Transaction> Executor<T> for Projection {
         let schema = input.output_schema().clone();
         let mut data_source = build(input, transaction)?;
         for tuple in data_source.iter_mut() {
+            // println!("projection before: {}", tuple);
             // let tuple = tuple;
+            let values = Self::projection(tuple, &exprs, &schema)?;
+            // println!("projection after: {}",values.iter().map(|v| v.to_string()).join(","));
 
-            let mut values = Vec::with_capacity(exprs.len());
-
-            for expr in exprs.iter() {
-                values.push(expr.eval(tuple, &schema)?);
-                // columns.push(expr.output_columns());
-            }
-            // tuple.columns = columns;
             tuple.values = values;
-
             tuples.push(tuple.clone());
         }
-        // for tuple in &tuples {
-        //     println!("proj:{}", tuple);
-        // }
         Ok(tuples)
     }
 }

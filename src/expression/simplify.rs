@@ -1011,6 +1011,8 @@ mod test {
             summary: ColumnSummary {
                 id: Some(0),
                 name: "c1".to_string(),
+                table_name: None,
+                
             },
             nullable: false,
             desc: ColumnDesc {
@@ -1019,7 +1021,7 @@ mod test {
                 is_unique: false,
                 default: None,
             },
-            ref_expr: None,
+            // ref_expr: None,
         });
         let val_1 = Arc::new(DataValue::Int32(Some(1)));
 

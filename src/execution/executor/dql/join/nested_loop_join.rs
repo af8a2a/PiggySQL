@@ -61,13 +61,13 @@ impl EqualCondition {
 
 /// NestedLoopJoin using nested loop join algorithm to execute a join operation.
 /// One input will be selected to be the inner table and the other will be the outer
-/// | JoinType                       |  Inner-table   |   Outer-table  |
-/// |--------------------------------|----------------|----------------|
-/// | Inner/Left/LeftSemi/LeftAnti   |    right       |      left      |
-/// |--------------------------------|----------------|----------------|
-/// | Right/RightSemi/RightAnti/Full |    left        |      right     |
-/// |--------------------------------|----------------|----------------|
-/// | Full                           |  not supported |  not supported |
+/// | JoinType                       |  Inner-table   |   Outer-table  |  
+/// |--------------------------------|----------------|----------------|  
+/// | Inner/Left                     |    right       |      left      |  
+/// |--------------------------------|----------------|----------------|  
+/// | Right                          |    left        |      right     |  
+/// |--------------------------------|----------------|----------------|  
+/// | Full                           |  not supported |  not supported |  
 pub struct NestedLoopJoin {
     left_input: LogicalPlan,
     right_input: LogicalPlan,
@@ -153,8 +153,6 @@ impl<T: Transaction> Executor<T> for NestedLoopJoin {
                         match value.as_ref() {
                             DataValue::Boolean(Some(true)) => {
                                 let tuple = match ty {
-                                    // JoinType::LeftAnti => None,
-                                    JoinType::Left if has_matched => None,
                                     JoinType::Right => {
                                         Self::emit_tuple(&right_tuple, &left_tuple, ty, true)
                                     }
@@ -172,18 +170,12 @@ impl<T: Transaction> Executor<T> for NestedLoopJoin {
 
                 if let Some(tuple) = tuple {
                     tuples.push(tuple);
-                    if matches!(ty, JoinType::Left) {
-                        break;
-                    }
                 }
-                // if matches!(ty, JoinType::LeftAnti) && has_matched {
-                //     break;
-                // }
+
             }
 
             // handle no matched tuple case
             let tuple = match ty {
-                // JoinType::LeftAnti if !has_matched => Some(left_tuple.clone()),
                 JoinType::Left | JoinType::Right if !has_matched => {
                     let right_tuple = Tuple {
                         id: None,
@@ -201,6 +193,7 @@ impl<T: Transaction> Executor<T> for NestedLoopJoin {
                 tuples.push(tuple);
             }
         }
+        tuples.iter().for_each(|tuple|println!("tuple: {}", tuple));
         Ok(tuples)
     }
 }
@@ -238,14 +231,6 @@ impl NestedLoopJoin {
                     values[i] = NULL_VALUE.clone();
                 });
             }
-            // JoinType::LeftSemi => values.truncate(left_len),
-            // JoinType::LeftAnti => {
-            //     if is_matched {
-            //         values.clear();
-            //     } else {
-            //         values.truncate(left_len);
-            //     }
-            // }
             JoinType::Full => todo!("Not support now."),
             _ => (),
         };
@@ -304,373 +289,3 @@ impl NestedLoopJoin {
         Arc::new(join_schema)
     }
 }
-
-// #[cfg(test)]
-// mod test {
-
-//     use super::*;
-//     use crate::catalog::{ColumnCatalog, ColumnDesc};
-//     use crate::execution::volcano::dql::test::build_integers;
-//     use crate::execution::volcano::{try_collect, ReadExecutor};
-//     use crate::expression::ScalarExpression;
-//     use crate::planner::operator::values::ValuesOperator;
-//     use crate::planner::operator::Operator;
-//     use crate::storage::kip::KipStorage;
-//     use crate::storage::Storage;
-//     use crate::types::value::DataValue;
-//     use crate::types::LogicalType;
-//     use std::collections::HashSet;
-//     use std::sync::Arc;
-//     use tempfile::TempDir;
-
-//     fn build_join_values(
-//         eq: bool,
-//     ) -> (
-//         Vec<(ScalarExpression, ScalarExpression)>,
-//         LogicalPlan,
-//         LogicalPlan,
-//         ScalarExpression,
-//     ) {
-//         let desc = ColumnDesc::new(LogicalType::Integer, false, false, None);
-
-//         let t1_columns = vec![
-//             Arc::new(ColumnCatalog::new("c1".to_string(), true, desc.clone())),
-//             Arc::new(ColumnCatalog::new("c2".to_string(), true, desc.clone())),
-//             Arc::new(ColumnCatalog::new("c3".to_string(), true, desc.clone())),
-//         ];
-
-//         let t2_columns = vec![
-//             Arc::new(ColumnCatalog::new("c4".to_string(), true, desc.clone())),
-//             Arc::new(ColumnCatalog::new("c5".to_string(), true, desc.clone())),
-//             Arc::new(ColumnCatalog::new("c6".to_string(), true, desc.clone())),
-//         ];
-
-//         let on_keys = if eq {
-//             vec![(
-//                 ScalarExpression::ColumnRef(t1_columns[1].clone()),
-//                 ScalarExpression::ColumnRef(t2_columns[1].clone()),
-//             )]
-//         } else {
-//             vec![]
-//         };
-
-//         let values_t1 = LogicalPlan {
-//             operator: Operator::Values(ValuesOperator {
-//                 rows: vec![
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(0))),
-//                         Arc::new(DataValue::Int32(Some(2))),
-//                         Arc::new(DataValue::Int32(Some(4))),
-//                     ],
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(1))),
-//                         Arc::new(DataValue::Int32(Some(2))),
-//                         Arc::new(DataValue::Int32(Some(5))),
-//                     ],
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(1))),
-//                         Arc::new(DataValue::Int32(Some(3))),
-//                         Arc::new(DataValue::Int32(Some(5))),
-//                     ],
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(3))),
-//                         Arc::new(DataValue::Int32(Some(5))),
-//                         Arc::new(DataValue::Int32(Some(7))),
-//                     ],
-//                 ],
-//                 schema_ref: Arc::new(t1_columns),
-//             }),
-//             childrens: vec![],
-//             physical_option: None,
-//             _output_schema_ref: None,
-//         };
-
-//         let values_t2 = LogicalPlan {
-//             operator: Operator::Values(ValuesOperator {
-//                 rows: vec![
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(0))),
-//                         Arc::new(DataValue::Int32(Some(2))),
-//                         Arc::new(DataValue::Int32(Some(4))),
-//                     ],
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(1))),
-//                         Arc::new(DataValue::Int32(Some(3))),
-//                         Arc::new(DataValue::Int32(Some(5))),
-//                     ],
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(4))),
-//                         Arc::new(DataValue::Int32(Some(6))),
-//                         Arc::new(DataValue::Int32(Some(8))),
-//                     ],
-//                     vec![
-//                         Arc::new(DataValue::Int32(Some(1))),
-//                         Arc::new(DataValue::Int32(Some(1))),
-//                         Arc::new(DataValue::Int32(Some(1))),
-//                     ],
-//                 ],
-//                 schema_ref: Arc::new(t2_columns),
-//             }),
-//             childrens: vec![],
-//             physical_option: None,
-//             _output_schema_ref: None,
-//         };
-
-//         let filter = ScalarExpression::Binary {
-//             op: crate::expression::BinaryOperator::Gt,
-//             left_expr: Box::new(ScalarExpression::ColumnRef(Arc::new(ColumnCatalog::new(
-//                 "c1".to_owned(),
-//                 true,
-//                 desc.clone(),
-//             )))),
-//             right_expr: Box::new(ScalarExpression::ColumnRef(Arc::new(ColumnCatalog::new(
-//                 "c4".to_owned(),
-//                 true,
-//                 desc.clone(),
-//             )))),
-//             ty: LogicalType::Integer,
-//         };
-
-//         (on_keys, values_t1, values_t2, filter)
-//     }
-
-//     fn valid_result(expected: &mut HashSet<Vec<Arc<DataValue>>>, actual: &[Tuple]) {
-//         assert_eq!(actual.len(), expected.len());
-
-//         for tuple in actual {
-//             let values = tuple
-//                 .values
-//                 .iter()
-//                 .map(|v| {
-//                     if matches!(v.as_ref(), DataValue::Null) {
-//                         Arc::new(DataValue::Int32(None))
-//                     } else {
-//                         v.clone()
-//                     }
-//                 })
-//                 .collect_vec();
-//             assert!(expected.remove(&values));
-//         }
-
-//         assert!(expected.is_empty());
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_inner_join() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, filter) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: Some(filter),
-//             },
-//             join_type: JoinType::Inner,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         let mut expected_set = HashSet::with_capacity(1);
-//         let tuple = build_integers(vec![Some(1), Some(2), Some(5), Some(0), Some(2), Some(4)]);
-//         expected_set.insert(tuple);
-
-//         valid_result(&mut expected_set, &tuples);
-
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_left_out_join() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, filter) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: Some(filter),
-//             },
-//             join_type: JoinType::LeftOuter,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         assert_eq!(
-//             tuples[0].values,
-//             build_integers(vec![Some(0), Some(2), Some(4), None, None, None])
-//         );
-
-//         let mut expected_set = HashSet::with_capacity(4);
-//         let tuple = build_integers(vec![Some(0), Some(2), Some(4), None, None, None]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![Some(1), Some(2), Some(5), Some(0), Some(2), Some(4)]);
-//         expected_set.insert(tuple);
-
-//         let tuple = build_integers(vec![Some(1), Some(3), Some(5), None, None, None]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![Some(3), Some(5), Some(7), None, None, None]);
-//         expected_set.insert(tuple);
-
-//         valid_result(&mut expected_set, &tuples);
-
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_cross_join_with_on() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, filter) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: Some(filter),
-//             },
-//             join_type: JoinType::Cross,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         let mut expected_set = HashSet::with_capacity(1);
-
-//         let tuple = build_integers(vec![Some(1), Some(2), Some(5), Some(0), Some(2), Some(4)]);
-//         expected_set.insert(tuple);
-
-//         valid_result(&mut expected_set, &tuples);
-
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_cross_join_without_filter() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, _) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: None,
-//             },
-//             join_type: JoinType::Cross,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         let mut expected_set = HashSet::with_capacity(3);
-
-//         let tuple = build_integers(vec![Some(0), Some(2), Some(4), Some(0), Some(2), Some(4)]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![Some(1), Some(2), Some(5), Some(0), Some(2), Some(4)]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![Some(1), Some(3), Some(5), Some(1), Some(3), Some(5)]);
-//         expected_set.insert(tuple);
-
-//         valid_result(&mut expected_set, &tuples);
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_cross_join_without_on() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, _) = build_join_values(false);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: None,
-//             },
-//             join_type: JoinType::Cross,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         assert_eq!(tuples.len(), 16);
-
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_left_semi_join() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, filter) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: Some(filter),
-//             },
-//             join_type: JoinType::LeftSemi,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         let mut expected_set = HashSet::with_capacity(1);
-//         expected_set.insert(build_integers(vec![Some(1), Some(2), Some(5)]));
-
-//         valid_result(&mut expected_set, &tuples);
-
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_left_anti_join() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, filter) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: Some(filter),
-//             },
-//             join_type: JoinType::LeftAnti,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         let mut expected_set = HashSet::with_capacity(3);
-//         expected_set.insert(build_integers(vec![Some(0), Some(2), Some(4)]));
-//         expected_set.insert(build_integers(vec![Some(1), Some(3), Some(5)]));
-//         expected_set.insert(build_integers(vec![Some(3), Some(5), Some(7)]));
-
-//         valid_result(&mut expected_set, &tuples);
-
-//         Ok(())
-//     }
-
-//     #[tokio::test]
-//     async fn test_nested_right_out_join() -> Result<(), DatabaseError> {
-//         let temp_dir = TempDir::new().expect("unable to create temporary working directory");
-//         let storage = KipStorage::new(temp_dir.path()).await?;
-//         let transaction = storage.transaction().await?;
-//         let (keys, left, right, filter) = build_join_values(true);
-//         let op = JoinOperator {
-//             on: JoinCondition::On {
-//                 on: keys,
-//                 filter: Some(filter),
-//             },
-//             join_type: JoinType::RightOuter,
-//         };
-//         let mut executor = NestedLoopJoin::from((op, left, right)).execute(&transaction);
-//         let tuples = try_collect(&mut executor).await?;
-
-//         let mut expected_set = HashSet::with_capacity(4);
-//         let tuple = build_integers(vec![Some(1), Some(2), Some(5), Some(0), Some(2), Some(4)]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![None, None, None, Some(1), Some(3), Some(5)]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![None, None, None, Some(1), Some(1), Some(1)]);
-//         expected_set.insert(tuple);
-//         let tuple = build_integers(vec![None, None, None, Some(4), Some(6), Some(8)]);
-//         expected_set.insert(tuple);
-
-//         valid_result(&mut expected_set, &tuples);
-
-//         Ok(())
-//     }
-// }

@@ -7,6 +7,8 @@ use std::sync::Arc;
 use crate::types::value::ValueRef;
 use crate::types::{ColumnId, LogicalType};
 
+use super::TableName;
+
 pub type ColumnRef = Arc<ColumnCatalog>;
 pub type SchemaRef = Arc<Vec<ColumnRef>>;
 pub type Schema=Vec<ColumnRef>;
@@ -16,7 +18,6 @@ pub struct ColumnCatalog {
     pub summary: ColumnSummary,
     pub nullable: bool,
     pub desc: ColumnDesc,
-    pub ref_expr: Option<ScalarExpression>,
 }
 
 impl Display for ColumnCatalog {
@@ -33,6 +34,7 @@ impl Display for ColumnCatalog {
 pub struct ColumnSummary {
     pub id: Option<ColumnId>,
     pub name: String,
+    pub table_name: Option<TableName>,
 }
 
 impl ColumnCatalog {
@@ -40,16 +42,17 @@ impl ColumnCatalog {
         column_name: String,
         nullable: bool,
         column_desc: ColumnDesc,
-        ref_expr: Option<ScalarExpression>,
+        // ref_expr: Option<ScalarExpression>,
     ) -> ColumnCatalog {
         ColumnCatalog {
             summary: ColumnSummary {
                 id: None,
                 name: column_name,
+                table_name: None,
             },
             nullable,
             desc: column_desc,
-            ref_expr,
+            // ref_expr,
         }
     }
 
@@ -58,11 +61,19 @@ impl ColumnCatalog {
             summary: ColumnSummary {
                 id: Some(0),
                 name: column_name,
+                table_name: None,
             },
             nullable: false,
             desc: ColumnDesc::new(LogicalType::Varchar(None), false, false, None),
-            ref_expr: None,
+            // ref_expr: None,
         }
+    }
+    pub fn table_name(&self) -> Option<&TableName> {
+        self.summary.table_name.as_ref()
+    }
+
+    pub fn set_table_name(&mut self, table_name: TableName) {
+        self.summary.table_name = Some(table_name);
     }
 
     pub(crate) fn summary(&self) -> &ColumnSummary {

@@ -13,7 +13,7 @@ use crate::{
     types::value::DataValue,
 };
 
-use super::Binder;
+use super::{lower_case_name, Binder};
 
 use crate::catalog::{
     ColumnCatalog, TableCatalog, TableName, DEFAULT_DATABASE_NAME, DEFAULT_SCHEMA_NAME,
@@ -235,12 +235,35 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 SelectItem::Wildcard(_) => {
                     select_items.extend_from_slice(self.bind_all_column_refs()?.as_slice());
                 }
-
-                _ => todo!("bind select list"),
+                SelectItem::QualifiedWildcard(table_name, _) => {
+                    self.bind_table_column_refs(
+                        &mut select_items,
+                        Arc::new(lower_case_name(table_name).to_string()),
+                    )?;
+                }
             };
         }
 
         Ok(select_items)
+    }
+
+    fn bind_table_column_refs(
+        & self,
+        exprs: &mut Vec<ScalarExpression>,
+        table_name: TableName,
+    ) -> Result<()> {
+        let table = self
+            .context
+            .table(table_name.clone())
+            .ok_or(DatabaseError::TableNotFound)?;
+
+        let append = table
+            .all_columns()
+            .into_iter()
+            .map(|col| ScalarExpression::ColumnRef(col))
+            .collect_vec();
+        exprs.extend(append);
+        Ok(())
     }
 
     fn bind_all_column_refs(&mut self) -> Result<Vec<ScalarExpression>> {
@@ -480,6 +503,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         left_schema: &TableCatalog,
         right_schema: &TableCatalog,
     ) -> Result<()> {
+
         match expr {
             Expr::BinaryOp { left, op, right } => match op {
                 ast::BinaryOperator::Eq => {
@@ -527,6 +551,10 @@ impl<'a, T: Transaction> Binder<'a, T> {
                         )?;
                     }
                 }
+                // ast::BinaryOperator::Or=>{
+
+                // }
+
                 _other => {
                     // example: baz > 1
                     accum_filter.push(self.bind_expr(expr)?);
