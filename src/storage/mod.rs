@@ -27,6 +27,7 @@ use self::engine::StorageEngine;
 use self::mvcc::{Scan, MVCC};
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
+    #[allow(async_fn_in_trait)]
     async fn transaction(&self) -> Result<Self::TransactionType>;
 }
 
@@ -497,6 +498,7 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
 
         Self::create_primary_key(&mut self.tx, &mut table_catalog)?;
         Self::create_index(&mut self.tx, &mut table_catalog, None)?;
+        // println!("create_table:table_catalog: {:#?}", table_catalog);
         for column in table_catalog.columns.values() {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
             self.tx.set(&key, value.to_vec())?;
@@ -784,7 +786,8 @@ impl<E: StorageEngine> MVCCTransaction<E> {
         let mut columns = vec![];
 
         while let Ok(Some((_, value))) = column_iter.next().transpose() {
-            columns.push(TableCodec::decode_column(&value)?);
+            let col=TableCodec::decode_column(&value)?;
+            columns.push(col);
         }
 
         Ok(columns)
@@ -844,13 +847,13 @@ mod test {
                 "c1".to_string(),
                 false,
                 ColumnDesc::new(LogicalType::Integer, true, false, None),
-                None,
+                // None,
             )),
             Arc::new(ColumnCatalog::new(
                 "c2".to_string(),
                 false,
                 ColumnDesc::new(LogicalType::Boolean, false, false, None),
-                None,
+                // None,
             )),
         ];
         let source_columns = columns
@@ -860,10 +863,7 @@ mod test {
         let _ = transaction.create_table(Arc::new("test".to_string()), source_columns, false)?;
         let table_catalog = transaction.table(Arc::new("test".to_string()));
         assert!(table_catalog.is_some());
-        assert!(table_catalog
-            .unwrap()
-            .get_column_id_by_name(&"c1".to_string())
-            .is_some());
+        let cols=table_catalog.unwrap().all_columns();
 
         transaction.append(
             &"test".to_string(),
@@ -890,7 +890,7 @@ mod test {
         let mut iter = transaction.read(
             Arc::new("test".to_string()),
             (None, None),
-            vec![ScalarExpression::ColumnRef(columns[0].clone())],
+            vec![ScalarExpression::ColumnRef(cols[0].clone())],
         )?;
 
         let tuples = iter.fetch_tuple()?;

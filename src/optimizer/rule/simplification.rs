@@ -175,6 +175,7 @@ mod test {
                 summary: ColumnSummary {
                     id: Some(0),
                     name: "c1".to_string(),
+                    table_name: Some(Arc::new("t1".to_string())),
                 },
                 nullable: false,
                 desc: ColumnDesc {
@@ -183,12 +184,13 @@ mod test {
                     is_unique: false,
                     default: None,
                 },
-                ref_expr: None,
+                // ref_expr: None,
             };
             let c2_col = ColumnCatalog {
                 summary: ColumnSummary {
                     id: Some(1),
                     name: "c2".to_string(),
+                    table_name: Some(Arc::new("t1".to_string())),
                 },
                 nullable: false,
                 desc: ColumnDesc {
@@ -197,7 +199,7 @@ mod test {
                     is_unique: true,
                     default: None,
                 },
-                ref_expr: None,
+                // ref_expr: None,
             };
 
             // -(c1 + 1) > c2 => c1 < -c2 - 1

@@ -21,7 +21,7 @@ pub use keycode::*;
 use serde::{Deserialize, Serialize};
 type Version = u64;
 use lazy_static::lazy_static;
-use tracing::debug;
+use tracing::{debug, info, trace};
 lazy_static! {
     static ref LOCK_MANAGER: Arc<LockManager> = Arc::new(LockManager::new());
 }
@@ -52,15 +52,6 @@ impl TransactionState {
             false
         } else {
             version <= self.version
-        }
-    }
-    ///不破坏快照的可见性判断
-    fn snapshot_visible(&self, version: Version) -> bool {
-        let lowest_version = *self.active.iter().min().unwrap_or(&self.version);
-        if self.active.contains(&version) {
-            false
-        } else {
-            version <= lowest_version
         }
     }
 }
@@ -138,17 +129,19 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             .engine
             .scan_prefix(&KeyPrefix::TxnWrite(self.state.version).encode()?)?;
         while let Some((key, _)) = scan.next().transpose()? {
+            trace!("rollback {:?}", key);
             match Key::decode(&key)? {
                 Key::TxnWrite(_, key) => {
                     rollback.push(Key::Version(key, self.state.version).encode()?)
                     // the version
                 }
-                key => {
-                    return Err(DatabaseError::InternalError(format!(
-                        "Expected TxnWrite, got {:?}",
-                        key
-                    )))
-                }
+                _=>{},
+                // key => {
+                //     return Err(DatabaseError::InternalError(format!(
+                //         "Expected TxnWrite, got {:?}",
+                //         key
+                //     )))
+                // }
             };
             rollback.push(key); // the TxnWrite record
         }
@@ -410,7 +403,7 @@ impl<E: StorageEngine> MVCC<E> {
             let watermark = self.watermark.load(Ordering::SeqCst);
             self.last_gc.store(watermark, Ordering::SeqCst);
 
-            debug!("GC watermark: {}", watermark);
+            info!("GC watermark: {}", watermark);
             // self.gc()?;
             self.gc()?;
             // self.engine.flush()?;
@@ -445,7 +438,7 @@ impl<E: StorageEngine> MVCC<E> {
             .engine
             .scan(&Key::Version(vec![], 0).encode()?..&KeyPrefix::Unversioned.encode()?)?
             .rev();
-        debug!("start MVCC GC!");
+        info!("start MVCC GC!");
         let mut gc_count = 0;
         let netx_version = match self.engine.get(&Key::NextVersion.encode()?)? {
             Some(ref v) => deserialize(v)?,
@@ -480,7 +473,7 @@ impl<E: StorageEngine> MVCC<E> {
             self.engine.delete(&Key::Version(key, version).encode()?)?;
 
         }
-        debug!("clean {} keys", gc_count);
+        info!("clean {} keys", gc_count);
         Ok(())
     }
 }

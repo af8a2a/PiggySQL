@@ -1,9 +1,14 @@
-use crate::execution::executor::{build, Executor, Source};
+use itertools::Itertools;
 
+use crate::catalog::ColumnRef;
+use crate::errors::*;
+use crate::execution::executor::{build, Executor, Source};
 use crate::expression::ScalarExpression;
 use crate::planner::operator::project::ProjectOperator;
 use crate::planner::LogicalPlan;
 use crate::storage::Transaction;
+use crate::types::tuple::Tuple;
+use crate::types::value::ValueRef;
 
 pub struct Projection {
     pub(crate) exprs: Vec<ScalarExpression>,
@@ -15,6 +20,20 @@ impl From<(ProjectOperator, LogicalPlan)> for Projection {
         Projection { exprs, input }
     }
 }
+impl Projection {
+    pub fn projection(
+        tuple: &Tuple,
+        exprs: &[ScalarExpression],
+        schmea: &[ColumnRef],
+    ) -> Result<Vec<ValueRef>> {
+        let mut values = Vec::with_capacity(exprs.len());
+        // println!("exprs:{}",exprs.iter().map(|expr|expr.to_string()).join(","));
+        for expr in exprs.iter() {
+            values.push(expr.eval(tuple, schmea)?);
+        }
+        Ok(values)
+    }
+}
 
 impl<T: Transaction> Executor<T> for Projection {
     fn execute(self, transaction: &mut T) -> Source {
@@ -23,22 +42,14 @@ impl<T: Transaction> Executor<T> for Projection {
         let schema = input.output_schema().clone();
         let mut data_source = build(input, transaction)?;
         for tuple in data_source.iter_mut() {
+            // println!("projection before: {}", tuple);
             // let tuple = tuple;
+            let values = Self::projection(tuple, &exprs, &schema)?;
+            // println!("projection after: {}",values.iter().map(|v| v.to_string()).join(","));
 
-            let mut values = Vec::with_capacity(exprs.len());
-
-            for expr in exprs.iter() {
-                values.push(expr.eval(tuple, &schema)?);
-                // columns.push(expr.output_columns());
-            }
-            // tuple.columns = columns;
             tuple.values = values;
-
             tuples.push(tuple.clone());
         }
-        // for tuple in &tuples {
-        //     println!("proj:{}", tuple);
-        // }
         Ok(tuples)
     }
 }

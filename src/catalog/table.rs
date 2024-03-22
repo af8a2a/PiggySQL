@@ -70,6 +70,7 @@ impl TableCatalog {
         let col_id = self.columns.len() as u32;
 
         col.summary.id = Some(col_id);
+        col.summary.table_name = Some(self.name.clone());
         self.column_idxs.insert(col.name().to_string(), col_id);
         self.columns.insert(col_id, Arc::new(col));
 
@@ -153,13 +154,13 @@ mod tests {
             "a".into(),
             false,
             ColumnDesc::new(LogicalType::Integer, false, false, None),
-            None,
+            // None,
         );
         let col1 = ColumnCatalog::new(
             "b".into(),
             false,
             ColumnDesc::new(LogicalType::Boolean, false, false, None),
-            None,
+            // None,
         );
         let col_catalogs = vec![col0, col1];
         let table_catalog = TableCatalog::new(Arc::new("test".to_string()), col_catalogs).unwrap();

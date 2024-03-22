@@ -4,7 +4,10 @@ pub(crate) mod dql;
 pub(crate) mod set;
 pub(crate) mod show;
 use crate::{
-    planner::{operator::Operator, LogicalPlan},
+    planner::{
+        operator::{join::JoinCondition, Operator},
+        LogicalPlan,
+    },
     storage::Transaction,
     types::tuple::Tuple,
 };
@@ -25,13 +28,15 @@ use self::{
         explain::Explain,
         filter::Filter,
         index_scan::IndexScan,
-        join::HashJoin,
+        join::*,
         limit::Limit,
         projection::Projection,
         seq_scan::SeqScan,
         sort::Sort,
         values::Values,
     },
+    hash_join::HashJoin,
+    nested_loop_join::NestedLoopJoin,
     set::SetVariable,
     show::ShowTables,
 };
@@ -64,15 +69,17 @@ pub fn build<T: Transaction>(plan: LogicalPlan, transaction: &mut T) -> Source {
         Operator::Filter(op) => {
             let input = childrens.pop().unwrap();
 
-            // let input = build(childrens.remove(0), transaction);
-
             Filter::from((op, input)).execute(transaction)
         }
         Operator::Join(op) => {
             let right_input = childrens.pop().unwrap();
             let left_input = childrens.pop().unwrap();
-
-            HashJoin::from((op, left_input, right_input)).execute(transaction)
+            match &op.on {
+                JoinCondition::On { on, .. } if !on.is_empty() => {
+                    HashJoin::from((op, left_input, right_input)).execute(transaction)
+                }
+                _ => NestedLoopJoin::from((op, left_input, right_input)).execute(transaction),
+            }
         }
         Operator::Project(op) => {
             // let input = build(childrens.remove(0), transaction);

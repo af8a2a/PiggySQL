@@ -15,18 +15,29 @@ impl ScalarExpression {
     ///表达式求值  
     ///给定元组，返回表达式的值
     pub fn eval(&self, tuple: &Tuple, schema: &[ColumnRef]) -> Result<ValueRef> {
-        // //具名元组的表达式求值
-        if let Some(value) = Self::eval_with_name(tuple, self.output_columns().name(), schema) {
+        // 具名元组的表达式求值
+        // if let Some(value) = Self::eval_with_name(tuple, self.output_columns().name(), schema) {
+        //     return Ok(value.clone());
+        // }
+        if let Some(value) = schema
+            .iter()
+            .find_position(|tul_col| tul_col.summary() == self.output_columns().summary())
+            .map(|(i, _)| &tuple.values[i])
+            .clone()
+        {
             return Ok(value.clone());
         }
-
         match &self {
             ScalarExpression::Constant(val) => Ok(val.clone()),
             ScalarExpression::ColumnRef(col) => {
-                let value = Self::eval_with_name(tuple, col.name(), schema)
+                // println!("schema:{:?}", schema);
+                // println!("col:{:?}", col.summary());
+                let value = schema
+                    .iter()
+                    .find_position(|tul_col| tul_col.summary() == col.summary())
+                    .map(|(i, _)| &tuple.values[i])
                     .unwrap_or(&NULL_VALUE)
                     .clone();
-
                 Ok(value)
             }
             ScalarExpression::Alias { expr, alias } => {
@@ -83,10 +94,14 @@ impl ScalarExpression {
                 Ok(Arc::new(DataValue::unary_op(&value, op)?))
             }
             ScalarExpression::AggCall { .. } => {
-                let value = Self::eval_with_name(tuple, self.output_columns().name(), schema)
+                // println!("{}",schema.iter().map(|item|item.to_string()).join(","));
+                // schema.iter().for_each(|item|)
+                let value = schema
+                    .iter()
+                    .find_position(|tul_col| tul_col.summary() == self.output_columns().summary())
+                    .map(|(i, _)| &tuple.values[i])
                     .unwrap_or(&NULL_VALUE)
                     .clone();
-
                 Ok(value)
             }
         }

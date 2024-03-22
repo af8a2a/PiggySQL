@@ -3,12 +3,14 @@ use std::sync::Arc;
 
 use crate::errors::Result;
 use crate::storage::engine::lsm::block::BlockBuilder;
+use crate::storage::engine::lsm::key::{KeySlice, KeyVec};
 use crate::storage::engine::lsm::lsm_storage::BlockCache;
+
 use bytes::BufMut;
 
 use super::bloom::Bloom;
 use super::{BlockMeta, FileObject, SsTable};
-use crate::storage::engine::lsm::key::{KeySlice, KeyVec};
+
 /// Builds an SSTable from key-value pairs.
 pub struct SsTableBuilder {
     builder: BlockBuilder,
@@ -79,6 +81,7 @@ impl SsTableBuilder {
         mut self,
         id: usize,
         block_cache: Option<Arc<BlockCache>>,
+        bloom_false_positive_rate:f64,
         path: impl AsRef<Path>,
     ) -> Result<SsTable> {
         self.finish_block();
@@ -88,7 +91,7 @@ impl SsTableBuilder {
         buf.put_u32(meta_offset as u32);
         let bloom = Bloom::build_from_key_hashes(
             &self.key_hashes,
-            Bloom::bloom_bits_per_key(self.key_hashes.len(), 0.01),
+            Bloom::bloom_bits_per_key(self.key_hashes.len(), bloom_false_positive_rate),
         );
         let bloom_offset = buf.len();
         bloom.encode(&mut buf);
@@ -106,8 +109,4 @@ impl SsTableBuilder {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn build_for_test(self, path: impl AsRef<Path>) -> Result<SsTable> {
-        self.build(0, None, path)
-    }
 }

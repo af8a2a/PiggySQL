@@ -1,13 +1,15 @@
 use std::ops::Bound;
 
+use crate::errors::Result;
+use bytes::Bytes;
+use tracing::debug;
+
 use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
 use super::iterators::two_merge_iterator::TwoMergeIterator;
 use super::iterators::StorageIterator;
-use super::memtable::MemTableIterator;
+use super::mem_table::MemTableIterator;
 use super::table::SsTableIterator;
-use crate::errors::*;
-use bytes::Bytes;
 
 /// Represents the internal type for an LSM iterator. This type will be changed across the tutorial for multiple times.
 type LsmIteratorInner = TwoMergeIterator<
@@ -38,11 +40,14 @@ impl LsmIterator {
             self.is_valid = false;
             return Ok(());
         }
+
         match self.end_bound.as_ref() {
             Bound::Unbounded => {}
             Bound::Included(key) => self.is_valid = self.inner.key().raw_ref() <= key.as_ref(),
             Bound::Excluded(key) => self.is_valid = self.inner.key().raw_ref() < key.as_ref(),
         }
+        // debug!("valid={:?}",self.is_valid);
+
         Ok(())
     }
 
@@ -52,12 +57,22 @@ impl LsmIterator {
         }
         Ok(())
     }
+
 }
 
 impl StorageIterator for LsmIterator {
     type KeyType<'a> = &'a [u8];
 
     fn is_valid(&self) -> bool {
+        // let mut res=true;
+        // if self.inner.is_valid() {
+        //     res=match self.end_bound.as_ref() {
+        //         Bound::Unbounded => {true},
+        //         Bound::Included(key) => self.inner.key().raw_ref() <= key.as_ref(),
+        //         Bound::Excluded(key) => self.inner.key().raw_ref() < key.as_ref(),
+        //     };
+    
+        // }
         self.is_valid
     }
 
@@ -105,14 +120,14 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
     }
 
     fn key(&self) -> Self::KeyType<'_> {
-        if self.has_errored || !self.iter.is_valid() {
+        if !self.is_valid() {
             panic!("invalid access to the underlying iterator");
         }
         self.iter.key()
     }
 
     fn value(&self) -> &[u8] {
-        if self.has_errored || !self.iter.is_valid() {
+        if !self.is_valid() {
             panic!("invalid access to the underlying iterator");
         }
         self.iter.value()
@@ -134,20 +149,5 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
 
     fn num_active_iterators(&self) -> usize {
         self.iter.num_active_iterators()
-    }
-}
-
-impl Iterator for LsmIterator {
-    type Item = (Vec<u8>, Vec<u8>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if !self.is_valid() {
-            return None;
-        } else {
-            let res = (self.key().to_vec(), self.value().to_vec());
-            self.next_inner().unwrap();
-            self.move_to_non_delete().unwrap();
-            return Some(res);
-        }
     }
 }

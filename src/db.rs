@@ -68,7 +68,7 @@ impl<S: Storage> Database<S> {
         let source_plan = binder.bind(&stmts[0])?;
         // println!("source_plan plan: {:#?}", source_plan);
         let mut best_plan = apply_optimization(source_plan)?;
-        // println!("best_plan plan: {:#?}", best_plan);
+        // println!("best_plan plan: {}", best_plan.explain(0));
         let schema = best_plan.output_schema().clone();
         Ok((schema, build(best_plan, transaction)))
     }

@@ -1,19 +1,17 @@
-use std::{
-    fmt::Display,
-    io::Read,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{fmt::Display, path::Path, sync::Arc};
 pub mod block;
 pub mod compact;
+mod debug;
 pub mod iterators;
 pub mod key;
 pub mod lsm_iterator;
 pub mod lsm_storage;
 pub mod manifest;
-pub mod memtable;
+pub mod mem_table;
 pub mod table;
 pub mod wal;
+
+use tracing::debug;
 
 use self::{
     iterators::StorageIterator,
@@ -70,9 +68,20 @@ impl StorageEngine for LSM {
         };
         let mut iter = self.inner.scan(start, end).unwrap();
         let mut kv = vec![];
+
+        debug!("range={:?}", (start, end));
+
         while iter.is_valid() {
+            let flag = iter.is_valid();
+            let key = iter.key();
+            debug!("key={:?}", key);
+            debug!("flag={:?}", flag);
+
+            // if !range.contains(&key.to_vec()){
+            //     debug!("key={:?}",key);
+            // }
             kv.push((iter.key().to_vec(), iter.value().to_vec()));
-            iter.next().ok().unwrap();
+            iter.next()?;
         }
         Ok(Box::new(kv.into_iter().map(Ok)))
     }

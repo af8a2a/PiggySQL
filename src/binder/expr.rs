@@ -1,7 +1,11 @@
+use crate::catalog::ColumnCatalog;
+use crate::catalog::ColumnRef;
 use crate::errors::*;
 use crate::expression;
 use crate::expression::agg::Aggregate;
+use crate::planner::LogicalPlan;
 use itertools::Itertools;
+use sqlparser::ast::Query;
 use sqlparser::ast::{
     BinaryOperator, DataType, Expr, Function, FunctionArg, FunctionArgExpr, Ident, UnaryOperator,
 };
@@ -40,11 +44,32 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 negated,
             } => self.bind_is_in(expr, list, *negated),
             Expr::Cast { expr, data_type } => self.bind_cast(expr, data_type),
+            Expr::Subquery(subquery)=>{
+                let (sub_query, column) = self.bind_subquery(subquery)?;
+                let (expr, sub_query) =(ScalarExpression::ColumnRef(column), sub_query);
+
+                Ok(expr)
+            }
             _ => {
                 println!("expr: {:#?} not support", expr);
                 todo!()
             }
         }
+    }
+
+
+
+    fn bind_subquery(
+        &mut self,
+        subquery: &Query,
+    ) -> Result<(LogicalPlan, Arc<ColumnCatalog>)> {
+        let mut sub_query = self.bind_query(subquery)?;
+        let sub_query_schema = sub_query.output_schema();
+
+        assert!(sub_query_schema.len() == 1);
+
+        let column = sub_query_schema[0].clone();
+        Ok((sub_query, column))
     }
 
     pub fn bind_like(

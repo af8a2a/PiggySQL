@@ -1,7 +1,8 @@
 // Copyright 2021 TiKV Project Authors. Licensed under Apache-2.0.
+use crate::errors::Result;
 
-use crate::errors::*;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+
 /// Implements a bloom filter
 pub struct Bloom {
     /// data of filter in bits

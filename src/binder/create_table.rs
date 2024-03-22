@@ -132,6 +132,6 @@ impl<'a, T: Transaction> Binder<'a, T> {
             }
         }
 
-        Ok(ColumnCatalog::new(column_name, nullable, column_desc, None))
+        Ok(ColumnCatalog::new(column_name, nullable, column_desc))
     }
 }
