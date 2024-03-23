@@ -66,6 +66,7 @@ impl LeveledCompactionController {
         &self,
         snapshot: &LsmStorageState,
     ) -> Option<LeveledCompactionTask> {
+
         // step 1: compute target level size
         let mut target_level_size = (0..self.options.max_levels).map(|_| 0).collect::<Vec<_>>(); // exclude level 0
         let mut real_level_size = Vec::with_capacity(self.options.max_levels);
