@@ -1,2 +1,21 @@
 #V2
 select count(*) from orders;
+show tables;
+drop table customer;
+show tables;
+select count(*) from account;
+select count(*) from customer;
+show tables;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+show tables;

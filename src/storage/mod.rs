@@ -19,6 +19,7 @@ use crate::types::ColumnId;
 use std::collections::{Bound, VecDeque};
 
 use std::mem;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use self::engine::memory::Memory;
@@ -294,7 +295,14 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
 pub struct MVCCTransaction<E: StorageEngine> {
     tx: mvcc::MVCCTransaction<E>,
     cache: Arc<Cache<TableName, TableCatalog>>,
+    concurrency_transaction: Arc<AtomicUsize>,
 }
+// impl<E: StorageEngine> Drop for MVCCTransaction<E> {
+//     fn drop(&mut self) {
+//         self.concurrency_transaction.fetch_sub(1, Ordering::SeqCst);
+//     }
+// }
+
 impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     type IterType<'a> = MVCCIter<'a, E>;
 
@@ -398,6 +406,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         column: &ColumnCatalog,
         if_not_exists: bool,
     ) -> Result<ColumnId> {
+        if self.concurrency_transaction.load(Ordering::SeqCst)>1{
+            return Err(DatabaseError::DDLSerialError(self.concurrency_transaction.load(Ordering::SeqCst)));
+        }
+
         if let Some(mut catalog) = self.table(table_name.clone()) {
             if !column.nullable && column.default_value().is_none() {
                 return Err(DatabaseError::NeedNullAbleOrDefault);
@@ -437,7 +449,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     }
 
     fn drop_column(&mut self, table_name: &TableName, column: &str, if_exists: bool) -> Result<()> {
-        dbg!(table_name.to_string(), column);
+        if self.concurrency_transaction.load(Ordering::SeqCst)>1{
+            return Err(DatabaseError::DDLSerialError(self.concurrency_transaction.load(Ordering::SeqCst)));
+        }
+
         if let Some(catalog) = self.table(table_name.clone()) {
             let column = match catalog.get_column_by_name(column) {
                 Some(col) => col,
@@ -485,6 +500,9 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         columns: Vec<ColumnCatalog>,
         if_not_exists: bool,
     ) -> Result<TableName> {
+        if self.concurrency_transaction.load(Ordering::SeqCst)>1{
+            return Err(DatabaseError::DDLSerialError(self.concurrency_transaction.load(Ordering::SeqCst)));
+        }
         let (table_key, value) = TableCodec::encode_root_table(&table_name)?;
         if self.tx.get(&table_key)?.is_some() {
             if if_not_exists {
@@ -510,6 +528,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     }
 
     fn drop_table(&mut self, table_name: &str, if_exists: bool) -> Result<()> {
+        if self.concurrency_transaction.load(Ordering::SeqCst)>1{
+            return Err(DatabaseError::DDLSerialError(self.concurrency_transaction.load(Ordering::SeqCst)));
+        }
+
         if self.table(Arc::new(table_name.to_string())).is_none() {
             if if_exists {
                 return Ok(());
@@ -592,12 +614,16 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
     }
 
     async fn commit(self) -> Result<()> {
+        self.concurrency_transaction.fetch_sub(1, Ordering::SeqCst);
+        // eprintln!("commit:{}", self.concurrency_transaction.load(Ordering::SeqCst));
         self.tx.commit()?;
 
         Ok(())
     }
 
     async fn rollback(self) -> Result<()> {
+        self.concurrency_transaction.fetch_sub(1, Ordering::SeqCst);
+        // eprintln!("rollback:{}", self.concurrency_transaction.load(Ordering::SeqCst));
         self.tx.rollback()?;
 
         Ok(())
@@ -609,6 +635,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         index_name: IndexName,
         column_name: &str,
     ) -> Result<()> {
+        if self.concurrency_transaction.load(Ordering::SeqCst)>1{
+            return Err(DatabaseError::DDLSerialError(self.concurrency_transaction.load(Ordering::SeqCst)));
+        }
+
         //todo error handling
         let indexs = Self::index_meta_collect(&table_name, &self.tx).unwrap_or_default();
         let indexs = indexs.into_iter().map(Arc::new).collect_vec();
@@ -629,6 +659,10 @@ impl<E: StorageEngine> Transaction for MVCCTransaction<E> {
         index_name: IndexName,
         _if_exists: bool,
     ) -> Result<()> {
+        if self.concurrency_transaction.load(Ordering::SeqCst)>1{
+            return Err(DatabaseError::DDLSerialError(self.concurrency_transaction.load(Ordering::SeqCst)));
+        }
+
         //check index exists
         //operator in copy temp data
         let mut indexs = Self::index_meta_collect(&table_name, &self.tx).unwrap();
@@ -797,6 +831,7 @@ impl<E: StorageEngine> MVCCTransaction<E> {
 pub struct MVCCLayer<E: StorageEngine> {
     layer: mvcc::MVCC<E>,
     cache: Arc<Cache<TableName, TableCatalog>>,
+    concurrency_transaction: Arc<AtomicUsize>,
 }
 impl<E: StorageEngine> MVCCLayer<E> {
     pub fn new(engine: E) -> Self {
@@ -804,6 +839,7 @@ impl<E: StorageEngine> MVCCLayer<E> {
         Self {
             layer: MVCC::new(Arc::new(engine)),
             cache: Arc::new(Cache::new(cache_size)),
+            concurrency_transaction: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -813,6 +849,7 @@ impl MVCCLayer<Memory> {
         Self {
             layer: MVCC::new(Arc::new(Memory::new())),
             cache: Arc::new(Cache::new(mock_cache_size)),
+            concurrency_transaction: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -820,9 +857,11 @@ impl<E: StorageEngine> Storage for MVCCLayer<E> {
     type TransactionType = MVCCTransaction<E>;
 
     async fn transaction(&self) -> Result<Self::TransactionType> {
+        let _=self.concurrency_transaction.fetch_add(1, Ordering::SeqCst);
         Ok(MVCCTransaction {
             tx: self.layer.begin().await?,
             cache: Arc::clone(&self.cache),
+            concurrency_transaction:self.concurrency_transaction.clone()
         })
     }
 }

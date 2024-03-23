@@ -15,7 +15,6 @@ use self::lock_manager::LockManager;
 use super::engine::{KvScan, StorageEngine};
 use crate::{errors::*, CONFIG_MAP};
 
-use futures::executor::block_on;
 pub use keycode::*;
 
 use serde::{Deserialize, Serialize};
@@ -34,7 +33,7 @@ fn serialize<V: Serialize>(value: &V) -> Result<Vec<u8>> {
 fn deserialize<'a, V: Deserialize<'a>>(bytes: &'a [u8]) -> Result<V> {
     Ok(bincode::deserialize(bytes)?)
 }
-const GC_BAIS:u64=1;
+const GC_BAIS: u64 = 1;
 pub struct MVCCTransaction<E: StorageEngine> {
     engine: Arc<E>,
     pub(crate) lock_manager: Option<Arc<LockManager>>,
@@ -135,13 +134,12 @@ impl<E: StorageEngine> MVCCTransaction<E> {
                     rollback.push(Key::Version(key, self.state.version).encode()?)
                     // the version
                 }
-                _=>{},
-                // key => {
-                //     return Err(DatabaseError::InternalError(format!(
-                //         "Expected TxnWrite, got {:?}",
-                //         key
-                //     )))
-                // }
+                _ => {} // key => {
+                        //     return Err(DatabaseError::InternalError(format!(
+                        //         "Expected TxnWrite, got {:?}",
+                        //         key
+                        //     )))
+                        // }
             };
             rollback.push(key); // the TxnWrite record
         }
@@ -158,42 +156,43 @@ impl<E: StorageEngine> MVCCTransaction<E> {
             lock_manager.acquire_write_lock(key.to_vec(), self.state.version);
             lock_manager.check_read_locks(key.to_vec(), self.state.version)?;
         }
+        //todo prevent W-W conflict
+        // // Check for write conflicts, i.e. if the latest key is invisible to us
+        // // (either a newer version, or an uncommitted version in our past). We
+        // // can only conflict with the latest key, since all transactions enforce
+        // // the same invariant.
+        // let from = Key::Version(
+        //     key.into(),
+        //     self.state
+        //         .active
+        //         .iter()
+        //         .min()
+        //         .copied()
+        //         .unwrap_or(self.state.version + 1),
+        // )
+        // .encode()?; //活跃事务中最老的版本或下一个版本
+        // let to = Key::Version(key.into(), u64::MAX).encode()?;
 
-        // Check for write conflicts, i.e. if the latest key is invisible to us
-        // (either a newer version, or an uncommitted version in our past). We
-        // can only conflict with the latest key, since all transactions enforce
-        // the same invariant.
-        let from = Key::Version(
-            key.into(),
-            self.state
-                .active
-                .iter()
-                .min()
-                .copied()
-                .unwrap_or(self.state.version + 1),
-        )
-        .encode()?; //活跃事务中最老的版本或下一个版本
-        let to = Key::Version(key.into(), u64::MAX).encode()?;
-
-        if let Some((key, _)) = self.engine.scan(from..=to)?.last().transpose()? {
-            //检查key是否被其他事务修改
-            //在写写冲突判断中,出现更新的版本要么是自己写入的,要么是被其它不可见事务写入,也就是活跃事务
-            match Key::decode(&key)? {
-                Key::Version(_, version) => {
-                    //被其它活跃事务修改
-                    if !self.state.is_visible(version) {
-                        //W-W冲突
-                        return Err(DatabaseError::Serialization);
-                    }
-                }
-                key => {
-                    return Err(DatabaseError::InternalError(format!(
-                        "Expected Key::Version got {:?}",
-                        key
-                    )))
-                }
-            }
-        }
+        // if let Some((key, _)) = self.engine.scan(from..=to)?.last().transpose()? {
+        //     //检查key是否被其他事务修改
+        //     //在写写冲突判断中,出现更新的版本要么是自己写入的,要么是被其它不可见事务写入,也就是活跃事务
+        //     match Key::decode(&key)? {
+        //         Key::Version(_, version) => {
+        //             //被其它活跃事务修改
+        //             if !self.state.is_visible(version) {
+        //                 debug!("current version {} write version {} conflict",self.state.version, version);
+        //                 //W-W冲突
+        //                 return Err(DatabaseError::Serialization);
+        //             }
+        //         }
+        //         key => {
+        //             return Err(DatabaseError::InternalError(format!(
+        //                 "Expected Key::Version got {:?}",
+        //                 key
+        //             )))
+        //         }
+        //     }
+        // }
 
         // Write the new version and its write record.
         //
@@ -381,7 +380,11 @@ pub struct MVCC<E: StorageEngine> {
 }
 impl<E: StorageEngine> MVCC<E> {
     pub fn new(engine: Arc<E>) -> Self {
-        let threshold=CONFIG_MAP.get("gc_threshold").unwrap().parse::<u64>().unwrap();
+        let threshold = CONFIG_MAP
+            .get("gc_threshold")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
         let mvcc = MVCC {
             engine,
             watermark: Arc::new(AtomicU64::new(1)),
@@ -434,44 +437,35 @@ impl<E: StorageEngine> MVCC<E> {
     }
 
     pub fn gc(&self) -> Result<()> {
-        let mut scan = self
+        let scan = self
             .engine
-            .scan(&Key::Version(vec![], 0).encode()?..&KeyPrefix::Unversioned.encode()?)?
-            .rev();
+            .scan(&Key::Version(vec![], 0).encode()?..&KeyPrefix::Unversioned.encode()?)?;
         info!("start MVCC GC!");
         let mut gc_count = 0;
         let netx_version = match self.engine.get(&Key::NextVersion.encode()?)? {
             Some(ref v) => deserialize(v)?,
             None => 1,
         };
+        debug!("netx_version:{}", netx_version);
         let active = MVCCTransaction::scan_active(&self.engine)?;
-        let oldest_version = u64::max(*active.iter().min().unwrap_or(&netx_version)-GC_BAIS,1);
+        let oldest_version = u64::max(*active.iter().min().unwrap_or(&netx_version) - GC_BAIS, 1);
         let resume_state = TransactionState {
             version: oldest_version,
             active,
         };
-        let mut mark=HashSet::new();
-        let mut batch=Vec::new();
-        while let Some((key, _)) = scan.next().transpose()? {
-            match Key::decode(&key)? {
-                Key::Version(key, version) => {
-                    //删除过时的键值对
-                    //注意:现存最早的事务能看到的记录不能被删除
-                    if resume_state.is_visible(version)&&!mark.contains(&key) {
-                        mark.insert(key.clone());
-                    }else if resume_state.is_visible(version)&&mark.contains(&key){
-                        gc_count+=1;
-                        batch.push((key, version));
-                    }
-                }
-                _ => {
-                    //nothing to do
-                }
+        let mut version_iter = VersionIterator::new(&resume_state, scan);
+        let mut batch = Vec::new();
+        let mut last_back = vec![];
+        while let Some((key, version, _)) = version_iter.next_back().transpose()? {
+            if last_back == key {
+                batch.push(Key::Version(key, version).encode()?);
+                gc_count += 1;
+            } else {
+                last_back = key;
             }
         }
-        for (key,version) in batch{
-            self.engine.delete(&Key::Version(key, version).encode()?)?;
-
+        for key in batch {
+            self.engine.delete(&key)?;
         }
         info!("clean {} keys", gc_count);
         Ok(())
@@ -530,6 +524,7 @@ impl<'a, E: StorageEngine + 'a> Scan<'a, E> {
         self.iter().collect()
     }
 }
+
 pub struct ScanIterator<'a> {
     /// Decodes and filters visible MVCC versions from the inner engine iterator.
     inner: std::iter::Peekable<VersionIterator<'a>>,
@@ -546,7 +541,6 @@ impl<'a> ScanIterator<'a> {
             last_back: None,
         }
     }
-
     /// Fallible next(), emitting the next item, or None if exhausted.
     fn try_next(&mut self) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
         while let Some((key, _version, value)) = self.inner.next().transpose()? {
@@ -943,6 +937,7 @@ pub mod tests {
     #[tokio::test]
     /// Set should return serialization errors both for uncommitted versions
     /// (past and future), and future committed versions.
+    /// deprecated:we no longer prevent w-w conflict
     async fn set_conflict() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
@@ -959,15 +954,15 @@ pub mod tests {
 
         assert_eq!(
             matches!(t2.set(b"a", vec![2]), Err(DatabaseError::Serialization)),
-            true
+            false
         ); // past uncommitted
         assert_eq!(
             matches!(t2.set(b"c", vec![2]), Err(DatabaseError::Serialization)),
-            true
+            false
         ); // future uncommitted
         assert_eq!(
             matches!(t2.set(b"d", vec![2]), Err(DatabaseError::Serialization)),
-            true
+            false
         ); // future committed
 
         Ok(())
@@ -995,16 +990,18 @@ pub mod tests {
         t2.set(b"b", vec![2])?;
         t2.delete(b"c")?;
         t3.set(b"d", vec![3])?;
-
-        // Both t1 and t3 will get serialization errors with t2.
-        assert!(matches!(
-            t1.set(b"b", vec![1]),
-            Err(DatabaseError::Serialization)
-        ));
-        assert!(matches!(
-            t3.set(b"c", vec![3]),
-            Err(DatabaseError::Serialization)
-        ));
+        // MVCC is append only
+        // // Both t1 and t3 will get serialization errors with t2.
+        // assert!(matches!(
+        //     t1.set(b"b", vec![1]),
+        //     Err(DatabaseError::Serialization)
+        // ));
+        // assert!(matches!(
+        //     t3.set(b"c", vec![3]),
+        //     Err(DatabaseError::Serialization)
+        // ));
+        t1.set(b"b", vec![1])?;
+        t3.set(b"c", vec![3])?;
 
         // When t2 is rolled back, none of its writes will be visible, and t1
         // and t3 can perform their writes and successfully commit.
@@ -1038,6 +1035,7 @@ pub mod tests {
     #[tokio::test]
     // A dirty write is when t2 overwrites an uncommitted value written by t1.
     // Snapshot isolation prevents this.
+    // we no longer prevents W-W conflicts and prevent dirty_write
     async fn anomaly_dirty_write() -> Result<()> {
         let mvcc = MVCC::new(Arc::new(Memory::new()));
 
@@ -1045,10 +1043,19 @@ pub mod tests {
         t1.set(b"key", vec![1])?;
 
         let t2 = mvcc.begin().await?;
-        assert!(matches!(
-            t2.set(b"key", vec![2]),
-            Err(DatabaseError::Serialization)
-        ));
+        t2.set(b"key", vec![2])?;
+        assert_eq!(t2.get(b"key")?, Some(vec![2]));
+        assert_eq!(t1.get(b"key")?, Some(vec![1]));
+        t1.delete(b"key")?;
+        assert_eq!(t2.get(b"key")?, Some(vec![2]));
+        t1.commit()?;
+        assert_eq!(t2.get(b"key")?, Some(vec![2]));
+        let t3 = mvcc.begin().await?;
+        assert_eq!(t3.get(b"key")?, None);
+        // assert!(matches!(
+        //     t2.set(b"key", vec![2]),
+        //     Err(DatabaseError::Serialization)
+        // ));
 
         Ok(())
     }
