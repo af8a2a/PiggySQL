@@ -64,16 +64,17 @@ impl StorageIterator for LsmIterator {
     type KeyType<'a> = &'a [u8];
 
     fn is_valid(&self) -> bool {
-        // let mut res=true;
-        // if self.inner.is_valid() {
-        //     res=match self.end_bound.as_ref() {
-        //         Bound::Unbounded => {true},
-        //         Bound::Included(key) => self.inner.key().raw_ref() <= key.as_ref(),
-        //         Bound::Excluded(key) => self.inner.key().raw_ref() < key.as_ref(),
-        //     };
+        //todo 
+        let mut res=true;
+        if self.inner.is_valid() {
+            res=match self.end_bound.as_ref() {
+                Bound::Unbounded => {true},
+                Bound::Included(key) => self.inner.key().raw_ref() <= key.as_ref(),
+                Bound::Excluded(key) => self.inner.key().raw_ref() < key.as_ref(),
+            };
     
-        // }
-        self.is_valid
+        }
+        self.is_valid&&res
     }
 
     fn key(&self) -> &[u8] {

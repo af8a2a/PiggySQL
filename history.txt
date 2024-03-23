@@ -6,3 +6,7 @@ show tables;
 select * from lineitem limit 1;
 show tables;
 select * from account;
+CREATE TABLE ORDERS (\n    O_ORDERKEY       INT NOT NULL ,\n    O_CUSTKEY        INT NOT NULL,\n    O_ORDERSTATUS    CHAR(1) NOT NULL,\n    O_TOTALPRICE     DECIMAL(15,2) NOT NULL,\n    O_ORDERDATE      DATE NOT NULL,\n    O_ORDERPRIORITY  CHAR(15) NOT NULL,  \n    O_CLERK          CHAR(15) NOT NULL, \n    O_SHIPPRIORITY   INT NOT NULL,\n    O_COMMENT        VARCHAR(79) NOT NULL\n)
+COPY orders FROM 'tests/tpc-h/tbl/orders.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from orders;\n

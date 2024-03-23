@@ -357,8 +357,8 @@ impl LsmStorageInner {
                         memtables.insert(x);
                     }
                     ManifestRecord::Compaction(task, output) => {
-                        let (new_state, _) =
-                            compaction_controller.apply_compaction_result(&state, &task, &output,true);
+                        let (new_state, _) = compaction_controller
+                            .apply_compaction_result(&state, &task, &output, true);
                         // TODO: apply remove again
                         state = new_state;
                         next_sst_id =
@@ -409,8 +409,18 @@ impl LsmStorageInner {
             m.add_record_when_init(ManifestRecord::NewMemtable(state.memtable.id()))?;
             next_sst_id += 1;
             manifest = m;
+            for (_id, ssts) in &mut state.levels {
+                ssts.sort_by(|x, y| {
+                    state
+                        .sstables
+                        .get(x)
+                        .unwrap()
+                        .first_key()
+                        .cmp(state.sstables.get(y).unwrap().first_key())
+                })
+            }
+    
         };
-
         let storage = Self {
             state: Arc::new(RwLock::new(Arc::new(state))),
             state_lock: Mutex::new(()),
@@ -421,8 +431,8 @@ impl LsmStorageInner {
             manifest: Some(manifest),
             options: options.into(),
         };
-        storage.sync_dir()?;
 
+        storage.sync_dir()?;
         Ok(storage)
     }
 
