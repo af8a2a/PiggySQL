@@ -15,7 +15,7 @@ pub mod types;
 use lazy_static::lazy_static;
 lazy_static! {
     pub static ref CONFIG_MAP: std::collections::HashMap<String, String> = config::Config::builder()
-        .add_source(config::File::with_name("config/Settings"))
+        .add_source(config::File::with_name("config/Settings.toml"))
         .build()
         .unwrap()
         .try_deserialize()
