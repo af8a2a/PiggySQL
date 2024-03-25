@@ -587,6 +587,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent-map"
+version = "5.0.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f5531a18ad61836deb8c2987422e44a38575564f423f448fe9e6cbbcb2171a"
+dependencies = [
+ "ebr",
+ "stack-map",
+]
+
+[[package]]
 name = "config"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -923,6 +933,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "442039f5147480ba31067cb00ada1adae6892028e40e45fc5de7b7df6dcc1b5f"
 dependencies = [
  "const-random",
+]
+
+[[package]]
+name = "ebr"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a7f90b4164e55fcf36357b68aa2c13f6c922b16ba96f219a5220abd5a94fc4b"
+dependencies = [
+ "shared-local-state",
 ]
 
 [[package]]
@@ -2265,6 +2284,7 @@ dependencies = [
  "cargo-tarpaulin",
  "chrono",
  "comfy-table",
+ "concurrent-map",
  "config",
  "crc32fast",
  "criterion",
@@ -3087,6 +3107,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-local-state"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a50ccb2f45251772ed15abfd1e5f10a305288187b1582ab2e4295b29bbb4929"
+dependencies = [
+ "parking_lot 0.12.1",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3243,6 +3272,12 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stack-map"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b49d6d36fee60faad91e23603db2356677b58ec2429237b39d5c60c26868f37c"
 
 [[package]]
 name = "static_assertions"

@@ -453,6 +453,8 @@ impl Log {
 }
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use super::*;
     use crate::storage::engine::tests::test_engine;
     test_engine!({
@@ -460,6 +462,6 @@ mod test {
             .unwrap()
             .path()
             .join("piggydb");
-        BitCask::new(path)?
+        Arc::new(BitCask::new(path)?)
     });
 }

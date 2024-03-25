@@ -85,6 +85,8 @@ impl StorageEngine for LSM {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use super::*;
     use crate::errors::Result;
     use crate::storage::engine::tests::test_engine;
@@ -93,6 +95,6 @@ mod test {
             .unwrap()
             .path()
             .join("piggydb");
-        LSM::new(path, LsmStorageOptions::default())
+        Arc::new(LSM::new(path,LsmStorageOptions::default()))
     });
 }

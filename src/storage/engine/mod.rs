@@ -410,6 +410,42 @@ mod tests {
 
                 Ok(())
             }
+            #[test]
+            fn single_thread() -> Result<()> {
+                let seq_id = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1));
+                let s = $setup;
+                for _ in 0..1000000 {
+                    let id = seq_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    s.set(&[id as u8], vec![id as u8]).unwrap();
+                    let value = s.get(&[id as u8]).unwrap();
+                    assert_eq!(value, Some(vec![id as u8]));
+                }
+                Ok(())
+            }
+            #[test]
+            fn concurrency() -> Result<()> {
+                let seq_id = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1));
+                let s = $setup;
+                let mut handles = Vec::new();
+                for _ in 0..6 {
+                    let seq_id = seq_id.clone();
+                    let s = s.clone();
+                    handles.push(std::thread::spawn(move || {
+                        // over 1e6 range,crossbeam skiplist will be error
+                        for _ in 0..10000 {
+                            let id = seq_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                            s.set(&[id as u8], vec![id as u8]).unwrap();
+                            let value = s.get(&[id as u8]).unwrap();
+                            assert_eq!(value, Some(vec![id as u8]));
+                        }
+                    }));
+                }
+                for handle in handles {
+                    handle.join().unwrap();
+                }
+
+                Ok(())
+            }
         };
     }
 
