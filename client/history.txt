@@ -40,3 +40,17 @@ select count(*) from customer;
 select count(*) from account;
 show tables;
 select count(*) from account;
+show tables;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+select count(*) from account;
+select count(*) from customer;
+show tables;
+describe accountl
+describe account;
+explain select * from account where id=1;
+explain select * from account where id=1 order by id;
+select * from account where id=1 order by id;
+select * from account where id>1;

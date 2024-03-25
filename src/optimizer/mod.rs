@@ -1,3 +1,7 @@
+use std::time::Instant;
+
+use tracing::debug;
+
 use crate::{optimizer::heuristic::optimizer::HepOptimizer, planner::LogicalPlan};
 
 use self::{heuristic::batch::HepBatchStrategy, rule::RuleImpl};
@@ -7,7 +11,8 @@ pub mod heuristic;
 pub mod rule;
 
 pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
-    HepOptimizer::new(plan)
+    let before = Instant::now();
+    let plan = HepOptimizer::new(plan)
         .batch(
             "Column Pruning".to_string(),
             HepBatchStrategy::once_topdown(),
@@ -45,5 +50,11 @@ pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
                 RuleImpl::EliminateLimits,
             ],
         )
-        .find_best()
+        .find_best();
+    let after = Instant::now();
+    debug!(
+        "apply optimization cost time : {} us",
+        after.duration_since(before).as_micros()
+    );
+    plan
 }
