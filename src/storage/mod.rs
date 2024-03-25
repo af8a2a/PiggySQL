@@ -4,7 +4,7 @@ mod table_codec;
 
 use itertools::Itertools;
 use moka::sync::Cache;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
@@ -167,6 +167,7 @@ impl<E: StorageEngine> Iter for MVCCIter<'_, E> {
             .skip(offset)
             .take(limit)
             .collect::<Result<Vec<_>>>()?;
+        trace!("seqscan fetch tuples count: {}", tuples.len());
         Ok(Some(tuples))
     }
 }
@@ -287,6 +288,7 @@ impl<E: StorageEngine> Iter for MVCCIndexIter<'_, E> {
                 _ => (),
             }
         }
+        trace!("index scan fetch tuples count: {}", tuples.len());
 
         Ok(Some(tuples))
     }

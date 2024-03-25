@@ -3,7 +3,7 @@
 #"bitcask"=simple bitcask variant
 #"memory"=in-memory skiplist engine
 #"sled"=bw-tree engine
-engine="lsm"
+engine="sled"
 #database filedir
 filename="test.db"
 #config for lsm

@@ -10,7 +10,6 @@ use crate::errors::Result;
 use bytes::Bytes;
 use derive_with::With;
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tracing::debug;
 
 use super::block::Block;
@@ -419,7 +418,6 @@ impl LsmStorageInner {
                         .cmp(state.sstables.get(y).unwrap().first_key())
                 })
             }
-    
         };
         let storage = Self {
             state: Arc::new(RwLock::new(Arc::new(state))),

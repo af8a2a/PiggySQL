@@ -16,8 +16,14 @@ async fn main() -> Result<()> {
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str())?;
-                let result = client.query(line.as_str()).await?;
-                println!("{}", create_table(result));
+                match client.query(line.as_str()).await {
+                    Ok(result) => println!("{}", create_table(result)),
+                    Err(e) => {
+                        println!("Error: {:?}", e);
+                    }
+                }
+                // let result = client.query(line.as_str()).await?;
+                // println!("{}", create_table(result));
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -29,7 +35,6 @@ async fn main() -> Result<()> {
             }
             Err(err) => {
                 println!("Error: {:?}", err);
-                break;
             }
         }
     }

@@ -24,11 +24,11 @@ async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..100000 {
+    for i in 0..500000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 100001, 100001).as_str();
+    batch += format!("({},{})", 500001, 500001).as_str();
 
     db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
         .await?;
@@ -49,11 +49,11 @@ async fn data_source_bitcask() -> Result<Database<MVCCLayer<BitCask>>> {
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..100000 {
+    for i in 0..500000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 100001, 100001).as_str();
+    batch += format!("({},{})", 500001, 500001).as_str();
 
     db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
         .await?;
@@ -74,11 +74,11 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..100000 {
+    for i in 0..500000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 100001, 100001).as_str();
+    batch += format!("({},{})", 500001, 500001).as_str();
 
     db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
         .await?;
@@ -99,11 +99,11 @@ async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..100000 {
+    for i in 0..500000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 100001, 100001).as_str();
+    batch += format!("({},{})", 500001, 500001).as_str();
 
     db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
         .await?;
@@ -111,7 +111,7 @@ async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
 }
 pub async fn primary_key_benchmark_100000(engine: &Database<MVCCLayer<Memory>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id>90000")
+        .run("SELECT * FROM BenchTable where id=490000")
         .await?;
     Ok(())
 }
@@ -119,14 +119,14 @@ pub async fn without_primary_key_benchmark_100000(
     engine: &Database<MVCCLayer<Memory>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val>90000")
+        .run("SELECT * FROM BenchTable where val=490000")
         .await?;
     Ok(())
 }
 
 pub async fn bitcask_benchmark_100000(engine: &Database<MVCCLayer<BitCask>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id>90000")
+        .run("SELECT * FROM BenchTable where id=490000")
         .await?;
     Ok(())
 }
@@ -134,13 +134,13 @@ pub async fn bitcask_without_primary_benchmark_100000(
     engine: &Database<MVCCLayer<BitCask>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val>90000")
+        .run("SELECT * FROM BenchTable where val=490000")
         .await?;
     Ok(())
 }
 pub async fn sled_benchmark_100000(engine: &Database<MVCCLayer<SledStore>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id>90000")
+        .run("SELECT * FROM BenchTable where id=490000")
         .await?;
     Ok(())
 }
@@ -148,19 +148,19 @@ pub async fn sled_without_primary_benchmark_100000(
     engine: &Database<MVCCLayer<SledStore>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val>90000")
+        .run("SELECT * FROM BenchTable where val=490000")
         .await?;
     Ok(())
 }
 pub async fn lsm_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id>90000")
+        .run("SELECT * FROM BenchTable where id=490000")
         .await?;
     Ok(())
 }
 pub async fn lsm_without_primary_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val>90000")
+        .run("SELECT * FROM BenchTable where val=490000")
         .await?;
     Ok(())
 }

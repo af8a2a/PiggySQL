@@ -7,31 +7,38 @@ use piggysql::{
         lsm::{lsm_storage::LsmStorageOptions, LSM},
         memory::Memory,
         sled_store::SledStore,
-    }, CONFIG_MAP,
+    },
+    CONFIG_MAP,
 };
 use tracing::Level;
+use tracing_appender::{non_blocking, rolling};
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main(worker_threads = 8)]
 async fn main() {
-    let log_level= CONFIG_MAP.get("log_level").unwrap();
-    let log_level= match log_level.as_str(){
+    let log_level = CONFIG_MAP.get("log_level").unwrap();
+    let log_level = match log_level.to_lowercase().as_str() {
         "info" => Level::INFO,
         "debug" => Level::DEBUG,
         "error" => Level::ERROR,
         "trace" => Level::TRACE,
-        _=>Level::INFO
-    } ;
+        _ => Level::INFO,
+    };
+    let file_appender = tracing_appender::rolling::hourly("./", "db.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
     let subscriber = FmtSubscriber::builder()
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
         .with_max_level(log_level)
+        .with_writer(non_blocking)
         // completes the builder.
         .finish();
+
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     let filename = CONFIG_MAP.get("filename").unwrap();
     let engine = CONFIG_MAP.get("engine").unwrap();
-    match engine.as_str() {
+    match engine.to_lowercase().as_str() {
         "sled" => {
             let store = SledStore::new(PathBuf::from(filename)).unwrap();
             let server = Server::new(store).await.unwrap();
@@ -50,7 +57,7 @@ async fn main() {
                 .parse::<f64>()
                 .unwrap_or(0.01);
             let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
-            let option = match compaction.as_str() {
+            let option = match compaction.to_lowercase().as_str() {
                 "leveled" => LsmStorageOptions::leveled_compaction()
                     .with_bloom_false_positive_rate(bloom_false_positive_rate),
                 "simple" => LsmStorageOptions::default()
