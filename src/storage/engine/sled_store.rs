@@ -36,7 +36,6 @@ impl StorageEngine for SledStore {
     fn scan(&self, range: impl std::ops::RangeBounds<Vec<u8>>) -> Result<KvScan> {
         Ok(Box::new(ScanIterator {
             inner: self.data.range(range),
-            phantom_data: std::marker::PhantomData,
         }))
     }
 
@@ -52,12 +51,11 @@ impl std::fmt::Display for SledStore {
     }
 }
 
-pub struct ScanIterator<'a> {
+pub struct ScanIterator {
     inner: sled::Iter,
-    phantom_data: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> Iterator for ScanIterator<'a> {
+impl Iterator for ScanIterator {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -69,7 +67,7 @@ impl<'a> Iterator for ScanIterator<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for ScanIterator<'a> {
+impl DoubleEndedIterator for ScanIterator {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.inner
             .next_back()
