@@ -179,4 +179,8 @@ pub enum DatabaseError {
     ),
     #[error("the {0} cannot support {1} for calculations")]
     UnsupportedBinaryOperator(LogicalType, BinaryOperator),
+
+    #[error("the DDL must run in serial,already running in: {0} transaction")]
+    DDLSerialError(usize),
+
 }

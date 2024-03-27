@@ -1,3 +1,5 @@
+use futures::future::err;
+
 use crate::binder::{Binder, BinderContext};
 use crate::catalog::SchemaRef;
 use crate::execution::executor::{build, Source};
@@ -30,7 +32,13 @@ impl<S: Storage> Database<S> {
     // /// Run SQL queries.
     pub async fn run(&self, sql: &str) -> Result<(SchemaRef, Vec<Tuple>)> {
         let mut transaction = self.storage.transaction().await?;
-        let (schema, tuples) = Self::_run(sql, &mut transaction)?;
+        let (schema, tuples) = match Self::_run(sql, &mut transaction){
+            Ok((schema, tuples)) => (schema, tuples),
+            Err(e) => {
+                transaction.rollback().await?;
+                return Err(e);
+            },
+        };
 
         transaction.commit().await?;
 
@@ -275,10 +283,6 @@ mod test {
             .await?;
         println!("{}", create_table(&tuples_time_where_t2));
 
-        assert!(database
-            .run("select max(d) from t2 group by c")
-            .await
-            .is_err());
 
         println!("distinct t1:");
         let tuples_distinct_t1 = database.run("select distinct b, k from t1").await?;

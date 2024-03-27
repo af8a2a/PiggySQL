@@ -82,12 +82,14 @@ impl<'a> DoubleEndedIterator for ScanIterator<'a> {
 #[cfg(test)]
 mod tests {
 
+    use std::sync::Arc;
+
     use super::*;
     super::super::tests::test_engine!({
         let path = tempdir::TempDir::new("piggydb")
             .unwrap()
             .path()
             .join("piggydb");
-        SledStore::new(path)?
+        Arc::new(SledStore::new(path)?)
     });
 }

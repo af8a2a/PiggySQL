@@ -17,6 +17,7 @@ use pgwire::{
     tokio::process_socket,
 };
 use tokio::{net::TcpListener, sync::Mutex};
+use tracing::debug;
 
 use crate::{
     catalog::SchemaRef,
@@ -306,10 +307,13 @@ impl<E: StorageEngine> Server<E> {
 
         tokio::select! {
             res = server_run(processor.clone(), processor.clone(), authenticator, listener) => {
-                if let Err(_err) = res {
+                if let Err(err) = res {
+                    debug!("server run error: {}", err);
                 }
             }
-            _ = quit() => {}
+            _ = quit() => {
+                debug!("quit server");
+            }
         }
     }
 }
@@ -331,7 +335,7 @@ pub(crate) async fn server_run<
         let placeholder_ref = placeholder.make();
 
         tokio::spawn(async move {
-            if let Err(_err) = process_socket(
+            if let Err(err) = process_socket(
                 incoming_socket.0,
                 None,
                 authenticator_ref,
@@ -340,7 +344,7 @@ pub(crate) async fn server_run<
             )
             .await
             {
-                {}
+                debug!("process_socket error: {}", err);
             }
         });
     }

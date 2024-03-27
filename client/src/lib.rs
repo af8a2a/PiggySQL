@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use comfy_table::{Cell, Table};
 use rand::Rng;
-use tokio_postgres::{Client, NoTls, Row, SimpleQueryMessage};
+use tokio_postgres::{Client, NoTls,  SimpleQueryMessage};
 
 pub struct SQLClient {
     pub client: Client,

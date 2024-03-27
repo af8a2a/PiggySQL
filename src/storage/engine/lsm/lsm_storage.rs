@@ -10,7 +10,6 @@ use crate::errors::Result;
 use bytes::Bytes;
 use derive_with::With;
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tracing::debug;
 
 use super::block::Block;
@@ -419,7 +418,6 @@ impl LsmStorageInner {
                         .cmp(state.sstables.get(y).unwrap().first_key())
                 })
             }
-    
         };
         let storage = Self {
             state: Arc::new(RwLock::new(Arc::new(state))),
@@ -723,39 +721,6 @@ impl LsmStorageInner {
         let memtable_iter = MergeIterator::create(memtable_iters);
 
         let mut table_iters = Vec::with_capacity(snapshot.l0_sstables.len());
-        let mut collect_l0 = |table_id| -> Result<()> {
-            let table = snapshot.sstables[table_id].clone();
-            if range_overlap(
-                lower,
-                upper,
-                table.first_key().as_key_slice(),
-                table.last_key().as_key_slice(),
-            ) {
-                let iter = match lower {
-                    Bound::Included(key) => {
-                        SsTableIterator::create_and_seek_to_key(table, KeySlice::from_slice(key))?
-                    }
-                    Bound::Excluded(key) => {
-                        let mut iter = SsTableIterator::create_and_seek_to_key(
-                            table,
-                            KeySlice::from_slice(key),
-                        )?;
-                        if iter.is_valid() && iter.key().raw_ref() == key {
-                            iter.next()?;
-                        }
-                        iter
-                    }
-                    Bound::Unbounded => SsTableIterator::create_and_seek_to_first(table)?,
-                };
-
-                table_iters.push(Box::new(iter));
-            }
-            Ok(())
-        };
-        // snapshot
-        //     .l0_sstables
-        //     .par_iter()
-        //     .try_for_each(|table_id| collect_l0(table_id));
         for table_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables[table_id].clone();
             if range_overlap(

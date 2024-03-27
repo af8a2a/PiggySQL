@@ -1,6 +1,6 @@
 use crate::errors::*;
 use dashmap::DashMap;
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::{atomic::AtomicU64, Arc}};
 
 #[derive(Clone, Copy)]
 struct TxnStatus {
@@ -8,7 +8,7 @@ struct TxnStatus {
     in_conflict: bool,
     /// The flag for an RW-depenedncy from this txn to another txn.
     out_conflict: bool,
-    /// The commit timestamp (current MvccKey::TxnNext) for this txn.
+    /// The commit timestamp for this txn.
     /// None if it is still running.
     commit_timestamp: Option<u64>,
 }

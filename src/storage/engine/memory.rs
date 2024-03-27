@@ -1,16 +1,18 @@
+use std::sync::Arc;
+
 use crossbeam_skiplist::SkipMap;
 
 use super::{KvScan, StorageEngine};
 use crate::errors::Result;
 pub struct Memory {
-    data: SkipMap<Vec<u8>, Vec<u8>>,
+    data: Arc<SkipMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl Memory {
     /// Creates a new Memory key-value storage engine.
     pub fn new() -> Self {
         Self {
-            data: SkipMap::new(),
+            data: Arc::new(SkipMap::new()),
         }
     }
 }
@@ -53,6 +55,8 @@ impl StorageEngine for Memory {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
-    super::super::tests::test_engine!(Memory::new());
+    super::super::tests::test_engine!(Arc::new(Memory::new()));
 }
