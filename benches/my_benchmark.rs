@@ -17,20 +17,20 @@ async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
     let db = Database::new(MVCCLayer::new(Memory::new()))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..500000 {
+    for i in 0..50000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 500001, 500001).as_str();
+    batch += format!("({},{})", 50001, 50001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
@@ -42,20 +42,20 @@ async fn data_source_bitcask() -> Result<Database<MVCCLayer<BitCask>>> {
     let db = Database::new(MVCCLayer::new(BitCask::new(path)?))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..500000 {
+    for i in 0..50000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 500001, 500001).as_str();
+    batch += format!("({},{})", 50001, 50001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
@@ -67,20 +67,20 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
     let db = Database::new(MVCCLayer::new(SledStore::new(path)?))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..500000 {
+    for i in 0..50000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 500001, 500001).as_str();
+    batch += format!("({},{})", 50001, 50001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
@@ -92,26 +92,26 @@ async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
     )))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
     )
     .await?;
     let mut batch = String::new();
-    for i in 0..500000 {
+    for i in 0..50000 {
         batch += format!("({},{})", i, i).as_str();
         batch += ","
     }
-    batch += format!("({},{})", 500001, 500001).as_str();
+    batch += format!("({},{})", 50001, 50001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
 pub async fn primary_key_benchmark_100000(engine: &Database<MVCCLayer<Memory>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=49000")
         .await?;
     Ok(())
 }
@@ -119,14 +119,14 @@ pub async fn without_primary_key_benchmark_100000(
     engine: &Database<MVCCLayer<Memory>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=49000")
         .await?;
     Ok(())
 }
 
 pub async fn bitcask_benchmark_100000(engine: &Database<MVCCLayer<BitCask>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=49000")
         .await?;
     Ok(())
 }
@@ -134,13 +134,13 @@ pub async fn bitcask_without_primary_benchmark_100000(
     engine: &Database<MVCCLayer<BitCask>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=49000")
         .await?;
     Ok(())
 }
 pub async fn sled_benchmark_100000(engine: &Database<MVCCLayer<SledStore>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=49000")
         .await?;
     Ok(())
 }
@@ -148,19 +148,19 @@ pub async fn sled_without_primary_benchmark_100000(
     engine: &Database<MVCCLayer<SledStore>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=49000")
         .await?;
     Ok(())
 }
 pub async fn lsm_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=49000")
         .await?;
     Ok(())
 }
 pub async fn lsm_without_primary_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=49000")
         .await?;
     Ok(())
 }
@@ -173,11 +173,11 @@ fn memory_benchmark(c: &mut Criterion) {
     let engine = rt.block_on(async { data_source().await.unwrap() });
     c.bench_function("select rows with primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { primary_key_benchmark_100000(&engine).await })
+            .iter(|| async { primary_key_benchmark_100000(&engine).await.unwrap() })
     });
     c.bench_function("select rows without primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { without_primary_key_benchmark_100000(&engine).await })
+            .iter(|| async { without_primary_key_benchmark_100000(&engine).await.unwrap() })
     });
 }
 fn bitcask_benchmark(c: &mut Criterion) {
@@ -189,11 +189,11 @@ fn bitcask_benchmark(c: &mut Criterion) {
     let bitcask = rt.block_on(async { data_source_bitcask().await.unwrap() });
     c.bench_function("bitcask benchmark select rows with primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { bitcask_benchmark_100000(&bitcask).await })
+            .iter(|| async { bitcask_benchmark_100000(&bitcask).await.unwrap() })
     });
     c.bench_function("bitcask benchmark select rows without primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { bitcask_without_primary_benchmark_100000(&bitcask).await })
+            .iter(|| async { bitcask_without_primary_benchmark_100000(&bitcask).await.unwrap() })
     });
 }
 fn lsm_benchmark(c: &mut Criterion) {
@@ -205,11 +205,11 @@ fn lsm_benchmark(c: &mut Criterion) {
     let lsm = rt.block_on(async { data_source_lsm().await.unwrap() });
     c.bench_function("lsm benchmark select rows with primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { lsm_benchmark_100000(&lsm).await })
+            .iter(|| async { lsm_benchmark_100000(&lsm).await.unwrap() })
     });
     c.bench_function("lsm benchmark select rows without primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { lsm_without_primary_benchmark_100000(&lsm).await })
+            .iter(|| async { lsm_without_primary_benchmark_100000(&lsm).await.unwrap() })
     });
 }
 
@@ -224,11 +224,11 @@ fn sled_benchmark(c: &mut Criterion) {
 
     c.bench_function("sled benchmark select rows with primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { sled_benchmark_100000(&sled).await })
+            .iter(|| async { sled_benchmark_100000(&sled).await.unwrap() })
     });
     c.bench_function("sled benchmark select rows without primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { sled_without_primary_benchmark_100000(&sled).await })
+            .iter(|| async { sled_without_primary_benchmark_100000(&sled).await.unwrap() })
     });
 }
 criterion_group!(
