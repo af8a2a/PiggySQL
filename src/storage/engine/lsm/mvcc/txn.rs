@@ -46,7 +46,6 @@ impl Transaction {
             self.clone(),
             self.inner.scan_with_ts(lower, upper, self.read_ts)?,
         )
-
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {
@@ -63,7 +62,9 @@ impl Transaction {
 }
 
 impl Drop for Transaction {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        self.inner.mvcc().ts.lock().1.remove_reader(self.read_ts)
+    }
 }
 
 type SkipMapRangeIter<'a> =
@@ -131,7 +132,6 @@ impl StorageIterator for TxnIterator {
     fn next(&mut self) -> Result<()> {
         self.iter.next()?;
         Ok(())
-
     }
 
     fn num_active_iterators(&self) -> usize {
