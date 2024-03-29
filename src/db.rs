@@ -9,12 +9,19 @@ use crate::parser;
 use crate::errors::{DatabaseError, Result};
 use crate::planner::LogicalPlan;
 use crate::storage::engine::memory::Memory;
+use crate::storage::experiment::MockDB;
 use crate::storage::{MVCCLayer, Storage, Transaction};
 use crate::types::tuple::Tuple;
 pub struct Database<S: Storage> {
     pub(crate) storage: S,
 }
-
+impl Database<MockDB> {
+    pub fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
+        Ok(Database {
+            storage: MockDB::new(path),
+        })
+    }
+}
 impl Database<MVCCLayer<Memory>> {
     pub fn new_memory() -> Result<Self> {
         Ok(Database {
@@ -32,12 +39,12 @@ impl<S: Storage> Database<S> {
     // /// Run SQL queries.
     pub async fn run(&self, sql: &str) -> Result<(SchemaRef, Vec<Tuple>)> {
         let mut transaction = self.storage.transaction().await?;
-        let (schema, tuples) = match Self::_run(sql, &mut transaction){
+        let (schema, tuples) = match Self::_run(sql, &mut transaction) {
             Ok((schema, tuples)) => (schema, tuples),
             Err(e) => {
                 transaction.rollback().await?;
                 return Err(e);
-            },
+            }
         };
 
         transaction.commit().await?;
@@ -282,7 +289,6 @@ mod test {
             .run("select (c + 1) from t2 where e > '2021-05-20'")
             .await?;
         println!("{}", create_table(&tuples_time_where_t2));
-
 
         println!("distinct t1:");
         let tuples_distinct_t1 = database.run("select distinct b, k from t1").await?;

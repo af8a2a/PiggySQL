@@ -8,8 +8,7 @@ use piggysql::{
             lsm::{lsm_storage::LsmStorageOptions, LSM},
             memory::Memory,
             sled_store::SledStore,
-        },
-        MVCCLayer,
+        }, experiment::MockDB, MVCCLayer
     },
 };
 
@@ -17,7 +16,7 @@ async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
     let db = Database::new(MVCCLayer::new(Memory::new()))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
@@ -30,7 +29,7 @@ async fn data_source() -> Result<Database<MVCCLayer<Memory>>> {
     }
     batch += format!("({},{})", 500001, 500001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
@@ -42,7 +41,7 @@ async fn data_source_bitcask() -> Result<Database<MVCCLayer<BitCask>>> {
     let db = Database::new(MVCCLayer::new(BitCask::new(path)?))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
@@ -55,7 +54,7 @@ async fn data_source_bitcask() -> Result<Database<MVCCLayer<BitCask>>> {
     }
     batch += format!("({},{})", 500001, 500001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
@@ -67,7 +66,7 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
     let db = Database::new(MVCCLayer::new(SledStore::new(path)?))?;
 
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
@@ -80,19 +79,15 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
     }
     batch += format!("({},{})", 500001, 500001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
-async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
+async fn data_source_lsm() -> Result<Database<MockDB>> {
     let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
-    let db = Database::new(MVCCLayer::new(LSM::new(
-        path,
-        LsmStorageOptions::leveled_compaction(),
-    )))?;
-
+    let db = Database::new_lsm(path)?;
     db.run(
-        "CREATE TABLE BenchTable(
+        "CREATE TABLE benchtable(
             id INT PRIMARY KEY,
             val INT);
             ",
@@ -105,13 +100,13 @@ async fn data_source_lsm() -> Result<Database<MVCCLayer<LSM>>> {
     }
     batch += format!("({},{})", 500001, 500001).as_str();
 
-    db.run(&format!("INSERT INTO BenchTable VALUES {}", batch))
+    db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
 }
 pub async fn primary_key_benchmark_100000(engine: &Database<MVCCLayer<Memory>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=490000")
         .await?;
     Ok(())
 }
@@ -119,14 +114,14 @@ pub async fn without_primary_key_benchmark_100000(
     engine: &Database<MVCCLayer<Memory>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=490000")
         .await?;
     Ok(())
 }
 
 pub async fn bitcask_benchmark_100000(engine: &Database<MVCCLayer<BitCask>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=490000")
         .await?;
     Ok(())
 }
@@ -134,13 +129,13 @@ pub async fn bitcask_without_primary_benchmark_100000(
     engine: &Database<MVCCLayer<BitCask>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=490000")
         .await?;
     Ok(())
 }
 pub async fn sled_benchmark_100000(engine: &Database<MVCCLayer<SledStore>>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=490000")
         .await?;
     Ok(())
 }
@@ -148,19 +143,19 @@ pub async fn sled_without_primary_benchmark_100000(
     engine: &Database<MVCCLayer<SledStore>>,
 ) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=490000")
         .await?;
     Ok(())
 }
-pub async fn lsm_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
+pub async fn lsm_benchmark_100000(engine: &Database<MockDB>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where id=490000")
+        .run("SELECT * FROM benchtable where id=490000")
         .await?;
     Ok(())
 }
-pub async fn lsm_without_primary_benchmark_100000(engine: &Database<MVCCLayer<LSM>>) -> Result<()> {
+pub async fn lsm_without_primary_benchmark_100000(engine: &Database<MockDB>) -> Result<()> {
     let _ = engine
-        .run("SELECT * FROM BenchTable where val=490000")
+        .run("SELECT * FROM benchtable where val=490000")
         .await?;
     Ok(())
 }
@@ -205,11 +200,11 @@ fn lsm_benchmark(c: &mut Criterion) {
     let lsm = rt.block_on(async { data_source_lsm().await.unwrap() });
     c.bench_function("lsm benchmark select rows with primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { lsm_benchmark_100000(&lsm).await })
+            .iter(|| async { lsm_benchmark_100000(&lsm).await.unwrap() })
     });
     c.bench_function("lsm benchmark select rows without primary key", |b| {
         b.to_async(&rt)
-            .iter(|| async { lsm_without_primary_benchmark_100000(&lsm).await })
+            .iter(|| async { lsm_without_primary_benchmark_100000(&lsm).await.unwrap() })
     });
 }
 
@@ -234,6 +229,6 @@ fn sled_benchmark(c: &mut Criterion) {
 criterion_group!(
     name = benches;
     config = Criterion::default();
-    targets = memory_benchmark,bitcask_benchmark,lsm_benchmark,sled_benchmark
+    targets = lsm_benchmark
 );
 criterion_main!(benches);
