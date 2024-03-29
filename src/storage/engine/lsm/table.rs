@@ -12,10 +12,13 @@ pub use builder::SsTableBuilder;
 use bytes::{Buf, BufMut};
 pub use iterator::SsTableIterator;
 
-
 use self::bloom::Bloom;
 
-use super::{block::Block, key::{KeyBytes, KeySlice}, lsm_storage::BlockCache};
+use super::{
+    block::Block,
+    key::{KeyBytes, KeySlice},
+    lsm_storage::BlockCache,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockMeta {
@@ -37,11 +40,11 @@ impl BlockMeta {
             // The size of key length
             estimated_size += std::mem::size_of::<u16>();
             // The size of actual key
-            estimated_size += meta.first_key.len();
+            estimated_size += meta.first_key.raw_len();
             // The size of key length
             estimated_size += std::mem::size_of::<u16>();
             // The size of actual key
-            estimated_size += meta.last_key.len();
+            estimated_size += meta.last_key.raw_len();
         }
         estimated_size += std::mem::size_of::<u32>();
         // Reserve the space to improve performance, especially when the size of incoming data is
@@ -51,10 +54,12 @@ impl BlockMeta {
         buf.put_u32(block_meta.len() as u32);
         for meta in block_meta {
             buf.put_u32(meta.offset as u32);
-            buf.put_u16(meta.first_key.len() as u16);
-            buf.put_slice(meta.first_key.raw_ref());
-            buf.put_u16(meta.last_key.len() as u16);
-            buf.put_slice(meta.last_key.raw_ref());
+            buf.put_u16(meta.first_key.key_len() as u16);
+            buf.put_slice(meta.first_key.key_ref());
+            buf.put_u64(meta.first_key.ts());
+            buf.put_u16(meta.last_key.key_len() as u16);
+            buf.put_slice(meta.last_key.key_ref());
+            buf.put_u64(meta.last_key.ts());
         }
         buf.put_u32(crc32fast::hash(&buf[original_len + 4..]));
         assert_eq!(estimated_size, buf.len() - original_len);
@@ -68,9 +73,11 @@ impl BlockMeta {
         for _ in 0..num {
             let offset = buf.get_u32() as usize;
             let first_key_len = buf.get_u16() as usize;
-            let first_key = KeyBytes::from_bytes(buf.copy_to_bytes(first_key_len));
+            let first_key =
+                KeyBytes::from_bytes_with_ts(buf.copy_to_bytes(first_key_len), buf.get_u64());
             let last_key_len: usize = buf.get_u16() as usize;
-            let last_key = KeyBytes::from_bytes(buf.copy_to_bytes(last_key_len));
+            let last_key =
+                KeyBytes::from_bytes_with_ts(buf.copy_to_bytes(last_key_len), buf.get_u64());
             block_meta.push(BlockMeta {
                 offset,
                 first_key,
@@ -116,13 +123,15 @@ impl FileObject {
     pub fn create(path: &Path, data: Vec<u8>) -> Result<Self> {
         // std::fs::write(path, &data)?;
         // println!("reach");
-        let mut file=File::options().read(true).write(true).create(true).open(path).unwrap();
+        let mut file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)
+            .unwrap();
         file.write_all(&data)?;
         file.sync_all().unwrap();
-        Ok(FileObject(
-            Some(file),
-            data.len() as u64,
-        ))
+        Ok(FileObject(Some(file), data.len() as u64))
     }
 
     pub fn open(path: &Path) -> Result<Self> {
@@ -220,7 +229,8 @@ impl SsTable {
     pub fn read_block_cached(&self, block_idx: usize) -> Result<Arc<Block>> {
         if let Some(ref block_cache) = self.block_cache {
             let blk = block_cache
-                .try_get_with((self.id, block_idx), || self.read_block(block_idx)).unwrap();
+                .try_get_with((self.id, block_idx), || self.read_block(block_idx))
+                .unwrap();
             Ok(blk)
         } else {
             self.read_block(block_idx)

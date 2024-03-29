@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use bytes::Buf;
 
-
 use crate::storage::engine::lsm::key::{KeySlice, KeyVec};
 
 use super::{Block, SIZEOF_U16};
@@ -27,7 +26,7 @@ impl Block {
         buf.get_u16();
         let key_len = buf.get_u16();
         let key = &buf[..key_len as usize];
-        KeyVec::from_vec(key.to_vec())
+        KeyVec::from_vec_with_ts(key.to_vec(), buf.get_u64())
     }
 }
 
@@ -106,7 +105,7 @@ impl BlockIterator {
         let key_len = entry.get_u16() as usize;
         let key = &entry[..key_len];
         self.key.clear();
-        self.key.append(&self.first_key.raw_ref()[..overlap_len]);
+        self.key.append(&self.first_key.key_ref()[..overlap_len]);
         self.key.append(key);
         entry.advance(key_len);
         let value_len = entry.get_u16() as usize;
