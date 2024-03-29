@@ -9,12 +9,10 @@ use crate::errors::Result;
 pub use leveled::{LeveledCompactionController, LeveledCompactionOptions, LeveledCompactionTask};
 use serde::{Deserialize, Serialize};
 pub use simple_leveled::{
-    SimpleLeveledCompactionController, SimpleLeveledCompactionOptions, SimpleLeveledCompactionTask
+    SimpleLeveledCompactionController, SimpleLeveledCompactionOptions, SimpleLeveledCompactionTask,
 };
 pub use tiered::{TieredCompactionController, TieredCompactionOptions, TieredCompactionTask};
 use tracing::debug;
-
-
 
 use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
@@ -75,11 +73,11 @@ impl CompactionController {
         snapshot: &LsmStorageState,
         task: &CompactionTask,
         output: &[usize],
-        in_recovery:bool,
+        in_recovery: bool,
     ) -> (LsmStorageState, Vec<usize>) {
         match (self, task) {
             (CompactionController::Leveled(ctrl), CompactionTask::Leveled(task)) => {
-                ctrl.apply_compaction_result(snapshot, task, output,in_recovery)
+                ctrl.apply_compaction_result(snapshot, task, output, in_recovery)
             }
             (CompactionController::Simple(ctrl), CompactionTask::Simple(task)) => {
                 ctrl.apply_compaction_result(snapshot, task, output)
@@ -118,36 +116,41 @@ impl LsmStorageInner {
     fn compact_generate_sst_from_iter(
         &self,
         mut iter: impl for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>,
-        compact_to_bottom_level: bool,
+        _compact_to_bottom_level: bool,
     ) -> Result<Vec<Arc<SsTable>>> {
         let mut builder = None;
         let mut new_sst = Vec::new();
+        let mut last_key = Vec::<u8>::new();
 
         while iter.is_valid() {
             if builder.is_none() {
                 builder = Some(SsTableBuilder::new(self.options.block_size));
             }
+            let same_as_last_key = iter.key().key_ref() == last_key;
+
             let builder_inner = builder.as_mut().unwrap();
-            if compact_to_bottom_level {
-                if !iter.value().is_empty() {
-                    builder_inner.add(iter.key(), iter.value());
-                }
-            } else {
-                builder_inner.add(iter.key(), iter.value());
-            }
-            iter.next()?;
 
             if builder_inner.estimated_size() >= self.options.target_sst_size {
                 let sst_id = self.next_sst_id();
-                let builder = builder.take().unwrap();
-                let sst = Arc::new(builder.build(
+                let old_builder = builder.take().unwrap();
+                let sst = Arc::new(old_builder.build(
                     sst_id,
                     Some(self.block_cache.clone()),
                     self.options.bloom_false_positive_rate,
                     self.path_of_sst(sst_id),
                 )?);
                 new_sst.push(sst);
+                builder = Some(SsTableBuilder::new(self.options.block_size));
             }
+            let builder_inner = builder.as_mut().unwrap();
+            builder_inner.add(iter.key(), iter.value());
+
+            if !same_as_last_key {
+                last_key.clear();
+                last_key.extend(iter.key().key_ref());
+            }
+
+            iter.next()?;
         }
         if let Some(builder) = builder {
             let sst_id = self.next_sst_id(); // lock dropped here
@@ -340,7 +343,7 @@ impl LsmStorageInner {
             }
             let (mut snapshot, files_to_remove) = self
                 .compaction_controller
-                .apply_compaction_result(&snapshot, &task, &output,false);
+                .apply_compaction_result(&snapshot, &task, &output, false);
             let mut ssts_to_remove = Vec::with_capacity(files_to_remove.len());
             for file_to_remove in &files_to_remove {
                 let result = snapshot.sstables.remove(file_to_remove);
