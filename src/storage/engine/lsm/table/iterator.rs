@@ -90,7 +90,7 @@ impl StorageIterator for SsTableIterator {
         self.blk_iter.is_valid()
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         self.blk_iter.next();
         if !self.blk_iter.is_valid() {
             self.blk_idx += 1;

@@ -140,14 +140,14 @@ impl LsmStorageInner {
             {
                 last_key.clear();
                 last_key.extend(iter.key().key_ref());
-                iter.next()?;
+                iter._next()?;
                 first_key_below_watermark = false;
                 continue;
             }
 
             if same_as_last_key && iter.key().ts() <= watermark {
                 if !first_key_below_watermark {
-                    iter.next()?;
+                    iter._next()?;
                     continue;
                 }
                 first_key_below_watermark = false;
@@ -174,7 +174,7 @@ impl LsmStorageInner {
                 last_key.extend(iter.key().key_ref());
             }
 
-            iter.next()?;
+            iter._next()?;
         }
         if let Some(builder) = builder {
             let sst_id = self.next_sst_id(); // lock dropped here

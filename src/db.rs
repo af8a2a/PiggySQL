@@ -9,16 +9,16 @@ use crate::parser;
 use crate::errors::{DatabaseError, Result};
 use crate::planner::LogicalPlan;
 use crate::storage::engine::memory::Memory;
-use crate::storage::experiment::MockDB;
+use crate::storage::experiment::LSM;
 use crate::storage::{MVCCLayer, Storage, Transaction};
 use crate::types::tuple::Tuple;
 pub struct Database<S: Storage> {
     pub(crate) storage: S,
 }
-impl Database<MockDB> {
+impl Database<LSM> {
     pub fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
         Ok(Database {
-            storage: MockDB::new(path),
+            storage: LSM::new(path),
         })
     }
 }

@@ -208,7 +208,7 @@ impl StorageIterator for MemTableIterator {
         !self.borrow_item().0.is_empty()
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         let entry = self.with_iter_mut(|iter| MemTableIterator::entry_to_item(iter.next()));
         self.with_mut(|x| *x.item = entry);
         Ok(())

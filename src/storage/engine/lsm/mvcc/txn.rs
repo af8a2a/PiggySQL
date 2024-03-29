@@ -216,7 +216,7 @@ impl StorageIterator for TxnLocalIterator {
         !self.borrow_item().0.is_empty()
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         let entry = self.with_iter_mut(|iter| TxnLocalIterator::entry_to_item(iter.next()));
         self.with_mut(|x| *x.item = entry);
         Ok(())
@@ -243,7 +243,7 @@ impl TxnIterator {
 
     fn skip_deletes(&mut self) -> Result<()> {
         while self.iter.is_valid() && self.iter.value().is_empty() {
-            self.iter.next()?;
+            self.iter._next()?;
         }
         Ok(())
     }
@@ -272,8 +272,8 @@ impl StorageIterator for TxnIterator {
         self.iter.is_valid()
     }
 
-    fn next(&mut self) -> Result<()> {
-        self.iter.next()?;
+    fn _next(&mut self) -> Result<()> {
+        self.iter._next()?;
         if self.is_valid() {
             self.add_to_read_set(self.key());
         }
@@ -283,5 +283,20 @@ impl StorageIterator for TxnIterator {
 
     fn num_active_iterators(&self) -> usize {
         self.iter.num_active_iterators()
+    }
+}
+
+impl Iterator for TxnIterator {
+    type Item = (Bytes, Bytes);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.is_valid() {
+            let key = Bytes::copy_from_slice(self.key());
+            let val = Bytes::copy_from_slice(self.value());
+            self._next().ok();
+            Some((key, val))
+        } else {
+            None
+        }
     }
 }

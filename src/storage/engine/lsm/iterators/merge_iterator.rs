@@ -97,7 +97,7 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
             .unwrap_or(false)
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         let current = self.current.as_mut().unwrap();
         // Pop the item out of the heap if they have the same value.
         while let Some(mut inner_iter) = self.iters.peek_mut() {
@@ -107,7 +107,7 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
             );
             if inner_iter.1.key() == current.1.key() {
                 // Case 1: an error occurred when calling `next`.
-                if let e @ Err(_) = inner_iter.1.next() {
+                if let e @ Err(_) = inner_iter.1._next() {
                     PeekMut::pop(inner_iter);
                     return e;
                 }
@@ -121,7 +121,7 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
             }
         }
 
-        current.1.next()?;
+        current.1._next()?;
 
         // If the current iterator is invalid, pop it out of the heap and select the next one.
         if !current.1.is_valid() {

@@ -808,7 +808,7 @@ impl LsmStorageInner {
                             KeySlice::from_slice(key, key::TS_RANGE_BEGIN),
                         )?;
                         while iter.is_valid() && iter.key().key_ref() == key {
-                            iter.next()?;
+                            iter._next()?;
                         }
                         iter
                     }
@@ -846,7 +846,7 @@ impl LsmStorageInner {
                         KeySlice::from_slice(key, key::TS_RANGE_BEGIN),
                     )?;
                     while iter.is_valid() && iter.key().key_ref() == key {
-                        iter.next()?;
+                        iter._next()?;
                     }
                     iter
                 }

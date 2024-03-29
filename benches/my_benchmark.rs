@@ -8,7 +8,7 @@ use piggysql::{
             lsm::{lsm_storage::LsmStorageOptions, LSM},
             memory::Memory,
             sled_store::SledStore,
-        }, experiment::MockDB, MVCCLayer
+        }, experiment::LSM, MVCCLayer
     },
 };
 
@@ -83,7 +83,7 @@ async fn data_source_sled() -> Result<Database<MVCCLayer<SledStore>>> {
         .await?;
     Ok(db)
 }
-async fn data_source_lsm() -> Result<Database<MockDB>> {
+async fn data_source_lsm() -> Result<Database<LSM>> {
     let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
     let db = Database::new_lsm(path)?;
     db.run(
@@ -147,13 +147,13 @@ pub async fn sled_without_primary_benchmark_100000(
         .await?;
     Ok(())
 }
-pub async fn lsm_benchmark_100000(engine: &Database<MockDB>) -> Result<()> {
+pub async fn lsm_benchmark_100000(engine: &Database<LSM>) -> Result<()> {
     let _ = engine
         .run("SELECT * FROM benchtable where id=490000")
         .await?;
     Ok(())
 }
-pub async fn lsm_without_primary_benchmark_100000(engine: &Database<MockDB>) -> Result<()> {
+pub async fn lsm_without_primary_benchmark_100000(engine: &Database<LSM>) -> Result<()> {
     let _ = engine
         .run("SELECT * FROM benchtable where val=490000")
         .await?;

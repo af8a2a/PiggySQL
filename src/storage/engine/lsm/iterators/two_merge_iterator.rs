@@ -27,7 +27,7 @@ impl<
 
     fn skip_b(&mut self) -> Result<()> {
         if self.a.is_valid() && self.b.is_valid() && self.b.key() == self.a.key() {
-            self.b.next()?;
+            self.b._next()?;
         }
         Ok(())
     }
@@ -75,11 +75,11 @@ impl<
         }
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         if self.choose_a {
-            self.a.next()?;
+            self.a._next()?;
         } else {
-            self.b.next()?;
+            self.b._next()?;
         }
         self.skip_b()?;
         self.choose_a = Self::choose_a(&self.a, &self.b);

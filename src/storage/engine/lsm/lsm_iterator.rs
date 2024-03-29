@@ -43,7 +43,7 @@ impl LsmIterator {
     }
 
     fn next_inner(&mut self) -> Result<()> {
-        self.inner.next()?;
+        self.inner._next()?;
         if !self.inner.is_valid() {
             self.is_valid = false;
             return Ok(());
@@ -112,7 +112,7 @@ impl StorageIterator for LsmIterator {
         self.inner.value()
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         self.next_inner()?;
         self.move_to_key()?;
         Ok(())
@@ -161,13 +161,13 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
         self.iter.value()
     }
 
-    fn next(&mut self) -> Result<()> {
+    fn _next(&mut self) -> Result<()> {
         // only move when the iterator is valid and not errored
         if self.has_errored {
             panic!("the iterator is tainted");
         }
         if self.iter.is_valid() {
-            if let Err(e) = self.iter.next() {
+            if let Err(e) = self.iter._next() {
                 self.has_errored = true;
                 return Err(e);
             }

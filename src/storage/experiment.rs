@@ -24,11 +24,11 @@ use super::{
     Projections, Storage,
 };
 use super::{tuple_projection, Bounds, Iter, Transaction};
-pub struct MockDB {
+pub struct LSM {
     db: Arc<MiniLsm>,
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
-impl MockDB {
+impl LSM {
     pub fn new(path: PathBuf) -> Self {
         let db = MiniLsm::open(path, LsmStorageOptions::leveled_compaction()).unwrap();
         let cache = Arc::new(Cache::new(40));
@@ -40,7 +40,7 @@ pub struct TransactionWarpper {
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
 // unsafe impl Send for TransactionWarpper {}
-impl Storage for MockDB {
+impl Storage for LSM {
     type TransactionType = TransactionWarpper;
 
     async fn transaction(&self) -> Result<Self::TransactionType> {
@@ -193,31 +193,45 @@ pub struct IteratorWarpper {
 }
 impl Iter for IteratorWarpper {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
-        let mut limit = match self.bound.1 {
+        let limit = match self.bound.1 {
             Some(limit) => limit,
             None => usize::MAX,
         };
-        let mut offset = self.bound.0.unwrap_or(0);
-        let mut tuples = vec![];
-        while self.iter.is_valid() {
-            if offset > 0 {
-                self.iter.next().unwrap();
-                offset -= 1;
-                continue;
-            }
-            if limit == 0 {
-                break;
-            }
-            let val = self.iter.value();
-            let tuple = tuple_projection(
-                &self.projection,
-                &self.all_columns,
-                TableCodec::decode_tuple(&self.all_columns, &val),
-            )?;
-            tuples.push(tuple);
-            self.iter.next()?;
-            limit -= 1;
-        }
+        let limit = self.bound.0.unwrap_or(0);
+        // let mut tuples = vec![];
+        let tuples = self
+            .iter
+            .by_ref()
+            .skip(limit)
+            .filter_map(|(_, val)| {
+                tuple_projection(
+                    &self.projection,
+                    &self.all_columns,
+                    TableCodec::decode_tuple(&self.all_columns, &val),
+                )
+                .ok()
+            })
+            .take(limit)
+            .collect_vec();
+        // while self.iter.is_valid() {
+        //     if offset > 0 {
+        //         self.iter.next().unwrap();
+        //         offset -= 1;
+        //         continue;
+        //     }
+        //     if limit == 0 {
+        //         break;
+        //     }
+        //     let val = self.iter.value();
+        //     let tuple = tuple_projection(
+        //         &self.projection,
+        //         &self.all_columns,
+        //         TableCodec::decode_tuple(&self.all_columns, &val),
+        //     )?;
+        //     tuples.push(tuple);
+        //     self.iter.next()?;
+        //     limit -= 1;
+        // }
         Ok(Some(tuples))
     }
 }
@@ -716,16 +730,15 @@ mod test {
         types::{value::DataValue, LogicalType},
     };
 
-
     use super::*;
     #[tokio::test]
     async fn test_in_storage() -> Result<()> {
         let path = tempdir::TempDir::new("piggydb")
-        .unwrap()
-        .path()
-        .join("piggydb");
+            .unwrap()
+            .path()
+            .join("piggydb");
 
-        let storage = MockDB::new(path);
+        let storage = LSM::new(path);
         let mut transaction = storage.transaction().await?;
         let columns = vec![
             Arc::new(ColumnCatalog::new(
@@ -748,7 +761,7 @@ mod test {
         let _ = transaction.create_table(Arc::new("test".to_string()), source_columns, false)?;
         let table_catalog = transaction.table(Arc::new("test".to_string()));
         assert!(table_catalog.is_some());
-        let cols=table_catalog.unwrap().all_columns();
+        let cols = table_catalog.unwrap().all_columns();
 
         transaction.append(
             &"test".to_string(),

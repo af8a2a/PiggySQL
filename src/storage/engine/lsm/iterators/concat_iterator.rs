@@ -108,8 +108,8 @@ impl StorageIterator for SstConcatIterator {
         }
     }
 
-    fn next(&mut self) -> Result<()> {
-        self.current.as_mut().unwrap().next()?;
+    fn _next(&mut self) -> Result<()> {
+        self.current.as_mut().unwrap()._next()?;
         self.move_until_valid()?;
         Ok(())
     }
