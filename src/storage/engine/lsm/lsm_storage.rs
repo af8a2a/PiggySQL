@@ -25,6 +25,7 @@ use super::key::{self, KeySlice, TS_RANGE_BEGIN};
 use super::lsm_iterator::{FusedIterator, LsmIterator};
 use super::manifest::{self, Manifest, ManifestRecord};
 use super::mem_table::{map_bound, map_key_bound_plus_ts, MemTable};
+use super::mvcc::txn::{Transaction, TxnIterator};
 use super::mvcc::LsmMvccInner;
 use super::table::{FileObject, SsTable, SsTableBuilder, SsTableIterator};
 
@@ -84,6 +85,7 @@ pub struct LsmStorageOptions {
     pub compaction_options: CompactionOptions,
     pub enable_wal: bool,
     pub bloom_false_positive_rate: f64,
+    pub serializable: bool,
 }
 
 impl LsmStorageOptions {
@@ -99,6 +101,7 @@ impl LsmStorageOptions {
             }),
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
+            serializable: false,
         }
     }
     pub fn no_compaction() -> Self {
@@ -109,6 +112,7 @@ impl LsmStorageOptions {
             compaction_options: CompactionOptions::NoCompaction,
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
+            serializable: false,
         }
     }
     pub fn leveled_compaction() -> Self {
@@ -124,6 +128,7 @@ impl LsmStorageOptions {
             }),
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
+            serializable: false,
         }
     }
 }
@@ -169,7 +174,6 @@ pub(crate) struct LsmStorageInner {
     pub(crate) compaction_controller: CompactionController,
     pub(crate) manifest: Option<Manifest>,
     pub(crate) mvcc: Option<LsmMvccInner>,
-
 }
 
 /// A thin wrapper for `LsmStorageInner` and the user interface for MiniLSM.
@@ -198,12 +202,6 @@ impl MiniLsm {
         self.compaction_notifier.send(()).ok();
         self.flush_notifier.send(()).ok();
 
-        if self.inner.options.enable_wal {
-            self.inner.sync()?;
-            self.inner.sync_dir()?;
-            return Ok(());
-        }
-
         let mut compaction_thread = self.compaction_thread.lock();
         if let Some(compaction_thread) = compaction_thread.take() {
             compaction_thread.join().unwrap();
@@ -211,6 +209,11 @@ impl MiniLsm {
         let mut flush_thread = self.flush_thread.lock();
         if let Some(flush_thread) = flush_thread.take() {
             flush_thread.join().unwrap();
+        }
+        if self.inner.options.enable_wal {
+            self.inner.sync()?;
+            self.inner.sync_dir()?;
+            return Ok(());
         }
 
         // create memtable and skip updating manifest
@@ -257,27 +260,22 @@ impl MiniLsm {
         self.inner.write_batch(batch)
     }
 
-    pub fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+    pub fn put(self: &Arc<Self>, key: &[u8], value: &[u8]) -> Result<()> {
         self.inner.put(key, value)
-    }
 
-    pub fn delete(&self, key: &[u8]) -> Result<()> {
+    }
+    pub fn delete(self: &Arc<Self>, key: &[u8]) -> Result<()> {
         self.inner.delete(key)
     }
-
     pub fn sync(&self) -> Result<()> {
         self.inner.sync()
     }
 
-    pub fn new_txn(&self) -> Result<()> {
+    pub fn new_txn(self: &Arc<Self>) -> Result<Arc<Transaction>> {
         self.inner.new_txn()
     }
 
-    pub fn scan(
-        &self,
-        lower: Bound<&[u8]>,
-        upper: Bound<&[u8]>,
-    ) -> Result<FusedIterator<LsmIterator>> {
+    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
         self.inner.scan(lower, upper)
     }
 
@@ -299,7 +297,6 @@ impl MiniLsm {
 }
 
 impl LsmStorageInner {
-    
     pub(crate) fn mvcc(&self) -> &LsmMvccInner {
         self.mvcc.as_ref().unwrap()
     }
@@ -440,7 +437,6 @@ impl LsmStorageInner {
             manifest: Some(manifest),
             options: options.into(),
             mvcc: Some(LsmMvccInner::new(0)),
-
         };
 
         storage.sync_dir()?;
@@ -452,7 +448,11 @@ impl LsmStorageInner {
     }
 
     /// Get a key from the storage. In day 7, this can be further optimized by using a bloom filter.
-    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+    pub fn get(self: &Arc<Self>, key: &[u8]) -> Result<Option<Bytes>> {
+        let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+        txn.get(key)
+    }
+    pub(crate) fn get_with_ts(&self, key: &[u8], read_ts: u64) -> Result<Option<Bytes>> {
         let snapshot = {
             let guard = self.state.read();
             Arc::clone(&guard)
@@ -522,6 +522,7 @@ impl LsmStorageInner {
                 MergeIterator::create(level_iters),
             )?,
             Bound::Unbounded,
+            read_ts,
         )?;
 
         if iter.is_valid() && iter.key() == key && !iter.value().is_empty() {
@@ -713,16 +714,25 @@ impl LsmStorageInner {
         Ok(())
     }
 
-    pub fn new_txn(&self) -> Result<()> {
-        // no-op
-        Ok(())
+    pub fn new_txn(self: &Arc<Self>) -> Result<Arc<Transaction>> {
+        Ok(self.mvcc().new_txn(self.clone(), self.options.serializable))
+    }
+
+    pub fn scan<'a>(
+        self: &'a Arc<Self>,
+        lower: Bound<&[u8]>,
+        upper: Bound<&[u8]>,
+    ) -> Result<TxnIterator> {
+        let txn = self.mvcc().new_txn(self.clone(), self.options.serializable);
+        txn.scan(lower, upper)
     }
 
     /// Create an iterator over a range of keys.
-    pub fn scan(
+    pub(crate) fn scan_with_ts(
         &self,
         lower: Bound<&[u8]>,
         upper: Bound<&[u8]>,
+        read_ts: u64,
     ) -> Result<FusedIterator<LsmIterator>> {
         let snapshot = {
             let guard = self.state.read();
@@ -815,6 +825,7 @@ impl LsmStorageInner {
         Ok(FusedIterator::new(LsmIterator::new(
             iter,
             map_bound(upper),
+            read_ts,
         )?))
     }
 }
