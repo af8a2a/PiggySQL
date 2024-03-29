@@ -123,7 +123,12 @@ mod test {
     use std::sync::Arc;
     #[tokio::test]
     async fn playground() -> Result<()> {
-        let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        let path = tempdir::TempDir::new("piggydb")
+            .unwrap()
+            .path()
+            .join("piggydb");
+
+        let database = Database::new_lsm(path)?;
         database
             .run("create table halloween (id int primary key,salary int)")
             .await?;
@@ -134,7 +139,12 @@ mod test {
     }
     #[tokio::test]
     async fn test_transaction_sql() -> Result<()> {
-        let database = Database::new(MVCCLayer::new(Memory::new()))?;
+        let path = tempdir::TempDir::new("piggydb")
+            .unwrap()
+            .path()
+            .join("piggydb");
+
+        let database = Database::new_lsm(path)?;
 
         database
             .run("create table halloween (id int primary key,salary int)")
@@ -157,7 +167,12 @@ mod test {
     #[tokio::test]
 
     async fn test_crud_sql() -> Result<()> {
-        let database = Database::new(MVCCLayer::new_memory())?;
+        let path = tempdir::TempDir::new("piggydb")
+            .unwrap()
+            .path()
+            .join("piggydb");
+
+        let database = Database::new_lsm(path)?;
 
         let _ = database.run(
             "create table t1 (a int primary key, b int unique null, k int, z varchar unique null)",

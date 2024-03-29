@@ -10,3 +10,4 @@ async-trait = "0.1"
 tokio = "1.29.1"
 tokio-test = "0.4.2"
 sqllogictest = "0.14.0"
+tempfile        = { version = "3.10.1" }

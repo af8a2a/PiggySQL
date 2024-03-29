@@ -128,31 +128,39 @@ impl Iter for IndexIteratorWarpper {
                     };
                     let mut collect_iter = self.txn.scan(encode_min, encode_max)?;
                     if self.index_meta.is_primary {
-                        while collect_iter.is_valid() {
-                            let val = collect_iter.value();
-                            let tuple = TableCodec::decode_tuple(&schema, val);
-                            tuples.push(tuple);
-                            collect_iter.next().unwrap();
-                        }
+                        // while collect_iter.is_valid() {
+                        //     let val = collect_iter.value();
+                        //     let tuple = TableCodec::decode_tuple(&schema, val);
+                        //     tuples.push(tuple);
+                        //     collect_iter.next().unwrap();
+                        // }
                         //主键索引可以直接获得元组
-                        // let collect = collect_iter
-                        //     .iter()
-                        //     .filter_map(|res| res.ok())
-                        //     .map(|(_, v)| -> Tuple { TableCodec::decode_tuple(&schema, &v) })
-                        //     .collect_vec();
-                        // tuples.extend(collect);
+                        let collect = collect_iter
+                            .map(|(_, v)| -> Tuple { TableCodec::decode_tuple(&schema, &v) })
+                            .collect_vec();
+                        tuples.extend(collect);
                     } else {
-                        while collect_iter.is_valid() {
-                            let val = collect_iter.value();
-                            let tuple_ids = TableCodec::decode_index(&val)?;
-                            collect_iter.next().unwrap();
+                        let index_values = collect_iter
+                            .map(|(_, v)| TableCodec::decode_index(&v).expect("decode index error"))
+                            .collect_vec();
+                        for tuple_ids in index_values {
                             for tuple_id in tuple_ids {
                                 if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
                                     tuples.push(tuple);
                                 }
                             }
-                            collect_iter.next().unwrap();
                         }
+                        // while collect_iter.is_valid() {
+                        //     let val = collect_iter.value();
+                        //     let tuple_ids = TableCodec::decode_index(&val)?;
+                        //     collect_iter.next().unwrap();
+                        //     for tuple_id in tuple_ids {
+                        //         if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
+                        //             tuples.push(tuple);
+                        //         }
+                        //     }
+                        //     collect_iter.next().unwrap();
+                        // }
                     }
                 }
                 ConstantBinary::Eq(val) => {
@@ -197,12 +205,12 @@ impl Iter for IteratorWarpper {
             Some(limit) => limit,
             None => usize::MAX,
         };
-        let limit = self.bound.0.unwrap_or(0);
+        let offset = self.bound.0.unwrap_or(0);
         // let mut tuples = vec![];
         let tuples = self
             .iter
             .by_ref()
-            .skip(limit)
+            .skip(offset)
             .filter_map(|(_, val)| {
                 tuple_projection(
                     &self.projection,
@@ -213,25 +221,7 @@ impl Iter for IteratorWarpper {
             })
             .take(limit)
             .collect_vec();
-        // while self.iter.is_valid() {
-        //     if offset > 0 {
-        //         self.iter.next().unwrap();
-        //         offset -= 1;
-        //         continue;
-        //     }
-        //     if limit == 0 {
-        //         break;
-        //     }
-        //     let val = self.iter.value();
-        //     let tuple = tuple_projection(
-        //         &self.projection,
-        //         &self.all_columns,
-        //         TableCodec::decode_tuple(&self.all_columns, &val),
-        //     )?;
-        //     tuples.push(tuple);
-        //     self.iter.next()?;
-        //     limit -= 1;
-        // }
+
         Ok(Some(tuples))
     }
 }

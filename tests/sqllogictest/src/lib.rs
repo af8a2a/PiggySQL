@@ -5,24 +5,32 @@ use piggysql::{
     errors::DatabaseError,
     storage::{
         engine::{memory::Memory, StorageEngine},
-        MVCCLayer,
+        experiment::LSM,
+        MVCCLayer, Storage,
     },
 };
 use sqllogictest::{AsyncDB, DBOutput, DefaultColumnType};
 
-pub struct Mock<S: StorageEngine> {
-    pub db: Database<MVCCLayer<S>>,
+pub struct Mock<S: Storage> {
+    pub db: Database<S>,
 }
 
-impl Mock<Memory> {
+impl Mock<MVCCLayer<Memory>> {
     pub fn new() -> Self {
         Self {
             db: Database::new_memory().unwrap(),
         }
     }
 }
+impl Mock<LSM> {
+    pub fn new_lsm(path: std::path::PathBuf) -> Self {
+        Self {
+            db: Database::new_lsm(path).unwrap(),
+        }
+    }
+}
 #[async_trait::async_trait]
-impl AsyncDB for Mock<Memory> {
+impl AsyncDB for Mock<LSM> {
     type Error = DatabaseError;
 
     type ColumnType = DefaultColumnType;

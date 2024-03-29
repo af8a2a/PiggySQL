@@ -5,7 +5,7 @@ use piggysql::{
     storage::{
         engine::{
             bitcask::BitCask,
-            lsm::{lsm_storage::LsmStorageOptions, LSM},
+            lsm::{lsm_storage::LsmStorageOptions, LSMEngine},
             memory::Memory,
             sled_store::SledStore,
         }, experiment::LSM, MVCCLayer

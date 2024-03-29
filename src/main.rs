@@ -4,7 +4,7 @@ use piggysql::{
     server::Server,
     storage::engine::{
         bitcask::BitCask,
-        lsm::{lsm_storage::LsmStorageOptions, LSM},
+        lsm::{lsm_storage::LsmStorageOptions, LSMEngine},
         memory::Memory,
         sled_store::SledStore,
     },
@@ -65,7 +65,7 @@ async fn main() {
                 _ => LsmStorageOptions::no_compaction()
                     .with_bloom_false_positive_rate(bloom_false_positive_rate),
             };
-            let store = LSM::new(PathBuf::from(filename), option);
+            let store = LSMEngine::new(PathBuf::from(filename), option);
             let server = Server::new(store).await.unwrap();
             Server::run(server).await;
         }

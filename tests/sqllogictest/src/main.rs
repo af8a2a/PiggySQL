@@ -2,6 +2,8 @@ use std::path::Path;
 
 use sqllogictest::Runner;
 use sqllogictest_test::Mock;
+use tempfile::{tempdir, TempDir};
+
 #[tokio::main]
 async fn main() {
     const SLT_PATTERN: &str = "tests/slt/**/*.slt";
@@ -12,6 +14,7 @@ async fn main() {
     println!("PiggySQL Test Start!\n");
 
     for slt_file in glob::glob(SLT_PATTERN).expect("failed to find slt files") {
+        let temp_dir = TempDir::new().expect("unable to create temporary working directory");
         let filepath = slt_file
             .expect("failed to read slt file")
             .to_str()
@@ -19,7 +22,7 @@ async fn main() {
             .to_string();
         println!("-> Now the test file is: {}", filepath);
 
-        let db = Mock::new();
+        let db = Mock::new_lsm(temp_dir.path().join("test"));
         let mut tester = Runner::new(db);
 
         if let Err(err) = tester.run_file_async(filepath).await {

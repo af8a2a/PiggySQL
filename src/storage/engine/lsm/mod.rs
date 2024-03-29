@@ -21,24 +21,24 @@ use self::{
 use super::Result;
 use super::StorageEngine;
 
-pub struct LSM {
+pub struct LSMEngine {
     pub inner: Arc<MiniLsm>,
 }
 
-impl LSM {
+impl LSMEngine {
     pub fn new(path: impl AsRef<Path>, option: LsmStorageOptions) -> Self {
         Self {
             inner: MiniLsm::open(path, option).unwrap(),
         }
     }
 }
-impl Display for LSM {
+impl Display for LSMEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "lsm")
     }
 }
 
-impl StorageEngine for LSM {
+impl StorageEngine for LSMEngine {
     fn delete(&self, key: &[u8]) -> super::Result<()> {
         self.inner.delete(key).unwrap();
         Ok(())
@@ -72,7 +72,7 @@ impl StorageEngine for LSM {
 
         while iter.is_valid() {
             kv.push((iter.key().to_vec(), iter.value().to_vec()));
-            iter.next()?;
+            iter._next()?;
         }
         Ok(Box::new(kv.into_iter().map(Ok)))
     }
@@ -95,6 +95,6 @@ mod test {
             .unwrap()
             .path()
             .join("piggydb");
-        Arc::new(LSM::new(path,LsmStorageOptions::default()))
+        Arc::new(LSMEngine::new(path,LsmStorageOptions::default()))
     });
 }
