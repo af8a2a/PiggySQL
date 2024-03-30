@@ -24,7 +24,7 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{experiment::PiggyKVStroage, Storage},
+    storage::{piggy_stroage::PiggyKVStroage},
     types::{tuple::Tuple, LogicalType},
 };
 

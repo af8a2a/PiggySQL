@@ -6,6 +6,7 @@ use std::sync::Arc;
 use bytes::{Buf, BufMut};
 use parking_lot::{Mutex, MutexGuard};
 use serde::{Deserialize, Serialize};
+use tracing::{error};
 use crate::errors::Result;
 
 use super::compact::CompactionTask;
@@ -56,6 +57,7 @@ impl Manifest {
             buf_ptr.advance(len as usize);
             let checksum = buf_ptr.get_u32();
             if checksum != crc32fast::hash(slice) {
+                error!("checksum mismatched!");
                 panic!("checksum mismatched!");
             }
             records.push(json);

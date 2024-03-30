@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use piggysql::{
     db::Database,
     errors::*,
-    storage::{engine::piggykv::lsm_storage::LsmStorageOptions, experiment::PiggyKVStroage},
+    storage::{piggy_stroage::PiggyKVStroage},
 };
 
 async fn data_source_lsm() -> Result<Database<PiggyKVStroage>> {

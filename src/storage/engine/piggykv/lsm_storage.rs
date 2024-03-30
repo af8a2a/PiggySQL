@@ -1,6 +1,6 @@
-use std::backtrace;
+
 use std::collections::{BTreeSet, HashMap};
-use std::fs::File;
+
 use std::ops::Bound;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicUsize;
@@ -21,9 +21,9 @@ use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
 use super::iterators::two_merge_iterator::TwoMergeIterator;
 use super::iterators::StorageIterator;
-use super::key::{self, KeySlice, TS_RANGE_BEGIN};
+use super::key::{self, KeySlice};
 use super::lsm_iterator::{FusedIterator, LsmIterator};
-use super::manifest::{self, Manifest, ManifestRecord};
+use super::manifest::{Manifest, ManifestRecord};
 use super::mem_table::{map_bound, map_key_bound_plus_ts, MemTable};
 use super::mvcc::txn::{Transaction, TxnIterator};
 use super::mvcc::LsmMvccInner;
@@ -176,7 +176,6 @@ pub(crate) struct LsmStorageInner {
     pub(crate) mvcc: Option<LsmMvccInner>,
 }
 
-
 impl LsmStorageInner {
     pub(crate) fn mvcc(&self) -> &LsmMvccInner {
         self.mvcc.as_ref().unwrap()
@@ -215,6 +214,7 @@ impl LsmStorageInner {
         if !path.exists() {
             std::fs::create_dir_all(path).expect("failed to create DB dir");
         }
+        let mut last_commit_ts = 0;
         let manifest_path = path.join("MANIFEST");
         if !manifest_path.exists() {
             if options.enable_wal {
@@ -268,6 +268,8 @@ impl LsmStorageInner {
                     Some(block_cache.clone()),
                     FileObject::open(&Self::path_of_sst_static(path, table_id))?,
                 )?;
+                last_commit_ts = last_commit_ts.max(sst.max_ts());
+
                 state.sstables.insert(table_id, Arc::new(sst));
                 sst_cnt += 1;
             }
@@ -281,6 +283,14 @@ impl LsmStorageInner {
                 for id in memtables.iter() {
                     let memtable =
                         MemTable::recover_from_wal(*id, Self::path_of_wal_static(path, *id))?;
+                    let max_ts = memtable
+                        .map
+                        .iter()
+                        .map(|x| x.key().ts())
+                        .max()
+                        .unwrap_or_default();
+                    last_commit_ts = last_commit_ts.max(max_ts);
+
                     if !memtable.is_empty() {
                         state.imm_memtables.insert(0, Arc::new(memtable));
                         wal_cnt += 1;
@@ -308,6 +318,7 @@ impl LsmStorageInner {
                 })
             }
         };
+
         let storage = Self {
             state: Arc::new(RwLock::new(Arc::new(state))),
             state_lock: Mutex::new(()),
@@ -317,9 +328,8 @@ impl LsmStorageInner {
             compaction_controller,
             manifest: Some(manifest),
             options: options.into(),
-            mvcc: Some(LsmMvccInner::new(0)),
+            mvcc: Some(LsmMvccInner::new(last_commit_ts)),
         };
-
         storage.sync_dir()?;
         Ok(storage)
     }

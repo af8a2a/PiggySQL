@@ -8,10 +8,10 @@ use bytes::Bytes;
 use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
-use tracing::{debug, trace};
+
 
 use super::iterators::StorageIterator;
-use super::key::{KeyBytes, KeySlice, TS_DEFAULT};
+use super::key::{KeyBytes, KeySlice};
 use super::table::SsTableBuilder;
 use super::wal::Wal;
 
@@ -20,7 +20,7 @@ use super::wal::Wal;
 /// An initial implementation of memtable is part of week 1, day 1. It will be incrementally implemented in other
 /// chapters of week 1 and week 2.
 pub struct MemTable {
-    map: Arc<SkipMap<KeyBytes, Bytes>>,
+    pub(super) map: Arc<SkipMap<KeyBytes, Bytes>>,
     wal: Option<Wal>,
     id: usize,
     approximate_size: Arc<AtomicUsize>,
@@ -191,7 +191,6 @@ impl MemTableIterator {
             .unwrap_or_else(|| (KeyBytes::new(), Bytes::new()))
     }
 }
-
 
 impl StorageIterator for MemTableIterator {
     type KeyType<'a> = KeySlice<'a>;

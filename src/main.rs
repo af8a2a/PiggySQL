@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use piggysql::{
     server::Server,
-    storage::{engine::piggykv::lsm_storage::LsmStorageOptions, experiment::PiggyKVStroage},
+    storage::{engine::piggykv::lsm_storage::LsmStorageOptions, piggy_stroage::PiggyKVStroage},
     CONFIG_MAP,
 };
 use tracing::Level;
-use tracing_appender::{non_blocking, rolling};
+
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main(worker_threads = 8)]
@@ -15,6 +15,7 @@ async fn main() {
     let log_level = match log_level.to_lowercase().as_str() {
         "info" => Level::INFO,
         "debug" => Level::DEBUG,
+        "warn" => Level::WARN,
         "error" => Level::ERROR,
         "trace" => Level::TRACE,
         _ => Level::INFO,

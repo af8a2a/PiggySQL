@@ -3,7 +3,7 @@ use std::time::Instant;
 use piggysql::{
     db::Database,
     errors::DatabaseError,
-    storage::{experiment::PiggyKVStroage, Storage},
+    storage::{piggy_stroage::PiggyKVStroage, Storage},
 };
 use sqllogictest::{AsyncDB, DBOutput, DefaultColumnType};
 

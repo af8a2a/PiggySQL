@@ -1,6 +1,6 @@
 use std::ops::Bound;
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
-use std::{mem, option};
+use std::{mem};
 
 use itertools::Itertools;
 use moka::sync::Cache;
@@ -9,13 +9,13 @@ use tracing::debug;
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName};
 use crate::catalog::{TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
-use crate::expression::ScalarExpression;
+
 use crate::storage::table_codec::TableCodec;
 use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use crate::{errors::*, CONFIG_MAP};
+use crate::{errors::*};
 
 use super::engine::piggykv::iterators::StorageIterator;
 use super::engine::piggykv::mvcc::txn::{Transaction as StorageTransaction, TxnIterator};
@@ -514,7 +514,7 @@ impl Transaction for TransactionWarpper {
         Ok(())
     }
 
-    fn set_isolation(&mut self, serializable: bool) -> Result<()> {
+    fn set_isolation(&mut self, _serializable: bool) -> Result<()> {
         todo!()
     }
 
@@ -541,7 +541,7 @@ impl Transaction for TransactionWarpper {
         &mut self,
         table_name: TableName,
         index_name: IndexName,
-        if_not_exists: bool,
+        _if_not_exists: bool,
     ) -> Result<()> {
         //check index exists
         //operator in copy temp data
@@ -701,8 +701,7 @@ impl TransactionWarpper {
 mod test {
 
     use crate::{
-        catalog::ColumnDesc,
-        types::{value::DataValue, LogicalType},
+        catalog::ColumnDesc, expression::ScalarExpression, types::{value::DataValue, LogicalType}
     };
 
     use super::*;

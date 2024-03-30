@@ -1,5 +1,5 @@
 use crate::catalog::ColumnCatalog;
-use crate::catalog::ColumnRef;
+
 use crate::errors::*;
 use crate::expression;
 use crate::expression::agg::Aggregate;
@@ -46,7 +46,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
             Expr::Cast { expr, data_type } => self.bind_cast(expr, data_type),
             Expr::Subquery(subquery)=>{
                 let (sub_query, column) = self.bind_subquery(subquery)?;
-                let (expr, sub_query) =(ScalarExpression::ColumnRef(column), sub_query);
+                let (expr, _sub_query) =(ScalarExpression::ColumnRef(column), sub_query);
 
                 Ok(expr)
             }

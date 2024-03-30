@@ -65,7 +65,7 @@ impl CopyFromFile {
         };
 
         let column_count = self.op.schema_ref.len();
-        let types = self
+        let _types = self
             .op
             .schema_ref
             .iter()

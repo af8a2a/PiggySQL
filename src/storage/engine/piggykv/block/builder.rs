@@ -1,4 +1,5 @@
 use bytes::BufMut;
+use tracing::error;
 
 use crate::storage::engine::piggykv::key::{KeySlice, KeyVec};
 
@@ -87,6 +88,7 @@ impl BlockBuilder {
     /// Finalize the block.
     pub fn build(self) -> Block {
         if self.is_empty() {
+            error!("block should not be empty");
             panic!("block should not be empty");
         }
         Block {

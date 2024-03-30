@@ -1,4 +1,4 @@
-use crate::{errors::Result, storage::engine::piggykv::key::KeySlice};
+use crate::{errors::Result};
 
 use super::StorageIterator;
 

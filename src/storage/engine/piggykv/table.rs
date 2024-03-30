@@ -11,6 +11,7 @@ use std::sync::Arc;
 pub use builder::SsTableBuilder;
 use bytes::{Buf, BufMut};
 pub use iterator::SsTableIterator;
+use tracing::error;
 
 use self::bloom::Bloom;
 
@@ -91,6 +92,7 @@ impl BlockMeta {
         let max_ts = buf.get_u64();
 
         if buf.get_u32() != checksum {
+            error!("checksum mismatched!");
             panic!("meta checksum mismatched");
         }
 
@@ -164,10 +166,6 @@ pub struct SsTable {
 
 }
 impl SsTable {
-    #[cfg(test)]
-    pub(crate) fn open_for_test(file: FileObject) -> Result<Self> {
-        Self::open(0, None, file)
-    }
     pub fn sync(&self) -> Result<()> {
         self.file.0.as_ref().unwrap().sync_all()?;
         Ok(())
@@ -230,6 +228,7 @@ impl SsTable {
         let block_data = &block_data_with_chksum[..block_len];
         let checksum = (&block_data_with_chksum[block_len..]).get_u32();
         if checksum != crc32fast::hash(block_data) {
+            error!("block checksum mismatched!");
             panic!("block checksum mismatched");
         }
         Ok(Arc::new(Block::decode(block_data)))

@@ -250,10 +250,10 @@ pub mod test {
     use super::*;
     use crate::binder::{Binder, BinderContext};
     use crate::catalog::{ColumnCatalog, ColumnDesc};
-    use crate::db::Database;
+    
     use crate::parser;
     use crate::planner::LogicalPlan;
-    use crate::storage::experiment::PiggyKVStroage;
+    use crate::storage::piggy_stroage::PiggyKVStroage;
     use crate::storage::{Storage, Transaction};
     use crate::types::LogicalType::Integer;
     use std::sync::Arc;

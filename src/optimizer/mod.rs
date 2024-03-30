@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use tracing::debug;
+use tracing::{trace};
 
 use crate::{optimizer::heuristic::optimizer::HepOptimizer, planner::LogicalPlan};
 
@@ -52,7 +52,7 @@ pub fn apply_optimization(plan: LogicalPlan) -> Result<LogicalPlan> {
         )
         .find_best();
     let after = Instant::now();
-    debug!(
+    trace!(
         "apply optimization cost time : {} us",
         after.duration_since(before).as_micros()
     );

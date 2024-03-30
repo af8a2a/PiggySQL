@@ -14,12 +14,13 @@ use bytes::Bytes;
 use crossbeam_skiplist::{map::Entry, SkipMap};
 use ouroboros::self_referencing;
 use parking_lot::Mutex;
+use tracing::error;
 
 use super::CommittedTxnData;
-use crate::errors::Result;
+use crate::errors::{DatabaseError, Result};
 use crate::storage::engine::piggykv::{
     iterators::{
-        two_merge_iterator::{self, TwoMergeIterator},
+        two_merge_iterator::{TwoMergeIterator},
         StorageIterator,
     },
     lsm_iterator::{FusedIterator, LsmIterator},
@@ -39,7 +40,10 @@ pub struct Transaction {
 impl Transaction {
     pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
         if self.committed.load(Ordering::SeqCst) {
-            panic!("cannot operate on committed txn!");
+            error!("cannot operate on committed txn!");
+            return Err(DatabaseError::InternalError(
+                "cannot operate on committed txn!".to_string(),
+            ));
         }
         if let Some(guard) = &self.key_hashes {
             let mut guard = guard.lock();
