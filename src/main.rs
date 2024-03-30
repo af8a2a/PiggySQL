@@ -2,12 +2,12 @@ use std::path::PathBuf;
 
 use piggysql::{
     server::Server,
-    storage::engine::{
+    storage::{engine::{
         bitcask::BitCask,
         lsm::{lsm_storage::LsmStorageOptions, LSMEngine},
         memory::Memory,
         sled_store::SledStore,
-    },
+    }, experiment::LSM},
     CONFIG_MAP,
 };
 use tracing::Level;
@@ -49,26 +49,26 @@ async fn main() {
             let server = Server::new(store).await.unwrap();
             Server::run(server).await;
         }
-        "lsm" => {
-            let bloom_false_positive_rate = CONFIG_MAP
-                .get("bloom_false_positive_rate")
-                .cloned()
-                .unwrap_or("0.01".to_string())
-                .parse::<f64>()
-                .unwrap_or(0.01);
-            let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
-            let option = match compaction.to_lowercase().as_str() {
-                "leveled" => LsmStorageOptions::leveled_compaction()
-                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
-                "simple" => LsmStorageOptions::default()
-                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
-                _ => LsmStorageOptions::no_compaction()
-                    .with_bloom_false_positive_rate(bloom_false_positive_rate),
-            };
-            let store = LSMEngine::new(PathBuf::from(filename), option);
-            let server = Server::new(store).await.unwrap();
-            Server::run(server).await;
-        }
+        // "lsm" => {
+        //     let bloom_false_positive_rate = CONFIG_MAP
+        //         .get("bloom_false_positive_rate")
+        //         .cloned()
+        //         .unwrap_or("0.01".to_string())
+        //         .parse::<f64>()
+        //         .unwrap_or(0.01);
+        //     let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
+        //     let option = match compaction.to_lowercase().as_str() {
+        //         "leveled" => LsmStorageOptions::leveled_compaction()
+        //             .with_bloom_false_positive_rate(bloom_false_positive_rate),
+        //         "simple" => LsmStorageOptions::default()
+        //             .with_bloom_false_positive_rate(bloom_false_positive_rate),
+        //         _ => LsmStorageOptions::no_compaction()
+        //             .with_bloom_false_positive_rate(bloom_false_positive_rate),
+        //     };
+        //     let store = LSM::new(PathBuf::from(filename), Some(option));
+        //     let server = Server::new(store).await.unwrap();
+        //     Server::run(server).await;
+        // }
         _ => {
             //fallback
             let store = Memory::new();

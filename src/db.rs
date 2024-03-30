@@ -18,7 +18,7 @@ pub struct Database<S: Storage> {
 impl Database<LSM> {
     pub fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
         Ok(Database {
-            storage: LSM::new(path),
+            storage: LSM::new(path,None),
         })
     }
 }

@@ -24,7 +24,7 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{engine::StorageEngine, MVCCLayer},
+    storage::{engine::StorageEngine, MVCCLayer, Storage},
     types::{tuple::Tuple, LogicalType},
 };
 
@@ -293,6 +293,7 @@ impl<E: StorageEngine> Server<E> {
             inner: Arc::new(Database::new(MVCCLayer::new(engine))?),
         }))
     }
+
     pub async fn run(server: Arc<Self>) {
         // let backend = Server::new().await.unwrap();
         let processor = server;

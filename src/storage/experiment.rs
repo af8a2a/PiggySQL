@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, option};
 use std::ops::Bound;
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
@@ -29,8 +29,12 @@ pub struct LSM {
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
 impl LSM {
-    pub fn new(path: PathBuf) -> Self {
-        let db = MiniLsm::open(path, LsmStorageOptions::leveled_compaction()).unwrap();
+    pub fn new(path: PathBuf,option:Option<LsmStorageOptions>) -> Self {
+        let option=match option{
+            Some(op) => op,
+            None => LsmStorageOptions::leveled_compaction(),
+        };
+        let db = MiniLsm::open(path, option).unwrap();
         let cache = Arc::new(Cache::new(40));
         Self { db, cache }
     }
@@ -39,7 +43,7 @@ pub struct TransactionWarpper {
     txn: Arc<StorageTransaction>,
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
-// unsafe impl Send for TransactionWarpper {}
+
 impl Storage for LSM {
     type TransactionType = TransactionWarpper;
 
@@ -150,17 +154,7 @@ impl Iter for IndexIteratorWarpper {
                                 }
                             }
                         }
-                        // while collect_iter.is_valid() {
-                        //     let val = collect_iter.value();
-                        //     let tuple_ids = TableCodec::decode_index(&val)?;
-                        //     collect_iter.next().unwrap();
-                        //     for tuple_id in tuple_ids {
-                        //         if let Some(tuple) = self.get_tuple_by_id(&tuple_id)? {
-                        //             tuples.push(tuple);
-                        //         }
-                        //     }
-                        //     collect_iter.next().unwrap();
-                        // }
+
                     }
                 }
                 ConstantBinary::Eq(val) => {
@@ -728,7 +722,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let storage = LSM::new(path);
+        let storage = LSM::new(path,None);
         let mut transaction = storage.transaction().await?;
         let columns = vec![
             Arc::new(ColumnCatalog::new(
