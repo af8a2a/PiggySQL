@@ -1,6 +1,6 @@
 use tracing::debug;
 
-use super::lsm_storage::{LsmStorageInner, MiniLsm};
+use super::{lsm_storage::LsmStorageInner, PiggyKV};
 
 impl LsmStorageInner {
     pub fn dump_structure(&self) {
@@ -18,7 +18,7 @@ impl LsmStorageInner {
     }
 }
 
-impl MiniLsm {
+impl PiggyKV {
     pub fn dump_structure(&self) {
         self.inner.dump_structure()
     }

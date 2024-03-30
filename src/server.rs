@@ -24,20 +24,20 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{engine::StorageEngine, MVCCLayer, Storage},
+    storage::{experiment::PiggyKVImpl, Storage},
     types::{tuple::Tuple, LogicalType},
 };
 
-pub struct Session<E: StorageEngine> {
-    inner: Arc<Database<MVCCLayer<E>>>,
-    tx: Mutex<Option<DBTransaction<MVCCLayer<E>>>>,
+pub struct Session {
+    inner: Arc<Database<PiggyKVImpl>>,
+    tx: Mutex<Option<DBTransaction<PiggyKVImpl>>>,
 }
-pub struct Server<E: StorageEngine> {
-    inner: Arc<Database<MVCCLayer<E>>>,
+pub struct Server {
+    inner: Arc<Database<PiggyKVImpl>>,
 }
 
-impl<E: StorageEngine> MakeHandler for Server<E> {
-    type Handler = Arc<Session<E>>;
+impl MakeHandler for Server {
+    type Handler = Arc<Session>;
 
     fn make(&self) -> Self::Handler {
         Arc::new(Session {
@@ -48,7 +48,7 @@ impl<E: StorageEngine> MakeHandler for Server<E> {
 }
 
 #[async_trait]
-impl<E: StorageEngine> ExtendedQueryHandler for Session<E> {
+impl ExtendedQueryHandler for Session {
     type Statement = String;
 
     type QueryParser = NoopQueryParser;
@@ -216,7 +216,7 @@ fn row_desc_from_stmt(schema: SchemaRef, format: &Format) -> PgWireResult<Vec<Fi
 }
 
 #[async_trait]
-impl<E: StorageEngine> SimpleQueryHandler for Session<E> {
+impl SimpleQueryHandler for Session {
     async fn do_query<'a, 'b: 'a, C>(
         &'b self,
         _client: &mut C,
@@ -287,10 +287,10 @@ impl<E: StorageEngine> SimpleQueryHandler for Session<E> {
     }
 }
 
-impl<E: StorageEngine> Server<E> {
-    pub async fn new(engine: E) -> Result<Arc<Server<E>>> {
+impl Server {
+    pub async fn new(kv: PiggyKVImpl) -> Result<Arc<Server>> {
         Ok(Arc::new(Server {
-            inner: Arc::new(Database::new(MVCCLayer::new(engine))?),
+            inner: Arc::new(Database::new(kv)?),
         }))
     }
 

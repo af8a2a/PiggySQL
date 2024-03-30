@@ -8,27 +8,26 @@ use crate::parser;
 
 use crate::errors::{DatabaseError, Result};
 use crate::planner::LogicalPlan;
-use crate::storage::engine::memory::Memory;
-use crate::storage::experiment::LSM;
-use crate::storage::{MVCCLayer, Storage, Transaction};
+use crate::storage::experiment::PiggyKVImpl;
+use crate::storage::{Storage, Transaction};
 use crate::types::tuple::Tuple;
 pub struct Database<S: Storage> {
     pub(crate) storage: S,
 }
-impl Database<LSM> {
+impl Database<PiggyKVImpl> {
     pub fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
         Ok(Database {
-            storage: LSM::new(path,None),
+            storage: PiggyKVImpl::new(path, None),
         })
     }
 }
-impl Database<MVCCLayer<Memory>> {
-    pub fn new_memory() -> Result<Self> {
-        Ok(Database {
-            storage: MVCCLayer::new_memory(),
-        })
-    }
-}
+// impl Database<MVCCLayer<Memory>> {
+//     pub fn new_memory() -> Result<Self> {
+//         Ok(Database {
+//             storage: MVCCLayer::new_memory(),
+//         })
+//     }
+// }
 
 impl<S: Storage> Database<S> {
     /// Create a new Database instance.
@@ -115,8 +114,6 @@ mod test {
     use super::*;
 
     use crate::db::Database;
-    use crate::storage::engine::memory::Memory;
-    use crate::storage::MVCCLayer;
     use crate::types::tuple::create_table;
     use crate::types::value::DataValue;
 

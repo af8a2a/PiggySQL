@@ -3,11 +3,7 @@ use std::time::Instant;
 use piggysql::{
     db::Database,
     errors::DatabaseError,
-    storage::{
-        engine::{memory::Memory, StorageEngine},
-        experiment::LSM,
-        MVCCLayer, Storage,
-    },
+    storage::{experiment::PiggyKVImpl, Storage},
 };
 use sqllogictest::{AsyncDB, DBOutput, DefaultColumnType};
 
@@ -15,14 +11,14 @@ pub struct Mock<S: Storage> {
     pub db: Database<S>,
 }
 
-impl Mock<MVCCLayer<Memory>> {
-    pub fn new() -> Self {
-        Self {
-            db: Database::new_memory().unwrap(),
-        }
-    }
-}
-impl Mock<LSM> {
+// impl Mock<MVCCLayer<Memory>> {
+//     pub fn new() -> Self {
+//         Self {
+//             db: Database::new_memory().unwrap(),
+//         }
+//     }
+// }
+impl Mock<PiggyKVImpl> {
     pub fn new_lsm(path: std::path::PathBuf) -> Self {
         Self {
             db: Database::new_lsm(path).unwrap(),
@@ -30,7 +26,7 @@ impl Mock<LSM> {
     }
 }
 #[async_trait::async_trait]
-impl AsyncDB for Mock<LSM> {
+impl AsyncDB for Mock<PiggyKVImpl> {
     type Error = DatabaseError;
 
     type ColumnType = DefaultColumnType;

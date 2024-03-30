@@ -1,4 +1,3 @@
-use std::{fmt::Display, path::Path, sync::Arc};
 pub mod block;
 pub mod compact;
 mod debug;
@@ -8,93 +7,138 @@ pub mod lsm_iterator;
 pub mod lsm_storage;
 pub mod manifest;
 pub mod mem_table;
+pub mod mvcc;
 pub mod table;
 pub mod wal;
-pub mod mvcc;
-use tracing::debug;
+
+use std::{ops::Bound, path::Path, sync::Arc};
+
+use bytes::Bytes;
+use parking_lot::Mutex;
 
 use self::{
-    iterators::StorageIterator,
-    lsm_storage::{LsmStorageOptions, MiniLsm},
+    lsm_storage::{LsmStorageInner, LsmStorageOptions, WriteBatchRecord},
+    mem_table::MemTable,
+    mvcc::txn::{Transaction, TxnIterator},
 };
 
 use super::Result;
-use super::StorageEngine;
 
-pub struct LSMEngine {
-    pub inner: Arc<MiniLsm>,
+/// A thin wrapper for `LsmStorageInner` and the user interface .
+pub struct PiggyKV {
+    pub(crate) inner: Arc<LsmStorageInner>,
+    /// Notifies the L0 flush thread to stop working. (In week 1 day 6)
+    flush_notifier: crossbeam_channel::Sender<()>,
+    /// The handle for the compaction thread. (In week 1 day 6)
+    flush_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// Notifies the compaction thread to stop working. (In week 2)
+    compaction_notifier: crossbeam_channel::Sender<()>,
+    /// The handle for the compaction thread. (In week 2)
+    compaction_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
-impl LSMEngine {
-    pub fn new(path: impl AsRef<Path>, option: LsmStorageOptions) -> Self {
-        Self {
-            inner: MiniLsm::open(path, option).unwrap(),
+impl Drop for PiggyKV {
+    fn drop(&mut self) {
+        self.compaction_notifier.send(()).ok();
+        self.flush_notifier.send(()).ok();
+    }
+}
+
+impl PiggyKV {
+    pub fn close(&self) -> Result<()> {
+        self.inner.sync_dir()?;
+        self.compaction_notifier.send(()).ok();
+        self.flush_notifier.send(()).ok();
+
+        let mut compaction_thread = self.compaction_thread.lock();
+        if let Some(compaction_thread) = compaction_thread.take() {
+            compaction_thread.join().unwrap();
         }
-    }
-}
-impl Display for LSMEngine {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "lsm")
-    }
-}
-
-impl StorageEngine for LSMEngine {
-    fn delete(&self, key: &[u8]) -> super::Result<()> {
-        self.inner.delete(key).unwrap();
-        Ok(())
-    }
-
-    fn flush(&self) -> super::Result<()> {
-        self.inner.force_flush()?;
-        self.inner.sync().unwrap();
-        Ok(())
-    }
-
-    fn get(&self, key: &[u8]) -> super::Result<Option<Vec<u8>>> {
-        let val = self.inner.get(key).unwrap();
-        Ok(val.map(|v| v.to_vec()))
-    }
-
-    fn scan(&self, range: impl std::ops::RangeBounds<Vec<u8>>) -> super::Result<super::KvScan> {
-        let start = match range.start_bound() {
-            std::ops::Bound::Included(v) => std::ops::Bound::Included(v.as_slice()),
-            std::ops::Bound::Excluded(v) => std::ops::Bound::Excluded(v.as_slice()),
-            std::ops::Bound::Unbounded => std::ops::Bound::Unbounded,
-        };
-        let end = match range.end_bound() {
-            std::ops::Bound::Included(v) => std::ops::Bound::Included(v.as_slice()),
-            std::ops::Bound::Excluded(v) => std::ops::Bound::Excluded(v.as_slice()),
-            std::ops::Bound::Unbounded => std::ops::Bound::Unbounded,
-        };
-        let mut iter = self.inner.scan(start, end).unwrap();
-        let mut kv = vec![];
-
-
-        while iter.is_valid() {
-            kv.push((iter.key().to_vec(), iter.value().to_vec()));
-            iter._next()?;
+        let mut flush_thread = self.flush_thread.lock();
+        if let Some(flush_thread) = flush_thread.take() {
+            flush_thread.join().unwrap();
         }
-        Ok(Box::new(kv.into_iter().map(Ok)))
-    }
+        if self.inner.options.enable_wal {
+            self.inner.sync()?;
+            self.inner.sync_dir()?;
+            return Ok(());
+        }
 
-    fn set(&self, key: &[u8], value: Vec<u8>) -> super::Result<()> {
-        self.inner.put(key, &value).unwrap();
+        // create memtable and skip updating manifest
+        if !self.inner.state.read().memtable.is_empty() {
+            self.inner
+                .freeze_memtable_with_memtable(Arc::new(MemTable::create(
+                    self.inner.next_sst_id(),
+                )))?;
+        }
+
+        while {
+            let snapshot = self.inner.state.read();
+            !snapshot.imm_memtables.is_empty()
+        } {
+            self.inner.force_flush_next_imm_memtable()?;
+        }
+        self.inner.sync_dir()?;
+
         Ok(())
     }
-}
 
-#[cfg(test)]
-mod test {
-    use std::sync::Arc;
+    /// Start the storage engine by either loading an existing directory or creating a new one if the directory does
+    /// not exist.
+    pub fn open(path: impl AsRef<Path>, options: LsmStorageOptions) -> Result<Arc<Self>> {
+        let inner = Arc::new(LsmStorageInner::open(path, options)?);
+        let (tx1, rx) = crossbeam_channel::unbounded();
+        let compaction_thread = inner.spawn_compaction_thread(rx)?;
+        let (tx2, rx) = crossbeam_channel::unbounded();
+        let flush_thread = inner.spawn_flush_thread(rx)?;
+        Ok(Arc::new(Self {
+            inner,
+            flush_notifier: tx2,
+            flush_thread: Mutex::new(flush_thread),
+            compaction_notifier: tx1,
+            compaction_thread: Mutex::new(compaction_thread),
+        }))
+    }
 
-    use super::*;
-    use crate::errors::Result;
-    use crate::storage::engine::tests::test_engine;
-    test_engine!({
-        let path = tempdir::TempDir::new("piggydb")
-            .unwrap()
-            .path()
-            .join("piggydb");
-        Arc::new(LSMEngine::new(path,LsmStorageOptions::default()))
-    });
+    pub fn get(&self, key: &[u8]) -> Result<Option<Bytes>> {
+        self.inner.get(key)
+    }
+
+    pub fn write_batch<T: AsRef<[u8]>>(&self, batch: &[WriteBatchRecord<T>]) -> Result<()> {
+        self.inner.write_batch(batch)
+    }
+
+    pub fn put(self: &Arc<Self>, key: &[u8], value: &[u8]) -> Result<()> {
+        self.inner.put(key, value)
+    }
+    pub fn delete(self: &Arc<Self>, key: &[u8]) -> Result<()> {
+        self.inner.delete(key)
+    }
+    pub fn sync(&self) -> Result<()> {
+        self.inner.sync()
+    }
+
+    pub fn new_txn(self: &Arc<Self>) -> Result<Arc<Transaction>> {
+        self.inner.new_txn()
+    }
+
+    pub fn scan(&self, lower: Bound<&[u8]>, upper: Bound<&[u8]>) -> Result<TxnIterator> {
+        self.inner.scan(lower, upper)
+    }
+
+    /// Only call this in test cases due to race conditions
+    pub fn force_flush(&self) -> Result<()> {
+        if !self.inner.state.read().memtable.is_empty() {
+            self.inner
+                .force_freeze_memtable(&self.inner.state_lock.lock())?;
+        }
+        if !self.inner.state.read().imm_memtables.is_empty() {
+            self.inner.force_flush_next_imm_memtable()?;
+        }
+        Ok(())
+    }
+
+    pub fn force_full_compaction(&self) -> Result<()> {
+        self.inner.force_full_compaction()
+    }
 }

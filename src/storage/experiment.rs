@@ -1,6 +1,6 @@
-use std::{mem, option};
 use std::ops::Bound;
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
+use std::{mem, option};
 
 use itertools::Itertools;
 use moka::sync::Cache;
@@ -19,22 +19,20 @@ use crate::{errors::*, CONFIG_MAP};
 
 use super::engine::lsm::iterators::StorageIterator;
 use super::engine::lsm::mvcc::txn::{Transaction as StorageTransaction, TxnIterator};
-use super::{
-    engine::lsm::lsm_storage::{LsmStorageOptions, MiniLsm},
-    Projections, Storage,
-};
+use super::engine::lsm::PiggyKV;
+use super::{engine::lsm::lsm_storage::LsmStorageOptions, Projections, Storage};
 use super::{tuple_projection, Bounds, Iter, Transaction};
-pub struct LSM {
-    db: Arc<MiniLsm>,
+pub struct PiggyKVImpl {
+    db: Arc<PiggyKV>,
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
-impl LSM {
-    pub fn new(path: PathBuf,option:Option<LsmStorageOptions>) -> Self {
-        let option=match option{
+impl PiggyKVImpl {
+    pub fn new(path: PathBuf, option: Option<LsmStorageOptions>) -> Self {
+        let option = match option {
             Some(op) => op,
             None => LsmStorageOptions::leveled_compaction(),
         };
-        let db = MiniLsm::open(path, option).unwrap();
+        let db = PiggyKV::open(path, option).unwrap();
         let cache = Arc::new(Cache::new(40));
         Self { db, cache }
     }
@@ -44,7 +42,7 @@ pub struct TransactionWarpper {
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
 
-impl Storage for LSM {
+impl Storage for PiggyKVImpl {
     type TransactionType = TransactionWarpper;
 
     async fn transaction(&self) -> Result<Self::TransactionType> {
@@ -130,14 +128,8 @@ impl Iter for IndexIteratorWarpper {
                         Bound::Excluded(ref lo) => Bound::Excluded(lo.as_slice()),
                         Bound::Unbounded => Bound::Unbounded,
                     };
-                    let mut collect_iter = self.txn.scan(encode_min, encode_max)?;
+                    let collect_iter = self.txn.scan(encode_min, encode_max)?;
                     if self.index_meta.is_primary {
-                        // while collect_iter.is_valid() {
-                        //     let val = collect_iter.value();
-                        //     let tuple = TableCodec::decode_tuple(&schema, val);
-                        //     tuples.push(tuple);
-                        //     collect_iter.next().unwrap();
-                        // }
                         //主键索引可以直接获得元组
                         let collect = collect_iter
                             .map(|(_, v)| -> Tuple { TableCodec::decode_tuple(&schema, &v) })
@@ -154,7 +146,6 @@ impl Iter for IndexIteratorWarpper {
                                 }
                             }
                         }
-
                     }
                 }
                 ConstantBinary::Eq(val) => {
@@ -722,7 +713,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let storage = LSM::new(path,None);
+        let storage = PiggyKVImpl::new(path, None);
         let mut transaction = storage.transaction().await?;
         let columns = vec![
             Arc::new(ColumnCatalog::new(
