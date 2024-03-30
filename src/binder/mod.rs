@@ -253,17 +253,17 @@ pub mod test {
     use crate::db::Database;
     use crate::parser;
     use crate::planner::LogicalPlan;
-    use crate::storage::experiment::PiggyKVImpl;
+    use crate::storage::experiment::PiggyKVStroage;
     use crate::storage::{Storage, Transaction};
     use crate::types::LogicalType::Integer;
     use std::sync::Arc;
     use tempfile::TempDir;
-    pub(crate) async fn build_test_catalog() -> Result<PiggyKVImpl> {
+    pub(crate) async fn build_test_catalog() -> Result<PiggyKVStroage> {
         let path = tempdir::TempDir::new("piggydb")
             .unwrap()
             .path()
             .join("piggydb");
-        let storage=PiggyKVImpl::new(path, None);
+        let storage=PiggyKVStroage::new(path, None);
 
         let mut transaction = storage.transaction().await?;
 

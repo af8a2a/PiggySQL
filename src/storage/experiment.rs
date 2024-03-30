@@ -17,16 +17,16 @@ use crate::types::value::ValueRef;
 use crate::types::ColumnId;
 use crate::{errors::*, CONFIG_MAP};
 
-use super::engine::lsm::iterators::StorageIterator;
-use super::engine::lsm::mvcc::txn::{Transaction as StorageTransaction, TxnIterator};
-use super::engine::lsm::PiggyKV;
-use super::{engine::lsm::lsm_storage::LsmStorageOptions, Projections, Storage};
+use super::engine::piggykv::iterators::StorageIterator;
+use super::engine::piggykv::mvcc::txn::{Transaction as StorageTransaction, TxnIterator};
+use super::engine::piggykv::PiggyKV;
+use super::{engine::piggykv::lsm_storage::LsmStorageOptions, Projections, Storage};
 use super::{tuple_projection, Bounds, Iter, Transaction};
-pub struct PiggyKVImpl {
+pub struct PiggyKVStroage {
     db: Arc<PiggyKV>,
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
-impl PiggyKVImpl {
+impl PiggyKVStroage {
     pub fn new(path: PathBuf, option: Option<LsmStorageOptions>) -> Self {
         let option = match option {
             Some(op) => op,
@@ -42,7 +42,7 @@ pub struct TransactionWarpper {
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
 
-impl Storage for PiggyKVImpl {
+impl Storage for PiggyKVStroage {
     type TransactionType = TransactionWarpper;
 
     async fn transaction(&self) -> Result<Self::TransactionType> {
@@ -713,7 +713,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let storage = PiggyKVImpl::new(path, None);
+        let storage = PiggyKVStroage::new(path, None);
         let mut transaction = storage.transaction().await?;
         let columns = vec![
             Arc::new(ColumnCatalog::new(

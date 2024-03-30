@@ -24,16 +24,16 @@ use crate::{
     db::{DBTransaction, Database},
     errors::*,
     planner::operator::Operator,
-    storage::{experiment::PiggyKVImpl, Storage},
+    storage::{experiment::PiggyKVStroage, Storage},
     types::{tuple::Tuple, LogicalType},
 };
 
 pub struct Session {
-    inner: Arc<Database<PiggyKVImpl>>,
-    tx: Mutex<Option<DBTransaction<PiggyKVImpl>>>,
+    inner: Arc<Database<PiggyKVStroage>>,
+    tx: Mutex<Option<DBTransaction<PiggyKVStroage>>>,
 }
 pub struct Server {
-    inner: Arc<Database<PiggyKVImpl>>,
+    inner: Arc<Database<PiggyKVStroage>>,
 }
 
 impl MakeHandler for Server {
@@ -288,7 +288,7 @@ impl SimpleQueryHandler for Session {
 }
 
 impl Server {
-    pub async fn new(kv: PiggyKVImpl) -> Result<Arc<Server>> {
+    pub async fn new(kv: PiggyKVStroage) -> Result<Arc<Server>> {
         Ok(Arc::new(Server {
             inner: Arc::new(Database::new(kv)?),
         }))

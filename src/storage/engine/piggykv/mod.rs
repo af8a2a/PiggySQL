@@ -22,7 +22,7 @@ use self::{
     mvcc::txn::{Transaction, TxnIterator},
 };
 
-use super::Result;
+use crate::errors::Result;
 
 /// A thin wrapper for `LsmStorageInner` and the user interface .
 pub struct PiggyKV {

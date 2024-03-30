@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::storage::engine::lsm::lsm_storage::LsmStorageState;
+use crate::storage::engine::piggykv::lsm_storage::LsmStorageState;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LeveledCompactionTask {

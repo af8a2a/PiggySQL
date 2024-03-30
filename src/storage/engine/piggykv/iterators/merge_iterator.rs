@@ -3,7 +3,7 @@ use std::collections::binary_heap::PeekMut;
 use std::collections::BinaryHeap;
 
 use crate::errors::Result;
-use crate::storage::engine::lsm::key::KeySlice;
+use crate::storage::engine::piggykv::key::KeySlice;
 
 
 use super::StorageIterator;

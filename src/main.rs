@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use piggysql::{
     server::Server,
-    storage::{engine::lsm::lsm_storage::LsmStorageOptions, experiment::PiggyKVImpl},
+    storage::{engine::piggykv::lsm_storage::LsmStorageOptions, experiment::PiggyKVStroage},
     CONFIG_MAP,
 };
 use tracing::Level;
@@ -32,43 +32,23 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     let filename = CONFIG_MAP.get("filename").unwrap();
-    let engine = CONFIG_MAP.get("engine").unwrap();
-    match engine.to_lowercase().as_str() {
-        "sled" => {
-            let store = SledStore::new(PathBuf::from(filename)).unwrap();
-            let server = Server::new(store).await.unwrap();
-            Server::run(server).await;
+    let bloom_false_positive_rate = CONFIG_MAP
+        .get("bloom_false_positive_rate")
+        .cloned()
+        .unwrap_or("0.01".to_string())
+        .parse::<f64>()
+        .unwrap_or(0.01);
+    let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
+    let option = match compaction.to_lowercase().as_str() {
+        "leveled" => LsmStorageOptions::leveled_compaction()
+            .with_bloom_false_positive_rate(bloom_false_positive_rate),
+        "simple" => {
+            LsmStorageOptions::default().with_bloom_false_positive_rate(bloom_false_positive_rate)
         }
-        "bitcask" => {
-            let store = BitCask::new(PathBuf::from(filename)).unwrap();
-            let server = Server::new(store).await.unwrap();
-            Server::run(server).await;
-        }
-        // "lsm" => {
-        //     let bloom_false_positive_rate = CONFIG_MAP
-        //         .get("bloom_false_positive_rate")
-        //         .cloned()
-        //         .unwrap_or("0.01".to_string())
-        //         .parse::<f64>()
-        //         .unwrap_or(0.01);
-        //     let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
-        //     let option = match compaction.to_lowercase().as_str() {
-        //         "leveled" => LsmStorageOptions::leveled_compaction()
-        //             .with_bloom_false_positive_rate(bloom_false_positive_rate),
-        //         "simple" => LsmStorageOptions::default()
-        //             .with_bloom_false_positive_rate(bloom_false_positive_rate),
-        //         _ => LsmStorageOptions::no_compaction()
-        //             .with_bloom_false_positive_rate(bloom_false_positive_rate),
-        //     };
-        //     let store = LSM::new(PathBuf::from(filename), Some(option));
-        //     let server = Server::new(store).await.unwrap();
-        //     Server::run(server).await;
-        // }
-        _ => {
-            //fallback
-            let store = Memory::new();
-            let server = Server::new(store).await.unwrap();
-            Server::run(server).await;
-        }
+        _ => LsmStorageOptions::no_compaction()
+            .with_bloom_false_positive_rate(bloom_false_positive_rate),
     };
+    let store = PiggyKVStroage::new(PathBuf::from(filename), Some(option));
+    let server = Server::new(store).await.unwrap();
+    Server::run(server).await;
 }

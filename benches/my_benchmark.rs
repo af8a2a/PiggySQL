@@ -2,10 +2,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use piggysql::{
     db::Database,
     errors::*,
-    storage::{engine::lsm::lsm_storage::LsmStorageOptions, experiment::PiggyKVImpl},
+    storage::{engine::piggykv::lsm_storage::LsmStorageOptions, experiment::PiggyKVStroage},
 };
 
-async fn data_source_lsm() -> Result<Database<PiggyKVImpl>> {
+async fn data_source_lsm() -> Result<Database<PiggyKVStroage>> {
     let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
     let db = Database::new_lsm(path)?;
     db.run(
@@ -25,6 +25,19 @@ async fn data_source_lsm() -> Result<Database<PiggyKVImpl>> {
     db.run(&format!("INSERT INTO benchtable VALUES {}", batch))
         .await?;
     Ok(db)
+}
+
+pub async fn lsm_benchmark_100000(engine: &Database<PiggyKVStroage>) -> Result<()> {
+    let _ = engine
+        .run("SELECT * FROM benchtable where id=490000")
+        .await?;
+    Ok(())
+}
+pub async fn lsm_without_primary_benchmark_100000(engine: &Database<PiggyKVStroage>) -> Result<()> {
+    let _ = engine
+        .run("SELECT * FROM benchtable where val=490000")
+        .await?;
+    Ok(())
 }
 
 fn lsm_benchmark(c: &mut Criterion) {

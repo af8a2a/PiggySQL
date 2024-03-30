@@ -8,16 +8,16 @@ use crate::parser;
 
 use crate::errors::{DatabaseError, Result};
 use crate::planner::LogicalPlan;
-use crate::storage::experiment::PiggyKVImpl;
+use crate::storage::experiment::PiggyKVStroage;
 use crate::storage::{Storage, Transaction};
 use crate::types::tuple::Tuple;
 pub struct Database<S: Storage> {
     pub(crate) storage: S,
 }
-impl Database<PiggyKVImpl> {
+impl Database<PiggyKVStroage> {
     pub fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
         Ok(Database {
-            storage: PiggyKVImpl::new(path, None),
+            storage: PiggyKVStroage::new(path, None),
         })
     }
 }
