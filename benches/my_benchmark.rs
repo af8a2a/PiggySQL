@@ -7,7 +7,7 @@ use piggysql::{
 
 async fn data_source_lsm() -> Result<Database<PiggyKVStroage>> {
     let path = tempdir::TempDir::new("piggydb").unwrap().path().join("lsm");
-    let db = Database::new_lsm(path)?;
+    let db = Database::new_lsm(path).await?;
     db.run(
         "CREATE TABLE benchtable(
             id INT PRIMARY KEY,

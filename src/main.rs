@@ -1,10 +1,6 @@
 use std::path::PathBuf;
 
-use piggysql::{
-    server::Server,
-    storage::{engine::piggykv::lsm_storage::LsmStorageOptions, piggy_stroage::PiggyKVStroage},
-    CONFIG_MAP,
-};
+use piggysql::{server::Server, storage::piggy_stroage::PiggyKVStroage, CONFIG_MAP};
 use tracing::Level;
 
 use tracing_subscriber::FmtSubscriber;
@@ -33,23 +29,13 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
     let filename = CONFIG_MAP.get("filename").unwrap();
-    let bloom_false_positive_rate = CONFIG_MAP
-        .get("bloom_false_positive_rate")
-        .cloned()
-        .unwrap_or("0.01".to_string())
-        .parse::<f64>()
-        .unwrap_or(0.01);
-    let compaction = CONFIG_MAP.get("compaction").unwrap().clone();
-    let option = match compaction.to_lowercase().as_str() {
-        "leveled" => LsmStorageOptions::leveled_compaction()
-            .with_bloom_false_positive_rate(bloom_false_positive_rate),
-        "simple" => {
-            LsmStorageOptions::default().with_bloom_false_positive_rate(bloom_false_positive_rate)
-        }
-        _ => LsmStorageOptions::no_compaction()
-            .with_bloom_false_positive_rate(bloom_false_positive_rate),
-    };
-    let store = PiggyKVStroage::new(PathBuf::from(filename), Some(option));
+    // let bloom_false_positive_rate = CONFIG_MAP
+    //     .get("bloom_false_positive_rate")
+    //     .cloned()
+    //     .unwrap_or("0.01".to_string())
+    //     .parse::<f64>()
+    //     .unwrap_or(0.01);
+    let store = PiggyKVStroage::new(PathBuf::from(filename)).await.unwrap();
     let server = Server::new(store).await.unwrap();
     Server::run(server).await;
 }

@@ -15,19 +15,13 @@ pub struct Database<S: Storage> {
     pub(crate) storage: S,
 }
 impl Database<PiggyKVStroage> {
-    pub fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
+    pub async fn new_lsm(path: std::path::PathBuf) -> Result<Self> {
         Ok(Database {
-            storage: PiggyKVStroage::new(path, None),
+            storage: PiggyKVStroage::new(path).await?,
         })
     }
 }
-// impl Database<MVCCLayer<Memory>> {
-//     pub fn new_memory() -> Result<Self> {
-//         Ok(Database {
-//             storage: MVCCLayer::new_memory(),
-//         })
-//     }
-// }
+
 
 impl<S: Storage> Database<S> {
     /// Create a new Database instance.
@@ -125,7 +119,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let database = Database::new_lsm(path)?;
+        let database = Database::new_lsm(path).await?;
         database
             .run("create table halloween (id int primary key,salary int)")
             .await?;
@@ -141,7 +135,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let database = Database::new_lsm(path)?;
+        let database = Database::new_lsm(path).await?;
 
         database
             .run("create table halloween (id int primary key,salary int)")
@@ -169,7 +163,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let database = Database::new_lsm(path)?;
+        let database = Database::new_lsm(path).await?;
 
         let _ = database.run(
             "create table t1 (a int primary key, b int unique null, k int, z varchar unique null)",

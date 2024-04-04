@@ -1,7 +1,7 @@
 use crate::execution::executor::{Executor, Source};
 
 use crate::planner::operator::scan::ScanOperator;
-use crate::storage::{Iter, Transaction};
+use crate::storage::{StorageIter, Transaction};
 
 pub(crate) struct SeqScan {
     op: ScanOperator,

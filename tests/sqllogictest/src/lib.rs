@@ -6,22 +6,17 @@ use piggysql::{
     storage::{piggy_stroage::PiggyKVStroage, Storage},
 };
 use sqllogictest::{AsyncDB, DBOutput, DefaultColumnType};
+use tokio_test::block_on;
 
 pub struct Mock<S: Storage> {
     pub db: Database<S>,
 }
 
-// impl Mock<MVCCLayer<Memory>> {
-//     pub fn new() -> Self {
-//         Self {
-//             db: Database::new_memory().unwrap(),
-//         }
-//     }
-// }
+
 impl Mock<PiggyKVStroage> {
     pub fn new_lsm(path: std::path::PathBuf) -> Self {
         Self {
-            db: Database::new_lsm(path).unwrap(),
+            db: block_on(Database::new_lsm(path)).unwrap()
         }
     }
 }

@@ -1,44 +1,43 @@
+use std::mem;
 use std::ops::Bound;
-use std::{collections::VecDeque, path::PathBuf, sync::Arc};
-use std::{mem};
+use std::sync::Arc;
+use std::{collections::VecDeque, path::PathBuf};
 
 use itertools::Itertools;
 use moka::sync::Cache;
+use piggykv::lsm::iterator::Iter;
+use piggykv::lsm::mvcc::{CheckType, TransactionIter};
+use piggykv::lsm::storage::Config;
+use piggykv::lsm::{mvcc, PiggyKV};
 use tracing::debug;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName};
 use crate::catalog::{TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 
+use crate::errors::*;
 use crate::storage::table_codec::TableCodec;
 use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
-use crate::types::ColumnId;
-use crate::{errors::*};
+use crate::types::{ColumnId, LogicalType};
 
-use super::engine::piggykv::iterators::StorageIterator;
-use super::engine::piggykv::mvcc::txn::{Transaction as StorageTransaction, TxnIterator};
-use super::engine::piggykv::PiggyKV;
-use super::{engine::piggykv::lsm_storage::LsmStorageOptions, Projections, Storage};
-use super::{tuple_projection, Bounds, Iter, Transaction};
+use super::{tuple_projection, Bounds, Projections, Storage, StorageIter, Transaction};
 pub struct PiggyKVStroage {
     db: Arc<PiggyKV>,
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
 impl PiggyKVStroage {
-    pub fn new(path: PathBuf, option: Option<LsmStorageOptions>) -> Self {
-        let option = match option {
-            Some(op) => op,
-            None => LsmStorageOptions::leveled_compaction(),
-        };
-        let db = PiggyKV::open(path, option).unwrap();
+    pub async fn new(path: impl Into<PathBuf> + Send) -> Result<Self> {
+        let db = Arc::new(
+            PiggyKV::open_with_config(Config::new(path).enable_level_0_memorization()).await?,
+        );
         let cache = Arc::new(Cache::new(40));
-        Self { db, cache }
+        Ok(Self { db, cache })
     }
 }
 pub struct TransactionWarpper {
-    txn: Arc<StorageTransaction>,
+    txn: mvcc::Transaction,
     cache: Arc<Cache<TableName, TableCatalog>>,
 }
 
@@ -47,21 +46,22 @@ impl Storage for PiggyKVStroage {
 
     async fn transaction(&self) -> Result<Self::TransactionType> {
         Ok(TransactionWarpper {
-            txn: self.db.new_txn().unwrap(),
+            txn: self.db.new_transaction(CheckType::Optimistic).await,
             cache: self.cache.clone(),
         })
     }
 }
-pub struct IndexIteratorWarpper {
+pub struct IndexIterator<'a> {
     projection: Projections,
 
     index_meta: IndexMetaRef,
     table: TableCatalog,
-    txn: Arc<StorageTransaction>,
-    binaries: VecDeque<ConstantBinary>,
+    txn: &'a mvcc::Transaction,
+    // scope_iter: Option<mvcc::TransactionIter<'a>>,
+    ranges: VecDeque<ConstantBinary>,
 }
 
-impl IndexIteratorWarpper {
+impl<'a> IndexIterator<'a> {
     fn val_to_key(&self, val: ValueRef) -> Result<Vec<u8>> {
         if self.index_meta.is_unique {
             let index = Index::new(self.index_meta.id, vec![val]);
@@ -85,11 +85,11 @@ impl IndexIteratorWarpper {
             .transpose()
     }
 }
-impl Iter for IndexIteratorWarpper {
+impl<'a> StorageIter for IndexIterator<'a> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
         let mut tuples: Vec<Tuple> = Vec::new();
         let schema = self.table.all_columns();
-        for binary in self.binaries.iter().cloned() {
+        for binary in self.ranges.iter().cloned() {
             match binary {
                 ConstantBinary::Scope { min, max } => {
                     let table_name = &self.table.name;
@@ -128,16 +128,18 @@ impl Iter for IndexIteratorWarpper {
                         Bound::Excluded(ref lo) => Bound::Excluded(lo.as_slice()),
                         Bound::Unbounded => Bound::Unbounded,
                     };
-                    let collect_iter = self.txn.scan(encode_min, encode_max)?;
+                    let collect_iter = self.txn.iter(encode_min, encode_max)?;
                     if self.index_meta.is_primary {
                         //主键索引可以直接获得元组
                         let collect = collect_iter
-                            .map(|(_, v)| -> Tuple { TableCodec::decode_tuple(&schema, &v) })
+                            .filter_map(|(_, v)| v)
+                            .map(|v| -> Tuple { TableCodec::decode_tuple(&schema, &v) })
                             .collect_vec();
                         tuples.extend(collect);
                     } else {
                         let index_values = collect_iter
-                            .map(|(_, v)| TableCodec::decode_index(&v).expect("decode index error"))
+                            .filter_map(|(_, v)| v)
+                            .map(|v| TableCodec::decode_index(&v).expect("decode index error"))
                             .collect_vec();
                         for tuple_ids in index_values {
                             for tuple_id in tuple_ids {
@@ -178,25 +180,27 @@ impl Iter for IndexIteratorWarpper {
     }
 }
 
-pub struct IteratorWarpper {
+pub struct PiggyIterator<'a> {
     projection: Projections,
     all_columns: Vec<ColumnRef>,
-    bound: Bounds,
-    iter: TxnIterator,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    iter: TransactionIter<'a>,
 }
-impl Iter for IteratorWarpper {
+impl StorageIter for PiggyIterator<'_> {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>> {
-        let limit = match self.bound.1 {
+        let limit = match self.limit {
             Some(limit) => limit,
             None => usize::MAX,
         };
-        let offset = self.bound.0.unwrap_or(0);
+        let offset = self.offset.unwrap_or(0);
         // let mut tuples = vec![];
         let tuples = self
             .iter
             .by_ref()
             .skip(offset)
-            .filter_map(|(_, val)| {
+            .filter_map(|(_, v)| v)
+            .filter_map(|val| {
                 tuple_projection(
                     &self.projection,
                     &self.all_columns,
@@ -206,15 +210,16 @@ impl Iter for IteratorWarpper {
             })
             .take(limit)
             .collect_vec();
+        println!("len: {}", tuples.len());
 
         Ok(Some(tuples))
     }
 }
 
 impl Transaction for TransactionWarpper {
-    type IterType<'a> = IteratorWarpper;
+    type IterType<'a> = PiggyIterator<'a>;
 
-    type IndexIterType<'a> = IndexIteratorWarpper;
+    type IndexIterType<'a> = IndexIterator<'a>;
 
     fn read(
         &self,
@@ -226,16 +231,17 @@ impl Transaction for TransactionWarpper {
             .table(table_name.clone())
             .ok_or(DatabaseError::TableNotFound)?
             .all_columns();
-        let (min, max) = TableCodec::tuple_bound(&table_name);
 
-        Ok(IteratorWarpper {
+        let (min, max) = TableCodec::tuple_bound(&table_name);
+        let iter = self
+            .txn
+            .iter(Bound::Included(&min), Bound::Included(&max))?;
+        Ok(PiggyIterator {
             projection,
             all_columns,
-            bound,
-            iter: self
-                .txn
-                .scan(Bound::Included(&min), Bound::Included(&max))
-                .unwrap(),
+            offset: bound.0,
+            limit: bound.1,
+            iter,
         })
     }
 
@@ -249,12 +255,13 @@ impl Transaction for TransactionWarpper {
         let table = self
             .table(table_name.clone())
             .ok_or(DatabaseError::TableNotFound)?;
-        Ok(IndexIteratorWarpper {
+        Ok(IndexIterator {
             projection,
             index_meta,
             table,
-            binaries: VecDeque::from(binaries),
-            txn: self.txn.clone(),
+            ranges: VecDeque::from(binaries),
+            txn: &self.txn,
+            // scope_iter: None,
         })
     }
 
@@ -281,7 +288,7 @@ impl Transaction for TransactionWarpper {
             }
         }
 
-        self.txn.put(&key, &value);
+        self.txn.set(key, value);
 
         Ok(())
     }
@@ -289,7 +296,7 @@ impl Transaction for TransactionWarpper {
     fn del_index(&mut self, table_name: &str, index: &Index) -> Result<()> {
         let key = TableCodec::encode_index_key(table_name, index)?;
 
-        self.txn.delete(&key);
+        self.txn.remove(&key)?;
 
         Ok(())
     }
@@ -300,13 +307,13 @@ impl Transaction for TransactionWarpper {
         if !is_overwrite && self.txn.get(&key).unwrap().is_some() && tuple.id.is_some() {
             return Err(DatabaseError::DuplicatePrimaryKey);
         }
-        self.txn.put(&key, &value);
+        self.txn.set(key, value);
         Ok(())
     }
 
     fn delete(&mut self, table_name: &str, tuple_id: TupleId) -> Result<()> {
         let key = TableCodec::encode_tuple_key(table_name, &tuple_id)?;
-        self.txn.delete(&key);
+        self.txn.remove(&key)?;
 
         Ok(())
     }
@@ -348,12 +355,12 @@ impl Transaction for TransactionWarpper {
                     false,
                 );
                 let (key, value) = TableCodec::encode_index_meta(table_name, meta_ref)?;
-                self.txn.put(&key, &value);
+                self.txn.set(key, value);
             }
 
             let column = catalog.get_column_by_id(&col_id).unwrap();
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
-            self.txn.put(&key, &value);
+            self.txn.set(key, value);
             self.cache.remove(table_name);
             Ok(col_id)
         } else {
@@ -379,13 +386,13 @@ impl Transaction for TransactionWarpper {
 
             if let Some(index_meta) = catalog.get_unique_index(&column.id().unwrap()) {
                 let (index_meta_key, _) = TableCodec::encode_index_meta(table_name, index_meta)?;
-                self.txn.delete(&index_meta_key);
+                self.txn.remove(&index_meta_key)?;
 
                 let (index_min, index_max) = TableCodec::index_bound(table_name, &index_meta.id);
-                self._drop_data(&index_min, &index_max)?;
+                Self::_drop_data(&mut self.txn, &index_min, &index_max)?;
             }
             let (key, _) = TableCodec::encode_column(table_name, column)?;
-            self.txn.delete(&key);
+            self.txn.remove(&key)?;
             self.cache.remove(table_name);
             Ok(())
         } else {
@@ -406,16 +413,16 @@ impl Transaction for TransactionWarpper {
             }
             return Err(DatabaseError::TableExists);
         }
-        self.txn.put(&table_key, &value);
+        self.txn.set(table_key, value);
 
         let mut table_catalog = TableCatalog::new(table_name.clone(), columns)?;
 
-        self.create_primary_key(&mut table_catalog)?;
-        self._create_index(&mut table_catalog, None)?;
+        Self::create_primary_key(&mut self.txn, &mut table_catalog)?;
+        Self::_create_index(&mut self.txn,&mut table_catalog, None)?;
         // println!("create_table:table_catalog: {:#?}", table_catalog);
         for column in table_catalog.columns.values() {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
-            self.txn.put(&key, &value);
+            self.txn.set(key, value);
         }
         // info!("create_table:table_catalog: {:#?}", table_catalog);
         self.cache.insert(table_name.clone(), table_catalog);
@@ -434,13 +441,13 @@ impl Transaction for TransactionWarpper {
         self.drop_data(table_name)?;
 
         let (column_min, column_max) = TableCodec::columns_bound(table_name);
-        self._drop_data(&column_min, &column_max)?;
+        Self::_drop_data(&mut self.txn, &column_min, &column_max)?;
 
         let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(table_name);
-        self._drop_data(&index_meta_min, &index_meta_max)?;
+        Self::_drop_data(&mut self.txn, &index_meta_min, &index_meta_max)?;
 
         self.txn
-            .delete(&TableCodec::encode_root_table_key(table_name));
+            .remove(&TableCodec::encode_root_table_key(table_name))?;
         self.cache.remove(&Arc::new(table_name.to_string()));
         Ok(())
     }
@@ -448,10 +455,10 @@ impl Transaction for TransactionWarpper {
     fn drop_data(&mut self, table_name: &str) -> Result<()> {
         //删除元组数据
         let (tuple_min, tuple_max) = TableCodec::tuple_bound(table_name);
-        self._drop_data(&tuple_min, &tuple_max)?;
+        Self::_drop_data(&mut self.txn, &tuple_min, &tuple_max)?;
         //删除关联索引数据
         let (index_min, index_max) = TableCodec::all_index_bound(table_name);
-        self._drop_data(&index_min, &index_max)?;
+        Self::_drop_data(&mut self.txn, &index_min, &index_max)?;
 
         Ok(())
     }
@@ -469,8 +476,7 @@ impl Transaction for TransactionWarpper {
                     }
                 };
 
-                let indexes = self
-                    .index_meta_collect(&table_name)?
+                let indexes = Self::index_meta_collect(&self.txn, &table_name)?
                     .into_iter()
                     .map(Arc::new)
                     .collect_vec();
@@ -490,23 +496,20 @@ impl Transaction for TransactionWarpper {
     }
 
     fn show_tables(&self) -> Result<Vec<String>> {
-        let mut metas = vec![];
         let (min, max) = TableCodec::root_table_bound();
-        let mut scan = self
+        let scan = self
             .txn
-            .scan(Bound::Included(&min), Bound::Included(&max))
-            .unwrap();
-        while scan.is_valid() {
-            let meta = TableCodec::decode_root_table(scan.value())?;
-            metas.push(meta);
-            scan.next().unwrap();
-        }
+            .iter(Bound::Included(&min), Bound::Included(&max))?;
 
+        let metas = scan
+            .filter_map(|(_, v)| v)
+            .filter_map(|val| TableCodec::decode_root_table(&val).ok())
+            .collect_vec();
         Ok(metas)
     }
 
     async fn commit(self) -> Result<()> {
-        self.txn.commit().unwrap();
+        self.txn.commit().await?;
         Ok(())
     }
 
@@ -524,14 +527,14 @@ impl Transaction for TransactionWarpper {
         index_name: IndexName,
         column_name: &str,
     ) -> Result<()> {
-        let indexs = self.index_meta_collect(&table_name).unwrap_or_default();
+        let indexs = Self::index_meta_collect(&self.txn, &table_name).unwrap_or_default();
         let indexs = indexs.into_iter().map(Arc::new).collect_vec();
         let mut cols = self.column_collect(table_name.clone())?;
         let col = cols.iter_mut().find(|col| col.name() == column_name);
         if let Some(col) = col {
             col.desc.is_unique = true;
             let mut table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
-            self._create_index(&mut table, Some(index_name.to_string()))?;
+            Self::_create_index(&mut self.txn,&mut table, Some(index_name.to_string()))?;
             self.cache.remove(&table_name);
         }
         Ok(())
@@ -545,7 +548,7 @@ impl Transaction for TransactionWarpper {
     ) -> Result<()> {
         //check index exists
         //operator in copy temp data
-        let mut indexs = self.index_meta_collect(&table_name).unwrap();
+        let mut indexs = Self::index_meta_collect(&self.txn, &table_name).unwrap();
         let (i, _) = indexs
             .iter()
             .find_position(|meta| meta.name == format!("{}_{}", "uk", index_name))
@@ -560,17 +563,17 @@ impl Transaction for TransactionWarpper {
         //这是一个相当愚蠢的更新方法，受限于tablecodec的设计,我们必须先获取表的全部索引元信息,全部删除后再添加
         //这会造成相当大的IO写入
         let (index_meta_min, index_meta_max) = TableCodec::index_meta_bound(&table_name);
-        self._drop_data(&index_meta_min, &index_meta_max)?;
+        Self::_drop_data(&mut self.txn, &index_meta_min, &index_meta_max)?;
         for meta in indexs.iter() {
             let (key, value) = TableCodec::encode_index_meta(&table_name, meta)?;
-            self.txn.put(&key, &value);
+            self.txn.set(key, value);
         }
         //删除索引数据
         let (index_min, index_max) = TableCodec::index_bound(&table_name, &item.id);
-        self._drop_data(&index_min, &index_max)?;
+        Self::_drop_data(&mut self.txn, &index_min, &index_max)?;
 
         let table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
-        self.update_table_meta(&table)?;
+        Self::update_table_meta(&mut self.txn, &table)?;
         self.cache.remove(&table_name);
 
         Ok(())
@@ -578,66 +581,59 @@ impl Transaction for TransactionWarpper {
 }
 
 impl TransactionWarpper {
-    fn _drop_data(&self, min: &[u8], max: &[u8]) -> Result<()> {
-        let mut scan = self
-            .txn
-            .scan(Bound::Included(min), Bound::Included(max))
-            .unwrap();
-        // let mut iter = scan.iter();
-        while scan.is_valid() {
-            let key = scan.key();
-            self.txn.delete(key);
-            scan.next().unwrap();
+    fn _drop_data(tx: &mut mvcc::Transaction, min: &[u8], max: &[u8]) -> Result<()> {
+        let mut iter = tx.iter(Bound::Included(min), Bound::Included(max))?;
+        let mut data_keys = vec![];
+
+        while let Some((key, value_option)) = iter.try_next()? {
+            if value_option.is_some() {
+                data_keys.push(key);
+            }
         }
+        drop(iter);
 
-        // for key in data_keys {
-        //     self.txn.delete(key);
-        // }
-
+        for key in data_keys {
+            tx.remove(&key)?
+        }
         Ok(())
     }
-    fn update_table_meta(&self, table: &TableCatalog) -> Result<()> {
+    fn update_table_meta(tx: &mut mvcc::Transaction, table: &TableCatalog) -> Result<()> {
         for column in table.columns.values() {
             let (key, value) = TableCodec::encode_column(&table.name, column)?;
-            self.txn.put(&key, &value);
+            tx.set(key, value);
         }
         Ok(())
     }
 
     ///获取一个表关联的所有索引
-    fn index_meta_collect(&self, name: &str) -> Option<Vec<IndexMeta>> {
+    fn index_meta_collect(tx: &mvcc::Transaction, name: &str) -> Option<Vec<IndexMeta>> {
         let (index_min, index_max) = TableCodec::index_meta_bound(name);
-        let mut index_metas = vec![];
-        let mut scan = self
-            .txn
-            .scan(Bound::Included(&index_min), Bound::Included(&index_max))
-            .expect("scan index meta error");
+
+        let scan = tx
+            .iter(Bound::Included(&index_min), Bound::Included(&index_max))
+            .unwrap();
         // let mut index_iter = index_scan.iter();
-        while scan.is_valid() {
-            if let Ok(index_meta) = TableCodec::decode_index_meta(scan.value()) {
-                index_metas.push(index_meta);
-            }
-            scan.next().unwrap();
-        }
+        let index_metas = scan
+            .filter_map(|(_, val)| val)
+            .filter_map(|val| TableCodec::decode_index_meta(&val).ok())
+            .collect_vec();
+
         Some(index_metas)
     }
     ///获取一个表关联的列信息
     fn column_collect(&self, table_name: TableName) -> Result<Vec<ColumnCatalog>> {
         let (column_min, column_max) = TableCodec::columns_bound(&table_name);
-        let mut scan = self
+        let scan = self
             .txn
-            .scan(Bound::Included(&column_min), Bound::Included(&column_max))
-            .unwrap();
-        let mut columns = vec![];
-        while scan.is_valid() {
-            let col = TableCodec::decode_column(scan.value())?;
-            columns.push(col);
-            scan.next().unwrap();
-        }
+            .iter(Bound::Included(&column_min), Bound::Included(&column_max))?;
+        let columns = scan
+            .filter_map(|(_, val)| val)
+            .filter_map(|value| TableCodec::decode_column(&value).ok())
+            .collect_vec();
 
         Ok(columns)
     }
-    fn create_primary_key(&self, table: &mut TableCatalog) -> Result<()> {
+    fn create_primary_key(tx: &mut mvcc::Transaction, table: &mut TableCatalog) -> Result<()> {
         let table_name = table.name.clone();
 
         let index_column = table
@@ -660,13 +656,13 @@ impl TransactionWarpper {
 
                 let (key, value) = TableCodec::encode_index_meta(&table_name, meta_ref)?;
 
-                self.txn.put(&key, &value);
+                tx.set(key, value);
             }
         }
         Ok(())
     }
 
-    fn _create_index(&self, table: &mut TableCatalog, index_name: Option<String>) -> Result<()> {
+    fn _create_index(tx: &mut mvcc::Transaction, table: &mut TableCatalog, index_name: Option<String>) -> Result<()> {
         let table_name = table.name.clone();
 
         for col in table
@@ -691,7 +687,7 @@ impl TransactionWarpper {
 
                 let (key, value) = TableCodec::encode_index_meta(&table_name, meta_ref)?;
 
-                self.txn.put(&key, &value);
+                tx.set(key, value);
             }
         }
         Ok(())
@@ -701,7 +697,9 @@ impl TransactionWarpper {
 mod test {
 
     use crate::{
-        catalog::ColumnDesc, expression::ScalarExpression, types::{value::DataValue, LogicalType}
+        catalog::ColumnDesc,
+        expression::ScalarExpression,
+        types::{value::DataValue, LogicalType},
     };
 
     use super::*;
@@ -712,7 +710,7 @@ mod test {
             .path()
             .join("piggydb");
 
-        let storage = PiggyKVStroage::new(path, None);
+        let storage = PiggyKVStroage::new(path).await?;
         let mut transaction = storage.transaction().await?;
         let columns = vec![
             Arc::new(ColumnCatalog::new(

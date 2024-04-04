@@ -599,7 +599,7 @@ impl DataValue {
 
         Ok(())
     }
-    #[warn(dead_code)]
+    #[allow(dead_code)]
     fn decimal_round_i(option: &Option<u8>, decimal: &mut Decimal) {
         if let Some(scale) = option {
             let new_decimal = decimal.trunc_with_scale(*scale as u32);

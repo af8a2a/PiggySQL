@@ -259,9 +259,6 @@ mod tests {
     use crate::catalog::{ColumnCatalog, ColumnDesc, TableCatalog};
     use crate::storage::table_codec::TableCodec;
     use crate::types::index::{Index, IndexMeta};
-    use crate::types::tuple::Tuple;
-    use crate::types::value::DataValue;
-    use crate::types::LogicalType;
     use bytes::Bytes;
     use itertools::Itertools;
     use std::collections::BTreeSet;

@@ -263,7 +263,7 @@ pub mod test {
             .unwrap()
             .path()
             .join("piggydb");
-        let storage=PiggyKVStroage::new(path, None);
+        let storage=PiggyKVStroage::new(path).await?;
 
         let mut transaction = storage.transaction().await?;
 

@@ -1,15 +1,14 @@
-pub mod engine;
 pub mod piggy_stroage;
 mod table_codec;
 
 use crate::catalog::{ColumnCatalog, ColumnRef, IndexName, TableCatalog, TableName};
 
+use crate::errors::*;
 use crate::expression::simplify::ConstantBinary;
 use crate::expression::ScalarExpression;
 use crate::types::index::{Index, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::ColumnId;
-use crate::{errors::*};
 
 pub trait Storage: Sync + Send {
     type TransactionType: Transaction;
@@ -22,8 +21,8 @@ pub(crate) type Bounds = (Option<usize>, Option<usize>);
 type Projections = Vec<ScalarExpression>;
 
 pub trait Transaction: Sync + Send + 'static {
-    type IterType<'a>: Iter;
-    type IndexIterType<'a>: Iter;
+    type IterType<'a>: StorageIter;
+    type IndexIterType<'a>: StorageIter;
 
     /// The bounds is applied to the whole data batches, not per batch.
     ///
@@ -104,7 +103,7 @@ enum IndexValue {
     Normal(TupleId),
 }
 
-pub trait Iter: Sync + Send {
+pub trait StorageIter: Sync + Send {
     fn fetch_tuple(&mut self) -> Result<Option<Vec<Tuple>>>;
 }
 
@@ -123,4 +122,3 @@ pub(crate) fn tuple_projection(
         values,
     })
 }
-

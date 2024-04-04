@@ -2,7 +2,7 @@ use crate::execution::executor::{Executor, Source};
 
 use crate::errors::*;
 use crate::planner::operator::scan::ScanOperator;
-use crate::storage::{Iter, Transaction};
+use crate::storage::{StorageIter, Transaction};
 
 pub(crate) struct IndexScan {
     op: ScanOperator,

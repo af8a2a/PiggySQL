@@ -183,4 +183,10 @@ pub enum DatabaseError {
     #[error("the DDL must run in serial,already running in: {0} transaction")]
     DDLSerialError(usize),
 
+    #[error("Storage Error")]
+    PiggyKVError(
+        #[from]
+        #[source]
+        piggykv::error::KernelError,
+    ),
 }
