@@ -164,13 +164,6 @@ pub enum DatabaseError {
         #[source]
         TryFromSliceError,
     ),
-
-    #[error("sled error {0}")]
-    SledError(
-        #[from]
-        #[source]
-        sled::Error,
-    ),
     #[error("csv error: {0}")]
     Csv(
         #[from]

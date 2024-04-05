@@ -14,9 +14,9 @@ pub struct Mock<S: Storage> {
 
 
 impl Mock<PiggyKVStroage> {
-    pub fn new_lsm(path: std::path::PathBuf) -> Self {
+    pub async fn new_lsm(path: std::path::PathBuf) -> Self {
         Self {
-            db: block_on(Database::new_lsm(path)).unwrap()
+            db: Database::new_lsm(path).await.unwrap()
         }
     }
 }

@@ -210,7 +210,7 @@ impl StorageIter for PiggyIterator<'_> {
             })
             .take(limit)
             .collect_vec();
-        println!("len: {}", tuples.len());
+        // println!("len: {}", tuples.len());
 
         Ok(Some(tuples))
     }
@@ -296,7 +296,7 @@ impl Transaction for TransactionWarpper {
     fn del_index(&mut self, table_name: &str, index: &Index) -> Result<()> {
         let key = TableCodec::encode_index_key(table_name, index)?;
 
-        self.txn.remove(&key)?;
+        self.txn.remove(&key).ok();
 
         Ok(())
     }
@@ -313,7 +313,7 @@ impl Transaction for TransactionWarpper {
 
     fn delete(&mut self, table_name: &str, tuple_id: TupleId) -> Result<()> {
         let key = TableCodec::encode_tuple_key(table_name, &tuple_id)?;
-        self.txn.remove(&key)?;
+        self.txn.remove(&key).ok();
 
         Ok(())
     }
@@ -418,7 +418,7 @@ impl Transaction for TransactionWarpper {
         let mut table_catalog = TableCatalog::new(table_name.clone(), columns)?;
 
         Self::create_primary_key(&mut self.txn, &mut table_catalog)?;
-        Self::_create_index(&mut self.txn,&mut table_catalog, None)?;
+        Self::_create_index(&mut self.txn, &mut table_catalog, None)?;
         // println!("create_table:table_catalog: {:#?}", table_catalog);
         for column in table_catalog.columns.values() {
             let (key, value) = TableCodec::encode_column(&table_name, column)?;
@@ -534,7 +534,7 @@ impl Transaction for TransactionWarpper {
         if let Some(col) = col {
             col.desc.is_unique = true;
             let mut table = TableCatalog::new_with_indexes(table_name.clone(), cols, indexs)?;
-            Self::_create_index(&mut self.txn,&mut table, Some(index_name.to_string()))?;
+            Self::_create_index(&mut self.txn, &mut table, Some(index_name.to_string()))?;
             self.cache.remove(&table_name);
         }
         Ok(())
@@ -662,7 +662,11 @@ impl TransactionWarpper {
         Ok(())
     }
 
-    fn _create_index(tx: &mut mvcc::Transaction, table: &mut TableCatalog, index_name: Option<String>) -> Result<()> {
+    fn _create_index(
+        tx: &mut mvcc::Transaction,
+        table: &mut TableCatalog,
+        index_name: Option<String>,
+    ) -> Result<()> {
         let table_name = table.name.clone();
 
         for col in table

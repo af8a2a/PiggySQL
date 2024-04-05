@@ -2,7 +2,7 @@ use std::path::Path;
 
 use sqllogictest::Runner;
 use sqllogictest_test::Mock;
-use tempfile::{tempdir, TempDir};
+use tempfile::TempDir;
 
 #[tokio::main]
 async fn main() {
@@ -22,7 +22,7 @@ async fn main() {
             .to_string();
         println!("-> Now the test file is: {}", filepath);
 
-        let db = Mock::new_lsm(temp_dir.path().join("test"));
+        let db = Mock::new_lsm(temp_dir.path().join("test")).await;
         let mut tester = Runner::new(db);
 
         if let Err(err) = tester.run_file_async(filepath).await {

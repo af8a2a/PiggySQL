@@ -252,10 +252,9 @@ impl<'a> Iterator for TransactionIter<'a>{
     type Item = KeyValue;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.is_valid(){
-            self.try_next().unwrap()
-        }else{
-            None
+        match self.try_next() {
+            Ok(item) => item,
+            Err(_) => None,
         }
     }
 }
