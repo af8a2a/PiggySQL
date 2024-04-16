@@ -19,10 +19,7 @@ use tracing::error;
 use super::CommittedTxnData;
 use crate::errors::{DatabaseError, Result};
 use crate::storage::engine::piggykv::{
-    iterators::{
-        two_merge_iterator::{TwoMergeIterator},
-        StorageIterator,
-    },
+    iterators::{two_merge_iterator::TwoMergeIterator, StorageIterator},
     lsm_iterator::{FusedIterator, LsmIterator},
     lsm_storage::{LsmStorageInner, WriteBatchRecord},
     mem_table::map_bound,
@@ -174,6 +171,31 @@ impl Transaction {
         }
 
         Ok(())
+    }
+    pub fn debug(&self) {
+        let snapshot = {
+            let guard = self.inner.state.write();
+            guard
+        };
+        for sst in snapshot.l0_sstables.iter() {
+            println!(
+                "l0 sst: {:?},first_key:{:?},last_key:{:?}",
+                sst,
+                snapshot.sstables[sst].first_key(),
+                snapshot.sstables[sst].last_key()
+            );
+        }
+        for level in snapshot.levels.iter() {
+            for sst in level.1.iter() {
+                println!(
+                    "l{} sst: {:?},first_key:{:?},last_key:{:?}",
+                    level.0,
+                    sst,
+                    snapshot.sstables[sst].first_key(),
+                    snapshot.sstables[sst].last_key()
+                );
+            }
+        }
     }
 }
 

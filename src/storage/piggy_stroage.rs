@@ -2,6 +2,7 @@ use std::ops::Bound;
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 use std::{mem};
 
+use bytes::Bytes;
 use itertools::Itertools;
 use moka::sync::Cache;
 use tracing::debug;
@@ -35,6 +36,11 @@ impl PiggyKVStroage {
         let db = PiggyKV::open(path, option).unwrap();
         let cache = Arc::new(Cache::new(40));
         Self { db, cache }
+    }
+}
+impl Drop for PiggyKVStroage {
+    fn drop(&mut self) {
+        self.db.close().unwrap();
     }
 }
 pub struct TransactionWarpper {
@@ -496,12 +502,14 @@ impl Transaction for TransactionWarpper {
             .txn
             .scan(Bound::Included(&min), Bound::Included(&max))
             .unwrap();
+        println!("scan: vaild {}", scan.is_valid());
         while scan.is_valid() {
+            println!("scan: {:?}", Bytes::copy_from_slice(scan.value()));
             let meta = TableCodec::decode_root_table(scan.value())?;
             metas.push(meta);
             scan.next().unwrap();
         }
-
+        // self.txn.debug();
         Ok(metas)
     }
 

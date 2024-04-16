@@ -5,11 +5,11 @@ filename="test.db"
 #"leveled"=rocksdb's leveled compaction
 #"simple"=lsm's paper compaction
 #anythine else=no compaction
-compaction="leveled"
+compaction="no"
 #config for bloom filter
 bloom_false_positive_rate=0.01
 #config for cache
 table_cache_size=64
 
 #config for log
-log_level="warn"
+log_level="debug"

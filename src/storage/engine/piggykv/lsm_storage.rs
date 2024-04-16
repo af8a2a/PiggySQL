@@ -1,4 +1,3 @@
-
 use std::collections::{BTreeSet, HashMap};
 
 use std::ops::Bound;
@@ -7,6 +6,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::errors::Result;
+use crate::storage::engine::piggykv::key::KeyBytes;
+use crate::storage::engine::piggykv::mem_table::map_key_bound;
 use bytes::Bytes;
 use derive_with::With;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -15,7 +16,6 @@ use tracing::debug;
 use super::block::Block;
 use super::compact::{
     CompactionController, CompactionOptions, LeveledCompactionController, LeveledCompactionOptions,
-    SimpleLeveledCompactionController, SimpleLeveledCompactionOptions, TieredCompactionController,
 };
 use super::iterators::concat_iterator::SstConcatIterator;
 use super::iterators::merge_iterator::MergeIterator;
@@ -56,12 +56,10 @@ pub enum WriteBatchRecord<T: AsRef<[u8]>> {
 impl LsmStorageState {
     fn create(options: &LsmStorageOptions) -> Self {
         let levels = match &options.compaction_options {
-            CompactionOptions::Leveled(LeveledCompactionOptions { max_levels, .. })
-            | CompactionOptions::Simple(SimpleLeveledCompactionOptions { max_levels, .. }) => (1
+            CompactionOptions::Leveled(LeveledCompactionOptions { max_levels, .. }) => (1
                 ..=*max_levels)
                 .map(|level| (level, Vec::new()))
                 .collect::<Vec<_>>(),
-            CompactionOptions::Tiered(_) => Vec::new(),
             CompactionOptions::NoCompaction => vec![(1, Vec::new())],
         };
         Self {
@@ -94,11 +92,7 @@ impl LsmStorageOptions {
             block_size: 4096,
             target_sst_size: 2 << 20, // 2MB
             num_memtable_limit: 3,
-            compaction_options: CompactionOptions::Simple(SimpleLeveledCompactionOptions {
-                level0_file_num_compaction_trigger: 2,
-                max_levels: 4,
-                size_ratio_percent: 128,
-            }),
+            compaction_options: CompactionOptions::NoCompaction,
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
             serializable: false,
@@ -202,12 +196,6 @@ impl LsmStorageInner {
             CompactionOptions::Leveled(options) => {
                 CompactionController::Leveled(LeveledCompactionController::new(options.clone()))
             }
-            CompactionOptions::Tiered(options) => {
-                CompactionController::Tiered(TieredCompactionController::new(options.clone()))
-            }
-            CompactionOptions::Simple(options) => CompactionController::Simple(
-                SimpleLeveledCompactionController::new(options.clone()),
-            ),
             CompactionOptions::NoCompaction => CompactionController::NoCompaction,
         };
 
@@ -429,7 +417,7 @@ impl LsmStorageInner {
             match record {
                 WriteBatchRecord::Del(key) => {
                     let key = key.as_ref();
-                    assert!(!key.is_empty(), "key cannot be empty");
+assert!(!key.is_empty(), "key cannot be empty");
                     let size;
                     {
                         let guard = self.state.read();
@@ -662,6 +650,14 @@ impl LsmStorageInner {
         upper: Bound<&[u8]>,
         read_ts: u64,
     ) -> Result<FusedIterator<LsmIterator>> {
+        println!(
+            "scan_with_ts: {:?}",
+            (
+                map_key_bound(map_key_bound_plus_ts(lower, key::TS_RANGE_BEGIN)),
+                map_key_bound(map_key_bound_plus_ts(upper, key::TS_RANGE_END)),
+                read_ts
+            )
+        );
         let snapshot = {
             let guard = self.state.read();
             Arc::clone(&guard)
@@ -679,7 +675,7 @@ impl LsmStorageInner {
             )));
         }
         let memtable_iter = MergeIterator::create(memtable_iters);
-
+        println!("memtable_count:{}", memtable_iter.num_active_iterators());
         let mut table_iters = Vec::with_capacity(snapshot.l0_sstables.len());
         for table_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables[table_id].clone();
@@ -689,6 +685,7 @@ impl LsmStorageInner {
                 table.first_key().as_key_slice(),
                 table.last_key().as_key_slice(),
             ) {
+                println!("hit sst:{}", table_id);
                 let iter = match lower {
                     Bound::Included(key) => SsTableIterator::create_and_seek_to_key(
                         table,

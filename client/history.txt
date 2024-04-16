@@ -60,3 +60,34 @@ select count(*) from customer;
 describe account;
 show tables;
 select count(*) from account;
+CREATE TABLE PART  (\n    P_PARTKEY     INT NOT NULL ,\n    P_NAME        VARCHAR(55) NOT NULL,\n    P_MFGR        CHAR(25) NOT NULL,\n    P_BRAND       CHAR(10) NOT NULL,\n    P_TYPE        VARCHAR(25) NOT NULL,\n    P_SIZE        INT NOT NULL,\n    P_CONTAINER   CHAR(10) NOT NULL,\n    P_RETAILPRICE DECIMAL(15,2) NOT NULL,\n    P_COMMENT     VARCHAR(23) NOT NULL\n);
+COPY PART FROM 'tests/tpc-h/tbl/part.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from part;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
+select count(*) from lineitem;
+select count(*) from part;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+show tables;
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
+CREATE TABLE PART  (\n    P_PARTKEY     INT NOT NULL ,\n    P_NAME        VARCHAR(55) NOT NULL,\n    P_MFGR        CHAR(25) NOT NULL,\n    P_BRAND       CHAR(10) NOT NULL,\n    P_TYPE        VARCHAR(25) NOT NULL,\n    P_SIZE        INT NOT NULL,\n    P_CONTAINER   CHAR(10) NOT NULL,\n    P_RETAILPRICE DECIMAL(15,2) NOT NULL,\n    P_COMMENT     VARCHAR(23) NOT NULL\n);\n
+COPY PART FROM 'tests/tpc-h/tbl/part.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from part;
+select count(*) from lineitem;
+show tables;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
