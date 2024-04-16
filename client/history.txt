@@ -1,24 +1,4 @@
 #V2
-select count(*) from orders;
-show tables;
-drop table customer;
-show tables;
-select count(*) from account;
-select count(*) from customer;
-show tables;
-select count(*) from customer;
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
-show tables;
 explain select * from customer;
 show tables;
 explain select * from customer;
@@ -60,3 +40,62 @@ select count(*) from customer;
 describe account;
 show tables;
 select count(*) from account;
+CREATE TABLE PART  (\n    P_PARTKEY     INT NOT NULL ,\n    P_NAME        VARCHAR(55) NOT NULL,\n    P_MFGR        CHAR(25) NOT NULL,\n    P_BRAND       CHAR(10) NOT NULL,\n    P_TYPE        VARCHAR(25) NOT NULL,\n    P_SIZE        INT NOT NULL,\n    P_CONTAINER   CHAR(10) NOT NULL,\n    P_RETAILPRICE DECIMAL(15,2) NOT NULL,\n    P_COMMENT     VARCHAR(23) NOT NULL\n);
+COPY PART FROM 'tests/tpc-h/tbl/part.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from part;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
+select count(*) from lineitem;
+select count(*) from part;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+show tables;
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
+CREATE TABLE PART  (\n    P_PARTKEY     INT NOT NULL ,\n    P_NAME        VARCHAR(55) NOT NULL,\n    P_MFGR        CHAR(25) NOT NULL,\n    P_BRAND       CHAR(10) NOT NULL,\n    P_TYPE        VARCHAR(25) NOT NULL,\n    P_SIZE        INT NOT NULL,\n    P_CONTAINER   CHAR(10) NOT NULL,\n    P_RETAILPRICE DECIMAL(15,2) NOT NULL,\n    P_COMMENT     VARCHAR(23) NOT NULL\n);\n
+COPY PART FROM 'tests/tpc-h/tbl/part.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from part;
+select count(*) from lineitem;
+show tables;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+CREATE TABLE PART  (\n    P_PARTKEY     INT NOT NULL ,\n    P_NAME        VARCHAR(55) NOT NULL,\n    P_MFGR        CHAR(25) NOT NULL,\n    P_BRAND       CHAR(10) NOT NULL,\n    P_TYPE        VARCHAR(25) NOT NULL,\n    P_SIZE        INT NOT NULL,\n    P_CONTAINER   CHAR(10) NOT NULL,\n    P_RETAILPRICE DECIMAL(15,2) NOT NULL,\n    P_COMMENT     VARCHAR(23) NOT NULL\n);\n
+CREATE TABLE SUPPLIER (\n    S_SUPPKEY     INT NOT NULL ,\n    S_NAME        CHAR(25) NOT NULL,\n    S_ADDRESS     VARCHAR(40) NOT NULL,\n    S_NATIONKEY   INT NOT NULL,\n    S_PHONE       CHAR(15) NOT NULL,\n    S_ACCTBAL     DECIMAL(15,2) NOT NULL,\n    S_COMMENT     VARCHAR(101) NOT NULL\n);\n
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+show tables
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);\n
+show tables;
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem;
+show tables;
+select count(*) from lineitem;
+CREATE TABLE LINEITEM (\n    L_ORDERKEY      INT NOT NULL ,\n    L_PARTKEY       INT NOT NULL,\n    L_SUPPKEY       INT NOT NULL,\n    L_LINENUMBER    INT NOT NULL,\n    L_QUANTITY      DECIMAL(15,2) NOT NULL,\n    L_EXTENDEDPRICE DECIMAL(15,2) NOT NULL,\n    L_DISCOUNT      DECIMAL(15,2) NOT NULL,\n    L_TAX           DECIMAL(15,2) NOT NULL,\n    L_RETURNFLAG    CHAR(1) NOT NULL,\n    L_LINESTATUS    CHAR(1) NOT NULL,\n    L_SHIPDATE      DATE NOT NULL,\n    L_COMMITDATE    DATE NOT NULL,\n    L_RECEIPTDATE   DATE NOT NULL,\n    L_SHIPINSTRUCT  CHAR(25) NOT NULL,\n    L_SHIPMODE      CHAR(10) NOT NULL,\n    L_COMMENT       VARCHAR(44) NOT NULL\n);
+COPY LINEITEM FROM 'tests/tpc-h/tbl/lineitem.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from lineitem
+;
+show tables;
+select count(*) from lineitem;
+CREATE TABLE ORDERS (\n    O_ORDERKEY       INT NOT NULL ,\n    O_CUSTKEY        INT NOT NULL,\n    O_ORDERSTATUS    CHAR(1) NOT NULL,\n    O_TOTALPRICE     DECIMAL(15,2) NOT NULL,\n    O_ORDERDATE      DATE NOT NULL,\n    O_ORDERPRIORITY  CHAR(15) NOT NULL,  \n    O_CLERK          CHAR(15) NOT NULL, \n    O_SHIPPRIORITY   INT NOT NULL,\n    O_COMMENT        VARCHAR(79) NOT NULL\n);\n
+COPY orders FROM 'tests/tpc-h/tbl/orders.tbl' ( DELIMITER '|' );\n
+show tables;
+select count(*) from orders;
+select count(*) from lineitem;

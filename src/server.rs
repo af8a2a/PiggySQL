@@ -33,7 +33,7 @@ pub struct Session {
     tx: Mutex<Option<DBTransaction<PiggyKVStroage>>>,
 }
 pub struct Server {
-    inner: Arc<Database<PiggyKVStroage>>,
+    pub(crate) inner: Arc<Database<PiggyKVStroage>>,
 }
 
 impl MakeHandler for Server {

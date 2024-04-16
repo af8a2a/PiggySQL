@@ -24,8 +24,9 @@ impl Block {
     fn get_first_key(&self) -> KeyVec {
         let mut buf = &self.data[..];
         buf.get_u16();
-        let key_len = buf.get_u16();
-        let key = &buf[..key_len as usize];
+        let key_len = buf.get_u16() as usize;
+        let key = &buf[..key_len];
+        buf.advance(key_len);
         KeyVec::from_vec_with_ts(key.to_vec(), buf.get_u64())
     }
 }
@@ -108,8 +109,12 @@ impl BlockIterator {
         self.key.append(&self.first_key.key_ref()[..overlap_len]);
         self.key.append(key);
         entry.advance(key_len);
+        let ts = entry.get_u64();
+        self.key.set_ts(ts);
         let value_len = entry.get_u16() as usize;
-        let value_offset_begin = offset + SIZEOF_U16 + SIZEOF_U16 + key_len + SIZEOF_U16;
+        // REMEMBER TO CHANGE THIS every time you change the encoding!
+        let value_offset_begin =
+            offset + SIZEOF_U16 + SIZEOF_U16 + std::mem::size_of::<u64>() + key_len + SIZEOF_U16;
         let value_offset_end = value_offset_begin + value_len;
         self.value_range = (value_offset_begin, value_offset_end);
         entry.advance(value_len);

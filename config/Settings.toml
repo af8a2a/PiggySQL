@@ -12,4 +12,4 @@ bloom_false_positive_rate=0.01
 table_cache_size=64
 
 #config for log
-log_level="warn"
+log_level="debug"

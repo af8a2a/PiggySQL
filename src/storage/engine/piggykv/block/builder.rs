@@ -29,7 +29,6 @@ fn compute_overlap(first_key: KeySlice, key: KeySlice) -> usize {
         i += 1;
     }
     i
-
 }
 
 impl BlockBuilder {
@@ -88,7 +87,6 @@ impl BlockBuilder {
     /// Finalize the block.
     pub fn build(self) -> Block {
         if self.is_empty() {
-            error!("block should not be empty");
             panic!("block should not be empty");
         }
         Block {

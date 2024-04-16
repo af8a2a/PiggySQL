@@ -1,7 +1,8 @@
+use std::mem;
 use std::ops::Bound;
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
-use std::{mem};
 
+use bytes::Bytes;
 use itertools::Itertools;
 use moka::sync::Cache;
 use tracing::debug;
@@ -10,12 +11,12 @@ use crate::catalog::{ColumnCatalog, ColumnRef, IndexName};
 use crate::catalog::{TableCatalog, TableName};
 use crate::expression::simplify::ConstantBinary;
 
+use crate::errors::*;
 use crate::storage::table_codec::TableCodec;
 use crate::types::index::{Index, IndexMeta, IndexMetaRef};
 use crate::types::tuple::{Tuple, TupleId};
 use crate::types::value::ValueRef;
 use crate::types::ColumnId;
-use crate::{errors::*};
 
 use super::engine::piggykv::iterators::StorageIterator;
 use super::engine::piggykv::mvcc::txn::{Transaction as StorageTransaction, TxnIterator};
@@ -35,6 +36,11 @@ impl PiggyKVStroage {
         let db = PiggyKV::open(path, option).unwrap();
         let cache = Arc::new(Cache::new(40));
         Self { db, cache }
+    }
+}
+impl Drop for PiggyKVStroage {
+    fn drop(&mut self) {
+        self.db.close().unwrap();
     }
 }
 pub struct TransactionWarpper {
@@ -490,18 +496,16 @@ impl Transaction for TransactionWarpper {
     }
 
     fn show_tables(&self) -> Result<Vec<String>> {
-        let mut metas = vec![];
         let (min, max) = TableCodec::root_table_bound();
-        let mut scan = self
+        let scan = self
             .txn
             .scan(Bound::Included(&min), Bound::Included(&max))
             .unwrap();
-        while scan.is_valid() {
-            let meta = TableCodec::decode_root_table(scan.value())?;
-            metas.push(meta);
-            scan.next().unwrap();
-        }
+        let metas = scan
+            .filter_map(|(_, val)| TableCodec::decode_root_table(&val).ok())
+            .collect_vec();
 
+        // self.txn.debug();
         Ok(metas)
     }
 
@@ -701,7 +705,9 @@ impl TransactionWarpper {
 mod test {
 
     use crate::{
-        catalog::ColumnDesc, expression::ScalarExpression, types::{value::DataValue, LogicalType}
+        catalog::ColumnDesc,
+        expression::ScalarExpression,
+        types::{value::DataValue, LogicalType},
     };
 
     use super::*;

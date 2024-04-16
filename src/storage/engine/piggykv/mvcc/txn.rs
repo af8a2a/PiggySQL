@@ -19,10 +19,7 @@ use tracing::error;
 use super::CommittedTxnData;
 use crate::errors::{DatabaseError, Result};
 use crate::storage::engine::piggykv::{
-    iterators::{
-        two_merge_iterator::{TwoMergeIterator},
-        StorageIterator,
-    },
+    iterators::{two_merge_iterator::TwoMergeIterator, StorageIterator},
     lsm_iterator::{FusedIterator, LsmIterator},
     lsm_storage::{LsmStorageInner, WriteBatchRecord},
     mem_table::map_bound,
@@ -72,14 +69,10 @@ impl Transaction {
         .build();
         let entry = local_iter.with_iter_mut(|iter| TxnLocalIterator::entry_to_item(iter.next()));
         local_iter.with_mut(|x| *x.item = entry);
+        let inner_scan = self.inner.scan_with_ts(lower, upper, self.read_ts)?;
 
-        TxnIterator::create(
-            self.clone(),
-            TwoMergeIterator::create(
-                local_iter,
-                self.inner.scan_with_ts(lower, upper, self.read_ts)?,
-            )?,
-        )
+        let iter = TwoMergeIterator::create(local_iter, inner_scan)?;
+        TxnIterator::create(self.clone(), iter)
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {
@@ -175,6 +168,31 @@ impl Transaction {
 
         Ok(())
     }
+    pub fn debug(&self) {
+        let snapshot = {
+            let guard = self.inner.state.write();
+            guard
+        };
+        for sst in snapshot.l0_sstables.iter() {
+            println!(
+                "l0 sst: {:?},first_key:{:?},last_key:{:?}",
+                sst,
+                snapshot.sstables[sst].first_key(),
+                snapshot.sstables[sst].last_key()
+            );
+        }
+        for level in snapshot.levels.iter() {
+            for sst in level.1.iter() {
+                println!(
+                    "l{} sst: {:?},first_key:{:?},last_key:{:?}",
+                    level.0,
+                    sst,
+                    snapshot.sstables[sst].first_key(),
+                    snapshot.sstables[sst].last_key()
+                );
+            }
+        }
+    }
 }
 
 impl Drop for Transaction {
@@ -237,7 +255,8 @@ impl TxnIterator {
         txn: Arc<Transaction>,
         iter: TwoMergeIterator<TxnLocalIterator, FusedIterator<LsmIterator>>,
     ) -> Result<Self> {
-        let mut iter = Self { txn: txn, iter };
+        let mut iter = Self { txn, iter };
+
         iter.skip_deletes()?;
         if iter.is_valid() {
             iter.add_to_read_set(iter.key());
@@ -247,6 +266,10 @@ impl TxnIterator {
 
     fn skip_deletes(&mut self) -> Result<()> {
         while self.iter.is_valid() && self.iter.value().is_empty() {
+            println!("skip key={}", String::from_utf8(self.iter.key().to_vec())?);
+            if !self.iter.value().is_empty() {
+                println!("val={}", String::from_utf8(self.iter.value().to_vec())?);
+            }
             self.iter._next()?;
         }
         Ok(())
