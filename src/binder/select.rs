@@ -260,7 +260,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
         let append = table
             .all_columns()
             .into_iter()
-            .map(|col| ScalarExpression::ColumnRef(col))
+            .map(ScalarExpression::ColumnRef)
             .collect_vec();
         exprs.extend(append);
         Ok(())
@@ -374,7 +374,7 @@ impl<'a, T: Transaction> Binder<'a, T> {
                 ScalarExpression::Constant(dv) => match dv.as_ref() {
                     DataValue::Int32(Some(v)) if *v >= 0 => limit = Some(*v as usize),
                     DataValue::Int64(Some(v)) if *v >= 0 => limit = Some(*v as usize),
-                    _ => return Err(DatabaseError::from(DatabaseError::InvalidType)),
+                    _ => return Err(DatabaseError::InvalidType),
                 },
                 _ => {
                     return Err(DatabaseError::InvalidColumn(

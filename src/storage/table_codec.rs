@@ -154,7 +154,7 @@ impl TableCodec {
         Ok(key_prefix)
     }
 
-    pub fn decode_tuple(columns: &Vec<ColumnRef>, bytes: &[u8]) -> Tuple {
+    pub fn decode_tuple(columns: &[ColumnRef], bytes: &[u8]) -> Tuple {
         Tuple::deserialize_from(columns, bytes)
     }
 

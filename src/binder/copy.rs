@@ -1,4 +1,3 @@
-use crate::errors::DatabaseError;
 use crate::planner::operator::copy_from_file::CopyFromFileOperator;
 use crate::planner::operator::Operator;
 use serde::{Deserialize, Serialize};

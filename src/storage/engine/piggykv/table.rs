@@ -135,6 +135,7 @@ impl FileObject {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(path)
             .unwrap();
         file.write_all(&data)?;

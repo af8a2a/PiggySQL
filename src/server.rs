@@ -208,7 +208,7 @@ fn row_desc_from_stmt(schema: SchemaRef, format: &Format) -> PgWireResult<Vec<Fi
                 name.to_string(),
                 None,
                 None,
-                into_pg_type(&datatype).unwrap(),
+                into_pg_type(datatype).unwrap(),
                 format.format_for(idx),
             ))
         })
@@ -410,7 +410,7 @@ fn encode_tuples<'a>(schema: SchemaRef, tuples: Vec<Tuple>) -> PgWireResult<Quer
     }
     // debug!("results: {:?}", results);
     // debug!("schema: {:?}", schema);
-    let iter = stream::iter(results.into_iter());
+    let iter = stream::iter(results);
     Ok(QueryResponse::new(schema, iter))
 }
 fn into_pg_type(data_type: &LogicalType) -> PgWireResult<Type> {

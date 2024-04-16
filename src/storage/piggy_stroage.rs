@@ -2,7 +2,6 @@ use std::mem;
 use std::ops::Bound;
 use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
-use bytes::Bytes;
 use itertools::Itertools;
 use moka::sync::Cache;
 use tracing::debug;
@@ -358,7 +357,7 @@ impl Transaction for TransactionWarpper {
             }
 
             let column = catalog.get_column_by_id(&col_id).unwrap();
-            let (key, value) = TableCodec::encode_column(&table_name, column)?;
+            let (key, value) = TableCodec::encode_column(table_name, column)?;
             self.txn.put(&key, &value);
             self.cache.remove(table_name);
             Ok(col_id)
@@ -557,8 +556,10 @@ impl Transaction for TransactionWarpper {
         let item = indexs.remove(i);
         let mut cols = self.column_collect(table_name.clone()).unwrap();
         let indexs = indexs.into_iter().map(Arc::new).collect_vec();
-        cols.get_mut(item.column_ids[0] as usize)
-            .and_then(|col| Some(col.desc.is_unique = false));
+        cols.get_mut(item.column_ids[0] as usize).and_then(|col| {
+            col.desc.is_unique = false;
+            Some(())
+        });
         //更新索引元数据
         //todo
         //这是一个相当愚蠢的更新方法，受限于tablecodec的设计,我们必须先获取表的全部索引元信息,全部删除后再添加

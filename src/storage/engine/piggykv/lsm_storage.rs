@@ -6,8 +6,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::errors::Result;
-use crate::storage::engine::piggykv::key::KeyBytes;
-use crate::storage::engine::piggykv::mem_table::map_key_bound;
 use bytes::Bytes;
 use derive_with::With;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -85,9 +83,8 @@ pub struct LsmStorageOptions {
     pub bloom_false_positive_rate: f64,
     pub serializable: bool,
 }
-
-impl LsmStorageOptions {
-    pub fn default() -> Self {
+impl Default for LsmStorageOptions {
+    fn default() -> Self {
         Self {
             block_size: 4096,
             target_sst_size: 2 << 20, // 2MB
@@ -98,6 +95,8 @@ impl LsmStorageOptions {
             serializable: false,
         }
     }
+}
+impl LsmStorageOptions {
     pub fn no_compaction() -> Self {
         Self {
             block_size: 4096,
@@ -122,7 +121,7 @@ impl LsmStorageOptions {
             }),
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
-            serializable: false,
+            serializable: true,
         }
     }
 }
@@ -684,7 +683,7 @@ impl LsmStorageInner {
                 table.first_key().as_key_slice(),
                 table.last_key().as_key_slice(),
             ) {
-                println!("hit sst:{}", table_id);
+                // println!("hit sst:{}", table_id);
                 let iter = match lower {
                     Bound::Included(key) => SsTableIterator::create_and_seek_to_key(
                         table,
@@ -703,8 +702,6 @@ impl LsmStorageInner {
 
                     Bound::Unbounded => SsTableIterator::create_and_seek_to_first(table)?,
                 };
-                assert_eq!(iter.is_valid(), true);
-
                 table_iters.push(Box::new(iter));
             }
         }

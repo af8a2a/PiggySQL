@@ -23,7 +23,6 @@ impl ScalarExpression {
             .iter()
             .find_position(|tul_col| tul_col.summary() == self.output_columns().summary())
             .map(|(i, _)| &tuple.values[i])
-            .clone()
         {
             return Ok(value.clone());
         }

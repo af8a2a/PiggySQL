@@ -1,5 +1,4 @@
 use crate::catalog::{ColumnCatalog, ColumnRef, Schema, SchemaRef};
-use crate::errors::DatabaseError;
 use crate::errors::*;
 use crate::execution::executor::dql::projection::Projection;
 use crate::execution::executor::{build, Executor, Source};
@@ -141,22 +140,22 @@ impl<T: Transaction> Executor<T> for NestedLoopJoin {
         for left_tuple in left_tuples {
             let mut has_matched = false;
 
-            for right_tuple in right_tuples.iter().cloned() {
-                let tuple = match (filter.as_ref(), eq_cond.equals(&left_tuple, &right_tuple)?) {
+            for right_tuple in right_tuples.iter() {
+                let tuple = match (filter.as_ref(), eq_cond.equals(&left_tuple, right_tuple)?) {
                     (None, true) if matches!(ty, JoinType::Right) => {
-                        Self::emit_tuple(&right_tuple, &left_tuple, ty, true)
+                        Self::emit_tuple(right_tuple, &left_tuple, ty, true)
                     }
-                    (None, true) => Self::emit_tuple(&left_tuple, &right_tuple, ty, true),
+                    (None, true) => Self::emit_tuple(&left_tuple, right_tuple, ty, true),
                     (Some(filter), true) => {
-                        let new_tuple = Self::merge_tuple(&left_tuple, &right_tuple, &ty);
+                        let new_tuple = Self::merge_tuple(&left_tuple, right_tuple, &ty);
                         let value = filter.eval(&new_tuple, &output_schema_ref)?;
                         match value.as_ref() {
                             DataValue::Boolean(Some(true)) => {
                                 let tuple = match ty {
                                     JoinType::Right => {
-                                        Self::emit_tuple(&right_tuple, &left_tuple, ty, true)
+                                        Self::emit_tuple(right_tuple, &left_tuple, ty, true)
                                     }
-                                    _ => Self::emit_tuple(&left_tuple, &right_tuple, ty, true),
+                                    _ => Self::emit_tuple(&left_tuple, right_tuple, ty, true),
                                 };
                                 has_matched = true;
                                 tuple

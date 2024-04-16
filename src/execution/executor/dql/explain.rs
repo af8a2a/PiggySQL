@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::{
-    catalog::ColumnCatalog,
     execution::executor::{Executor, Source},
     planner::LogicalPlan,
     storage::Transaction,
@@ -18,7 +17,6 @@ impl From<LogicalPlan> for Explain {
 }
 impl<T: Transaction> Executor<T> for Explain {
     fn execute(self, _: &mut T) -> Source {
-        let _columns = vec![Arc::new(ColumnCatalog::new_dummy("PLAN".to_string()))];
         let values = vec![Arc::new(DataValue::Utf8(Some(self.plan.explain(0))))];
         Ok(vec![Tuple { id: None, values }])
     }

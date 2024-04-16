@@ -53,7 +53,7 @@ impl SsTableBuilder {
             self.last_key.set_from_slice(key);
             return;
         }
-        assert_eq!(self.builder.is_empty(), false);
+        assert!(!self.builder.is_empty());
         // create a new block builder and append block data
         self.finish_block();
 

@@ -1,5 +1,4 @@
 use bytes::BufMut;
-use tracing::error;
 
 use crate::storage::engine::piggykv::key::{KeySlice, KeyVec};
 

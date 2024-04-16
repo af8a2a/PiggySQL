@@ -1,4 +1,3 @@
-use tracing::debug;
 
 use super::{lsm_storage::LsmStorageInner, PiggyKV};
 
