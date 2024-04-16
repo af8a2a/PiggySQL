@@ -417,7 +417,7 @@ impl LsmStorageInner {
             match record {
                 WriteBatchRecord::Del(key) => {
                     let key = key.as_ref();
-assert!(!key.is_empty(), "key cannot be empty");
+                    assert!(!key.is_empty(), "key cannot be empty");
                     let size;
                     {
                         let guard = self.state.read();
@@ -650,14 +650,14 @@ assert!(!key.is_empty(), "key cannot be empty");
         upper: Bound<&[u8]>,
         read_ts: u64,
     ) -> Result<FusedIterator<LsmIterator>> {
-        println!(
-            "scan_with_ts: {:?}",
-            (
-                map_key_bound(map_key_bound_plus_ts(lower, key::TS_RANGE_BEGIN)),
-                map_key_bound(map_key_bound_plus_ts(upper, key::TS_RANGE_END)),
-                read_ts
-            )
-        );
+        // println!(
+        //     "scan_with_ts: {:?}",
+        //     (
+        //         map_key_bound(map_key_bound_plus_ts(lower, key::TS_RANGE_BEGIN)),
+        //         map_key_bound(map_key_bound_plus_ts(upper, key::TS_RANGE_END)),
+        //         read_ts
+        //     )
+        // );
         let snapshot = {
             let guard = self.state.read();
             Arc::clone(&guard)
@@ -675,7 +675,6 @@ assert!(!key.is_empty(), "key cannot be empty");
             )));
         }
         let memtable_iter = MergeIterator::create(memtable_iters);
-        println!("memtable_count:{}", memtable_iter.num_active_iterators());
         let mut table_iters = Vec::with_capacity(snapshot.l0_sstables.len());
         for table_id in snapshot.l0_sstables.iter() {
             let table = snapshot.sstables[table_id].clone();
@@ -701,8 +700,10 @@ assert!(!key.is_empty(), "key cannot be empty");
                         }
                         iter
                     }
+
                     Bound::Unbounded => SsTableIterator::create_and_seek_to_first(table)?,
                 };
+                assert_eq!(iter.is_valid(), true);
 
                 table_iters.push(Box::new(iter));
             }
@@ -745,12 +746,10 @@ assert!(!key.is_empty(), "key cannot be empty");
         }
 
         let iter = TwoMergeIterator::create(memtable_iter, l0_iter)?;
+
         let iter = TwoMergeIterator::create(iter, MergeIterator::create(level_iters))?;
 
-        Ok(FusedIterator::new(LsmIterator::new(
-            iter,
-            map_bound(upper),
-            read_ts,
-        )?))
+        let lsm_iter = LsmIterator::new(iter, map_bound(upper), read_ts)?;
+        Ok(FusedIterator::new(lsm_iter))
     }
 }

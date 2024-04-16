@@ -53,7 +53,7 @@ impl SsTableBuilder {
             self.last_key.set_from_slice(key);
             return;
         }
-
+        assert_eq!(self.builder.is_empty(), false);
         // create a new block builder and append block data
         self.finish_block();
 
@@ -86,7 +86,7 @@ impl SsTableBuilder {
         mut self,
         id: usize,
         block_cache: Option<Arc<BlockCache>>,
-        bloom_false_positive_rate:f64,
+        bloom_false_positive_rate: f64,
         path: impl AsRef<Path>,
     ) -> Result<SsTable> {
         self.finish_block();
@@ -114,5 +114,4 @@ impl SsTableBuilder {
             max_ts: self.max_ts,
         })
     }
-
 }

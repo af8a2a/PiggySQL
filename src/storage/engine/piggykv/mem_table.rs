@@ -9,7 +9,6 @@ use crossbeam_skiplist::map::Entry;
 use crossbeam_skiplist::SkipMap;
 use ouroboros::self_referencing;
 
-
 use super::iterators::StorageIterator;
 use super::key::{KeyBytes, KeySlice};
 use super::table::SsTableBuilder;

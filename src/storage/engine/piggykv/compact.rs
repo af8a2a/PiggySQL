@@ -300,7 +300,7 @@ impl LsmStorageInner {
         let Some(task) = task else {
             return Ok(());
         };
-        self.dump_structure();
+        // self.dump_structure();
         debug!("running compaction task: {:?}", task);
         let sstables = self.compact(&task)?;
         let output = sstables.iter().map(|x| x.sst_id()).collect::<Vec<_>>();

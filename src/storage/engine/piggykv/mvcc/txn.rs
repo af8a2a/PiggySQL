@@ -69,14 +69,10 @@ impl Transaction {
         .build();
         let entry = local_iter.with_iter_mut(|iter| TxnLocalIterator::entry_to_item(iter.next()));
         local_iter.with_mut(|x| *x.item = entry);
+        let inner_scan = self.inner.scan_with_ts(lower, upper, self.read_ts)?;
 
-        TxnIterator::create(
-            self.clone(),
-            TwoMergeIterator::create(
-                local_iter,
-                self.inner.scan_with_ts(lower, upper, self.read_ts)?,
-            )?,
-        )
+        let iter = TwoMergeIterator::create(local_iter, inner_scan)?;
+        TxnIterator::create(self.clone(), iter)
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {
@@ -259,7 +255,8 @@ impl TxnIterator {
         txn: Arc<Transaction>,
         iter: TwoMergeIterator<TxnLocalIterator, FusedIterator<LsmIterator>>,
     ) -> Result<Self> {
-        let mut iter = Self { txn: txn, iter };
+        let mut iter = Self { txn, iter };
+
         iter.skip_deletes()?;
         if iter.is_valid() {
             iter.add_to_read_set(iter.key());
@@ -269,6 +266,10 @@ impl TxnIterator {
 
     fn skip_deletes(&mut self) -> Result<()> {
         while self.iter.is_valid() && self.iter.value().is_empty() {
+            println!("skip key={}", String::from_utf8(self.iter.key().to_vec())?);
+            if !self.iter.value().is_empty() {
+                println!("val={}", String::from_utf8(self.iter.value().to_vec())?);
+            }
             self.iter._next()?;
         }
         Ok(())
