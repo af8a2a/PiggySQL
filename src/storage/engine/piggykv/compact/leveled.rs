@@ -66,7 +66,6 @@ impl LeveledCompactionController {
         &self,
         snapshot: &LsmStorageState,
     ) -> Option<LeveledCompactionTask> {
-
         // step 1: compute target level size
         let mut target_level_size = (0..self.options.max_levels).map(|_| 0).collect::<Vec<_>>(); // exclude level 0
         let mut real_level_size = Vec::with_capacity(self.options.max_levels);
@@ -111,16 +110,19 @@ impl LeveledCompactionController {
                 is_lower_level_bottom_level: base_level == self.options.max_levels,
             });
         }
-
+        //计算各层级压缩的优先级
+        //尚未实现并行压缩，每次只能压缩一个层级
         let mut priorities = Vec::with_capacity(self.options.max_levels);
         for level in 0..self.options.max_levels {
             let prio = real_level_size[level] as f64 / target_level_size[level] as f64;
+            //大于层级大小上限，必须压缩
             if prio > 1.0 {
+                //优先级,目标层级
                 priorities.push((prio, level + 1));
             }
         }
         priorities.sort_by(|a, b| a.partial_cmp(b).unwrap().reverse());
-        let priority = priorities.first();
+        let priority = priorities.first();//获取最大优先级
         if let Some((_, level)) = priority {
             println!(
                 "target level sizes: {:?}, real level sizes: {:?}, base_level: {}",
@@ -134,9 +136,10 @@ impl LeveledCompactionController {
                     .collect::<Vec<_>>(),
                 base_level,
             );
-
+            //压缩目标层级
             let level = *level;
-            let selected_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap(); // select the oldest sst to compact
+            // 选择上层的最老sst合并
+            let selected_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap(); 
             println!(
                 "compaction triggered by priority: {level} out of {:?}, select {selected_sst} for compaction",
                 priorities
