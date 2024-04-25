@@ -1,6 +1,6 @@
 use std::ops::Bound;
 
-use crate::errors::Result;
+use crate::errors::{DatabaseError, Result};
 use bytes::Bytes;
 
 
@@ -154,7 +154,7 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
     fn _next(&mut self) -> Result<()> {
         // only move when the iterator is valid and not errored
         if self.has_errored {
-            panic!("the iterator is tainted");
+            return Err(DatabaseError::InternalError("the iterator is tainted".to_string()));
         }
         if self.iter.is_valid() {
             if let Err(e) = self.iter._next() {

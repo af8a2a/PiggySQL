@@ -44,8 +44,6 @@ fn return_result(size: usize) -> Result<Tuple> {
 
 impl CopyFromFile {
     /// Read records from file using blocking IO.
-    ///
-    /// The read data chunks will be sent through `tx`.
     fn read_file_blocking(mut self) -> Result<Vec<Tuple>> {
         let file = File::open(self.op.source.path)?;
         let mut buf_reader = BufReader::new(file);
@@ -65,12 +63,7 @@ impl CopyFromFile {
         };
 
         let column_count = self.op.schema_ref.len();
-        let _types = self
-            .op
-            .schema_ref
-            .iter()
-            .map(|column| *column.datatype())
-            .collect_vec();
+
         debug!("column count: {}", column_count);
         let tuple_builder = TupleBuilder::new(self.op.schema_ref.clone());
         let mut tuples = vec![];

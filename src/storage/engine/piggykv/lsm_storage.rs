@@ -88,7 +88,7 @@ impl Default for LsmStorageOptions {
         Self {
             block_size: 4096,
             target_sst_size: 2 << 20, // 2MB
-            num_memtable_limit: 3,
+            num_memtable_limit: 2,
             compaction_options: CompactionOptions::NoCompaction,
             enable_wal: true,
             bloom_false_positive_rate: 0.01,

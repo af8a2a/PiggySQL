@@ -110,16 +110,16 @@ impl Transaction {
         if let Some(guard) = &self.key_hashes {
             let guard = guard.lock();
             let (write_set, read_set) = &*guard;
-            println!(
-                "commit txn: write_set: {:?}, read_set: {:?}",
-                write_set, read_set
-            );
+            // println!(
+            //     "commit txn: write_set: {:?}, read_set: {:?}",
+            //     write_set, read_set
+            // );
             if !write_set.is_empty() {
                 let committed_txns = self.inner.mvcc().committed_txns.lock();
                 for (_, txn_data) in committed_txns.range((self.read_ts + 1)..) {
                     for key_hash in read_set {
                         if txn_data.key_hashes.contains(key_hash) {
-                            panic!("serializable check failed");
+                            return Err(DatabaseError::Serialization);
                         }
                     }
                 }

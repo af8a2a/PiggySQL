@@ -114,4 +114,9 @@ impl SsTableBuilder {
             max_ts: self.max_ts,
         })
     }
+    #[cfg(test)]
+    pub(crate) fn build_for_test(self, path: impl AsRef<Path>) -> Result<SsTable> {
+        self.build(0, None,0.01, path)
+    }
+
 }

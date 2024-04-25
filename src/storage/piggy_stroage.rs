@@ -509,7 +509,7 @@ impl Transaction for TransactionWarpper {
     }
 
     async fn commit(self) -> Result<()> {
-        self.txn.commit().unwrap();
+        self.txn.commit()?;
         Ok(())
     }
 

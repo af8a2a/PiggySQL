@@ -1,6 +1,5 @@
 use crate::planner::operator::Operator;
 
-#[allow(dead_code)]
 pub enum PatternChildrenPredicate {
     /// all childrens nodes match all
     Recursive,

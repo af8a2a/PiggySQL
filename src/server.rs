@@ -298,10 +298,7 @@ impl Server {
         // let backend = Server::new().await.unwrap();
         let processor = server;
 
-        // We have not implemented extended query in this server, use placeholder instead
-        // let placeholder = Arc::new(StatelessMakeHandler::new(Arc::new(
-        //     PlaceholderExtendedQueryHandler,
-        // )));
+
         let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
         let server_addr = format!("{}:{}", "127.0.0.1", "5432");
         let listener = TcpListener::bind(server_addr).await.unwrap();
@@ -408,8 +405,6 @@ fn encode_tuples<'a>(schema: SchemaRef, tuples: Vec<Tuple>) -> PgWireResult<Quer
 
         results.push(encoder.finish());
     }
-    // debug!("results: {:?}", results);
-    // debug!("schema: {:?}", schema);
     let iter = stream::iter(results);
     Ok(QueryResponse::new(schema, iter))
 }

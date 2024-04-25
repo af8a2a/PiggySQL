@@ -47,14 +47,14 @@ derive-with = "0.5.0"
 tracing-appender = "0.2.3"
 
 [dev-dependencies]
-cargo-tarpaulin = "0.27.1"
 tokio-test = "0.4.2"
 tempfile = "3.0.7"
 tempdir = "~0.3.7"
 criterion = { version = "0.5.1", features = ["html_reports", "async_tokio"] }
+sqlite = { version = "0.34.0" }
 
 [workspace]
-members = ["client","tests/sqllogictest"]
+members = ["client", "tests/sqllogictest"]
 
 [[bench]]
 name = "my_benchmark"

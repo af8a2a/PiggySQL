@@ -39,7 +39,7 @@ pub struct PiggyKV {
 
 impl Drop for PiggyKV {
     fn drop(&mut self) {
-        println!("drop");
+        // println!("drop");
         self.compaction_notifier.send(()).ok();
         self.flush_notifier.send(()).ok();
     }
