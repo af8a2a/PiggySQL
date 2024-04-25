@@ -122,7 +122,7 @@ impl LeveledCompactionController {
             }
         }
         priorities.sort_by(|a, b| a.partial_cmp(b).unwrap().reverse());
-        let priority = priorities.first();//获取最大优先级
+        let priority = priorities.first(); //获取最大优先级
         if let Some((_, level)) = priority {
             println!(
                 "target level sizes: {:?}, real level sizes: {:?}, base_level: {}",
@@ -139,7 +139,7 @@ impl LeveledCompactionController {
             //压缩目标层级
             let level = *level;
             // 选择上层的最老sst合并
-            let selected_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap(); 
+            let selected_sst = snapshot.levels[level - 1].1.iter().min().copied().unwrap();
             println!(
                 "compaction triggered by priority: {level} out of {:?}, select {selected_sst} for compaction",
                 priorities
@@ -233,5 +233,36 @@ impl LeveledCompactionController {
         }
         snapshot.levels[task.lower_level - 1].1 = new_lower_level_ssts;
         (snapshot, files_to_remove)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use tempfile::tempdir;
+
+    use crate::storage::engine::piggykv::{compact::CompactionOptions, debug::{check_compaction_ratio, compaction_bench}, lsm_storage::LsmStorageOptions, PiggyKV};
+
+    use super::LeveledCompactionOptions;
+
+
+    #[test]
+    fn test_integration() {
+        let dir = tempdir().unwrap();
+        let storage = PiggyKV::open(
+            &dir,
+            LsmStorageOptions::compaction_test(CompactionOptions::Leveled(
+                LeveledCompactionOptions {
+                    level0_file_num_compaction_trigger: 2,
+                    level_size_multiplier: 2,
+                    base_level_size_mb: 1,
+                    max_levels: 4,
+                },
+            )),
+        )
+        .unwrap();
+
+        compaction_bench(storage.clone());
+        check_compaction_ratio(storage.clone());
     }
 }

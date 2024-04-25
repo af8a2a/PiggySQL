@@ -92,11 +92,36 @@ impl Default for LsmStorageOptions {
             compaction_options: CompactionOptions::NoCompaction,
             enable_wal: true,
             bloom_false_positive_rate: 0.01,
-            serializable: false,
+            serializable: true,
         }
     }
 }
 impl LsmStorageOptions {
+    pub fn default_for_mvcc_test(compaction_options: CompactionOptions) -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 1 << 20, // 1MB
+            compaction_options,
+            enable_wal: false,
+            num_memtable_limit: 2,
+            serializable: false,
+            bloom_false_positive_rate: 0.01,
+        }
+    }
+
+    pub fn compaction_test(compaction_options: CompactionOptions) -> Self {
+        Self {
+            block_size: 4096,
+            target_sst_size: 1 << 20, // 1MB
+            compaction_options,
+            enable_wal: false,
+            num_memtable_limit: 2,
+            serializable: false,
+            bloom_false_positive_rate: 0.01,
+        }
+    }
+
+
     pub fn no_compaction() -> Self {
         Self {
             block_size: 4096,
