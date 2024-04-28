@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
                         println!("show tables: show all tables");
                         println!("describe [table]: describe table schema");
                         println!("explain [sql]: explain sql");
-                        println!("type Postgre dilect SQL to query");
+                        println!("type Postgre dialect SQL to query");
                     }
                     _=>match client.query(line.as_str()).await {
                         Ok(result) => println!("{}", create_table(result)),
