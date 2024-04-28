@@ -1,7 +1,4 @@
 #V2
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
 select count(*) from customer;
 select count(*) from account;
 select count(*) from customer;
@@ -99,3 +96,6 @@ select count(*) from lineitem;
 show tables;
 select count(*) from account;
 select count(*) from customer;
+.h
+show tables;
+show tables
