@@ -295,10 +295,7 @@ impl Server {
     }
 
     pub async fn run(server: Arc<Self>) {
-        // let backend = Server::new().await.unwrap();
         let processor = server;
-
-
         let authenticator = Arc::new(StatelessMakeHandler::new(Arc::new(NoopStartupHandler)));
         let server_addr = format!("{}:{}", "127.0.0.1", "5432");
         let listener = TcpListener::bind(server_addr).await.unwrap();
@@ -331,9 +328,8 @@ pub(crate) async fn server_run<
         let authenticator_ref = authenticator.make();
         let processor_ref = processor.make();
         let placeholder_ref = placeholder.make();
-
         tokio::spawn(async move {
-            if let Err(err) = process_socket(
+            if let Err(err) =  pgwire::tokio::process_socket(
                 incoming_socket.0,
                 None,
                 authenticator_ref,

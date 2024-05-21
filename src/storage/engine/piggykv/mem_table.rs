@@ -14,10 +14,7 @@ use super::key::{KeyBytes, KeySlice, TS_DEFAULT};
 use super::table::SsTableBuilder;
 use super::wal::Wal;
 
-/// A basic mem-table based on crossbeam-skiplist.
-///
-/// An initial implementation of memtable is part of week 1, day 1. It will be incrementally implemented in other
-/// chapters of week 1 and week 2.
+
 pub struct MemTable {
     pub(super) map: Arc<SkipMap<KeyBytes, Bytes>>,
     wal: Option<Wal>,
@@ -136,7 +133,6 @@ impl MemTable {
         iter
     }
 
-    /// Flush the mem-table to SSTable. Implement in week 1 day 6.
     pub fn flush(&self, builder: &mut SsTableBuilder) -> Result<()> {
         for entry in self.map.iter() {
             builder.add(entry.key().as_key_slice(), &entry.value()[..]);
@@ -185,10 +181,6 @@ type SkipMapRangeIter<'a> = crossbeam_skiplist::map::Range<
     Bytes,
 >;
 
-/// An iterator over a range of `SkipMap`. This is a self-referential structure and please refer to week 1, day 2
-/// chapter for more information.
-///
-/// This is part of week 1, day 2.
 #[self_referencing]
 pub struct MemTableIterator {
     /// Stores a reference to the skipmap.

@@ -8,10 +8,8 @@ pub type KeySlice<'a> = Key<&'a [u8]>;
 pub type KeyVec = Key<Vec<u8>>;
 pub type KeyBytes = Key<Bytes>;
 
-/// For testing purpose, should not use anywhere in your implementation.
 pub const TS_ENABLED: bool = true;
 
-/// Temporary, should remove after implementing full week 3 day 1 + 2.
 pub const TS_DEFAULT: u64 = 0;
 
 pub const TS_MAX: u64 = std::u64::MAX;
@@ -46,7 +44,6 @@ impl Key<Vec<u8>> {
         Self(Vec::new(), TS_DEFAULT)
     }
 
-    /// Create a `KeyVec` from a `Vec<u8>` and a ts. Will be removed in week 3.
     pub fn from_vec_with_ts(key: Vec<u8>, ts: u64) -> Self {
         Self(key, ts)
     }
@@ -134,7 +131,6 @@ impl<'a> Key<&'a [u8]> {
         Key(self.0.to_vec(), self.1)
     }
 
-    /// Create a key slice from a slice. Will be removed in week 3.
     pub fn from_slice(slice: &'a [u8], ts: u64) -> Self {
         Self(slice, ts)
     }

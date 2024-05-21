@@ -5,3 +5,4 @@
 *.db
 *.wal
 db.log.*
+*.profraw

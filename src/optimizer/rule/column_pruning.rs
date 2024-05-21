@@ -153,15 +153,6 @@ impl ColumnPruning {
 
             Self::_apply(copy_references, all_referenced, child_id, graph);
         }
-
-        // for child_id in graph.children_at(node_id) {
-        //     let new_references: HashSet<&ColumnSummary> = referenced_columns
-        //         .iter()
-        //         .map(|column| column.summary())
-        //         .collect();
-
-        //     Self::_apply(new_references, all_referenced, child_id, graph);
-        // }
     }
 }
 

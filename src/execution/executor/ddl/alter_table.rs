@@ -95,7 +95,7 @@ impl<T: Transaction> Executor<T> for DropColumn {
                 {
                     if is_primary {
                         Err(DatabaseError::InvalidColumn(
-                            "drop of primary key column is not allowed.".to_owned(),
+                            "drop of primary key column is not allowed.".to_string(),
                         ))?;
                     }
                     option_column_index = Some(column_index);

@@ -77,7 +77,7 @@ pub enum CompactionOptions {
     /// Leveled compaction with partial compaction + dynamic level support (= RocksDB's Leveled
     /// Compaction)
     Leveled(LeveledCompactionOptions),
-    /// In no compaction mode (week 1), always flush to L0
+    /// In no compaction mode , always flush to L0
     NoCompaction,
 }
 

@@ -5,10 +5,6 @@ select count(*) from customer;
 select count(*) from account;
 select count(*) from customer;
 select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
-select count(*) from customer;
-select count(*) from account;
 show tables;
 select count(*) from account;
 show tables;
@@ -99,3 +95,7 @@ select count(*) from customer;
 .h
 show tables;
 show tables
+show tables;
+.help
+show tables;
+.exit
