@@ -517,8 +517,9 @@ impl Transaction for TransactionWarpper {
         Ok(())
     }
 
-    fn set_isolation(&mut self, _serializable: bool) -> Result<()> {
-        todo!()
+    fn set_isolation(&mut self, serializable: bool) -> Result<()> {
+        self.txn.serialize.store(serializable,std::sync::atomic::Ordering::SeqCst);
+        Ok(())
     }
 
     fn create_index(

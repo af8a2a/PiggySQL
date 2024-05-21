@@ -31,6 +31,7 @@ pub struct Transaction {
     pub(crate) inner: Arc<LsmStorageInner>,
     pub(crate) local_storage: Arc<SkipMap<Bytes, Bytes>>,
     pub(crate) committed: Arc<AtomicBool>,
+    pub(crate) serialize: Arc<AtomicBool>,
     /// Write set and read set
     pub(crate) key_hashes: Option<Mutex<(HashSet<u32>, HashSet<u32>)>>,
 }
@@ -142,7 +143,7 @@ impl Transaction {
             })
             .collect::<Vec<_>>();
         let ts = self.inner.write_batch_inner(&batch)?;
-        if serializability_check {
+        if serializability_check&&self.serialize.load(Ordering::Relaxed) {
             let mut committed_txns = self.inner.mvcc().committed_txns.lock();
             let mut key_hashes = self.key_hashes.as_ref().unwrap().lock();
             let (write_set, _) = &mut *key_hashes;

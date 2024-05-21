@@ -346,7 +346,7 @@ pub fn check_compaction_ratio(storage: Arc<PiggyKV>) {
         }
     }
 }
-
+#[allow(dead_code)]
 pub fn dump_files_in_dir(path: impl AsRef<Path>) {
     println!("--- DIR DUMP ---");
     for f in path.as_ref().read_dir().unwrap() {

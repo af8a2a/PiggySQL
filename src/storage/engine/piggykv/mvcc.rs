@@ -69,6 +69,7 @@ impl LsmMvccInner {
             } else {
                 None
             },
+            serialize: Arc::new(AtomicBool::new(serializable)),
         })
     }
 }
@@ -260,7 +261,7 @@ mod tests {
     #[test]
     fn test_task2_lsm_iterator_mvcc() {
         let dir = tempdir().unwrap();
-        let mut options = LsmStorageOptions::default();
+        let options = LsmStorageOptions::default();
         let storage = PiggyKV::open(&dir, options.clone()).unwrap();
         storage.put(b"a", b"1").unwrap();
         storage.put(b"b", b"1").unwrap();
